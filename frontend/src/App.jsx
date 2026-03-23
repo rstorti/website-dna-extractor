@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import './index.css';
 import './loading.css';
 
+const API_BASE_URL = window.location.hostname === 'localhost' ? '' : 'https://website-dna-extractor.onrender.com';
+
 function App() {
     const [url, setUrl] = useState('');
     const [youtubeUrl, setYoutubeUrl] = useState('');
@@ -53,7 +55,7 @@ function App() {
 
     const fetchHistory = async () => {
         try {
-            const res = await fetch('/api/history');
+            const res = await fetch(`${API_BASE_URL}/api/history`);
             const data = await res.json();
             setHistoryData(data || []);
         } catch (e) { console.error('Failed to fetch history', e); }
@@ -99,7 +101,7 @@ function App() {
         const timeoutId = setTimeout(() => controller.abort(), 180000); // 3-minute timeout
 
         try {
-            const response = await fetch('/api/extract', {
+            const response = await fetch(`${API_BASE_URL}/api/extract`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url, youtubeUrl, profileUrl }),
@@ -177,7 +179,7 @@ function App() {
     const handleDeleteDomain = async (domain) => {
         if (!window.confirm(`Are you sure you want to delete ALL extractions for ${domain}?`)) return;
         try {
-            await fetch('/api/history', {
+            await fetch(`${API_BASE_URL}/api/history`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ domain })
@@ -195,7 +197,7 @@ function App() {
     const handleDeleteExtraction = async (timestamp) => {
         if (!window.confirm(`Delete this specific extraction record?`)) return;
         try {
-            await fetch('/api/history', {
+            await fetch(`${API_BASE_URL}/api/history`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ timestamp })
@@ -210,7 +212,7 @@ function App() {
     const handleForceDownload = (e, url, title) => {
         e.preventDefault();
         // Route through our local backend to cleanly affix the filename without CORS issues
-        window.location.href = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(title)}`;
+        window.location.href = `${API_BASE_URL}/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(title)}`;
     };
 
     return (
