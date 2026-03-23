@@ -214,17 +214,23 @@ function App() {
                 {activeTab === 'Dashboard' && (
                     <>
                         <div className="input-card">
-                            <h1 className="brand-font">Website DNA Extractor</h1>
-                            <p>Enter any URL to automatically extract brand components, logos, and configuration JSON. Built to match the Lovable layout.</p>
+                            <h1 className="brand-font" style={{ marginBottom: '0.5rem', fontSize: '2.5rem' }}>Create Your Campaign</h1>
+                            <h3 style={{ color: 'var(--primary)', fontWeight: '500', fontSize: '1.4rem', marginTop: 0, marginBottom: '1rem' }}>Most content gets watched and forgotten.</h3>
+                            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '1.1rem', lineHeight: '1.6' }}>
+                                A Minfo campaign gives your audience a seamless connection to what interests them at the moment of curiosity - and gives you proof it worked.
+                            </p>
+                            <p style={{ color: 'var(--text-secondary)', marginBottom: '2.5rem', fontSize: '1.1rem', lineHeight: '1.6' }}>
+                                Add either or all of the URLs below. Minfo pulls your brand details and content style automatically, then builds a draft campaign for you to review and make your own.
+                            </p>
 
                             <div className="search-bar" style={{ display: 'flex', gap: '1.5rem', maxWidth: '850px', alignItems: 'stretch' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', flex: 1 }}>
-                                    <div style={{ display: 'flex', gap: '0.8rem' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1 }}>
+                                    <div style={{ display: 'flex', gap: '1rem', height: '54px' }}>
                                         <input
                                             type="url"
                                             className="url-input"
                                             placeholder="Website URL (e.g. https://example.com)"
-                                            style={{ flex: 1 }}
+                                            style={{ flex: 1, height: '100%', padding: '0 1.2rem', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}
                                             value={url}
                                             onChange={(e) => setUrl(e.target.value)}
                                             onKeyDown={(e) => e.key === 'Enter' && handleExtract()}
@@ -232,7 +238,7 @@ function App() {
                                         />
                                         <button 
                                             onClick={async () => { try { const text = await navigator.clipboard.readText(); setUrl(text); } catch (e) { alert('Enable clipboard permissions or use Win+V/Ctrl+V directly'); } }}
-                                            style={{ background: 'transparent', color: 'var(--primary)', border: '1px solid var(--primary)', borderRadius: 'var(--radius-sm)', padding: '0 1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'all 0.2s', flexShrink: 0 }}
+                                            style={{ width: '54px', height: '54px', background: 'transparent', color: 'var(--primary)', border: '1px solid var(--primary)', borderRadius: 'var(--radius-sm)', padding: 0, cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', transition: 'all 0.2s', flexShrink: 0 }}
                                             onMouseEnter={(e)=>e.currentTarget.style.background='rgba(249, 157, 50, 0.1)'}
                                             onMouseLeave={(e)=>e.currentTarget.style.background='transparent'}
                                             title="Paste from Clipboard"
@@ -240,12 +246,12 @@ function App() {
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
                                         </button>
                                     </div>
-                                    <div style={{ display: 'flex', gap: '0.8rem' }}>
+                                    <div style={{ display: 'flex', gap: '1rem', height: '54px' }}>
                                         <input
                                             type="url"
                                             className="url-input"
                                             placeholder="YouTube Video URL (Optional)"
-                                            style={{ flex: 1 }}
+                                            style={{ flex: 1, height: '100%', padding: '0 1.2rem', background: '#1c1c1c', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}
                                             value={youtubeUrl}
                                             onChange={(e) => setYoutubeUrl(e.target.value)}
                                             onKeyDown={(e) => e.key === 'Enter' && handleExtract()}
@@ -253,20 +259,20 @@ function App() {
                                         />
                                         <button 
                                             onClick={async () => { try { const text = await navigator.clipboard.readText(); setYoutubeUrl(text); } catch (e) { alert('Enable clipboard permissions or use Win+V/Ctrl+V directly'); } }}
-                                            style={{ background: 'transparent', color: 'var(--primary)', border: '1px solid var(--primary)', borderRadius: 'var(--radius-sm)', padding: '0 1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'all 0.2s', flexShrink: 0 }}
-                                            onMouseEnter={(e)=>e.currentTarget.style.background='rgba(249, 157, 50, 0.1)'}
-                                            onMouseLeave={(e)=>e.currentTarget.style.background='transparent'}
+                                            style={{ width: '54px', height: '54px', background: 'transparent', color: youtubeUrl ? 'var(--text-secondary)' : 'var(--primary)', border: youtubeUrl ? '1px solid var(--text-secondary)' : '1px solid var(--primary)', borderRadius: 'var(--radius-sm)', padding: 0, cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', transition: 'all 0.2s', flexShrink: 0 }}
+                                            onMouseEnter={(e)=>{e.currentTarget.style.background='rgba(249, 157, 50, 0.1)'; e.currentTarget.style.borderColor='var(--primary)'; e.currentTarget.style.color='var(--primary)';}}
+                                            onMouseLeave={(e)=>{e.currentTarget.style.background='transparent'; e.currentTarget.style.borderColor=youtubeUrl ? 'var(--text-secondary)' : 'var(--primary)'; e.currentTarget.style.color=youtubeUrl ? 'var(--text-secondary)' : 'var(--primary)';}}
                                             title="Paste from Clipboard"
                                         >
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
                                         </button>
                                     </div>
-                                    <div style={{ display: 'flex', gap: '0.8rem' }}>
+                                    <div style={{ display: 'flex', gap: '1rem', height: '54px' }}>
                                         <input
                                             type="url"
                                             className="url-input"
                                             placeholder="Link-in-Bio / Profile Page URL (Optional)"
-                                            style={{ flex: 1 }}
+                                            style={{ flex: 1, height: '100%', padding: '0 1.2rem', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}
                                             value={profileUrl}
                                             onChange={(e) => setProfileUrl(e.target.value)}
                                             onKeyDown={(e) => e.key === 'Enter' && handleExtract()}
@@ -274,7 +280,7 @@ function App() {
                                         />
                                         <button 
                                             onClick={async () => { try { const text = await navigator.clipboard.readText(); setProfileUrl(text); } catch (e) { alert('Enable clipboard permissions or use Win+V/Ctrl+V directly'); } }}
-                                            style={{ background: 'transparent', color: 'var(--primary)', border: '1px solid var(--primary)', borderRadius: 'var(--radius-sm)', padding: '0 1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'all 0.2s', flexShrink: 0 }}
+                                            style={{ width: '54px', height: '54px', background: 'transparent', color: 'var(--primary)', border: '1px solid var(--primary)', borderRadius: 'var(--radius-sm)', padding: 0, cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', transition: 'all 0.2s', flexShrink: 0 }}
                                             onMouseEnter={(e)=>e.currentTarget.style.background='rgba(249, 157, 50, 0.1)'}
                                             onMouseLeave={(e)=>e.currentTarget.style.background='transparent'}
                                             title="Paste from Clipboard"
@@ -283,9 +289,36 @@ function App() {
                                         </button>
                                     </div>
                                 </div>
-                                <div style={{ display: 'flex', flexShrink: 0, paddingLeft: '0.5rem' }}>
-                                    <button className="btn-extract" onClick={handleExtract} disabled={loading || (!url && !profileUrl)} style={{ height: '100%', minWidth: '150px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', margin: 0 }}>
-                                        {loading ? <div className="loader"></div> : 'Extract DNA'}
+                                <div style={{ display: 'flex', flexShrink: 0, paddingLeft: '1rem' }}>
+                                    <button 
+                                        className="btn-extract-custom" 
+                                        onClick={handleExtract} 
+                                        disabled={loading || (!url && !profileUrl && !youtubeUrl)} 
+                                        style={{ 
+                                            height: '100%', 
+                                            minWidth: '150px', 
+                                            display: 'flex', 
+                                            flexDirection: 'row', 
+                                            justifyContent: 'center', 
+                                            alignItems: 'center', 
+                                            margin: 0, 
+                                            borderRadius: 'var(--radius-md)', 
+                                            border: 'none', 
+                                            background: 'rgba(255, 255, 255, 0.08)', 
+                                            color: 'var(--text-secondary)',
+                                            fontSize: '1.2rem',
+                                            cursor: (loading || (!url && !profileUrl && !youtubeUrl)) ? 'not-allowed' : 'pointer',
+                                            transition: 'all 0.3s ease'
+                                        }}
+                                        onMouseEnter={(e) => { if(!(loading || (!url && !profileUrl && !youtubeUrl))) { e.currentTarget.style.background = 'var(--primary)'; e.currentTarget.style.color = '#000'; e.currentTarget.style.transform = 'scale(1.02)'; }}}
+                                        onMouseLeave={(e) => { if(!(loading || (!url && !profileUrl && !youtubeUrl))) { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.transform = 'scale(1)'; }}}
+                                    >
+                                        {loading ? <div className="loader"></div> : (
+                                            <>
+                                                <span style={{ fontWeight: '800', color: 'inherit', marginRight: '6px' }}>Extract</span>
+                                                <span style={{ fontWeight: '400', color: 'inherit', opacity: 0.8 }}>Info</span>
+                                            </>
+                                        )}
                                     </button>
                                 </div>
                             </div>
