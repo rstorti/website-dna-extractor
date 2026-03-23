@@ -54,8 +54,8 @@ app.get('/api/download', async (req, res) => {
 app.post('/api/extract', async (req, res) => {
     const { url, youtubeUrl, profileUrl } = req.body;
 
-    if (!url && !profileUrl) {
-        return res.status(400).json({ error: 'At least one URL (Website or Profile) is required' });
+    if (!url && !profileUrl && !youtubeUrl) {
+        return res.status(400).json({ error: 'At least one URL (Website, Profile, or YouTube) is required' });
     }
 
     let targetUrl = url ? url.trim() : null;
@@ -156,11 +156,11 @@ app.post('/api/extract', async (req, res) => {
         let vMainIndex = -1;
         let vProfIndex = -1;
 
-        if (extractionResult) {
+        if (extractionResult || aiYoutubeData) {
             console.log(`\n⏳ Submitting data to Gemini Vision Pro...`);
             vMainIndex = verifyPromises.length;
             verifyPromises.push(Promise.race([
-                verifyDNA(extractionResult.mappedData, extractionResult.screenshotPath, extractionResult.logoPath, aiYoutubeData),
+                verifyDNA(extractionResult ? extractionResult.mappedData : {}, extractionResult ? extractionResult.screenshotPath : null, extractionResult ? extractionResult.logoPath : null, aiYoutubeData),
                 verifyTimeout
             ]));
         }

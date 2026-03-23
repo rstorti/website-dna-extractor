@@ -36,11 +36,16 @@ async function verifyDNA(mappedData, screenshotPath, logoPath, youtubeData = nul
             generationConfig: { responseMimeType: "application/json" }
         });
 
-        const imagePart = await fileToGenerativePart(screenshotPath, "image/png");
+        let imagePart = null;
+        if (screenshotPath) {
+            try {
+                imagePart = await fileToGenerativePart(screenshotPath, "image/png");
+            } catch (e) { console.error("Could not load screenshot for AI verification"); }
+        }
 
         const prompt = `
             You are a strict, highly attentive Quality Assurance Engineer for a brand agency.
-            I have just run an automated script to extract the visual "DNA" (colors, titles) of the website shown in the attached screenshot.
+            I have just run an automated script to extract the visual "DNA" (colors, titles) of the website${screenshotPath ? ' shown in the attached screenshot' : ''}.
             
             Here is the JSON data the script extracted:
             ${JSON.stringify(mappedData, null, 2)}
@@ -89,7 +94,8 @@ async function verifyDNA(mappedData, screenshotPath, logoPath, youtubeData = nul
             }
         `;
 
-        const parts = [prompt, imagePart];
+        const parts = [prompt];
+        if (imagePart) parts.push(imagePart);
 
         if (logoPath) {
             try {
