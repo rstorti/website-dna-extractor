@@ -172,7 +172,7 @@ function App() {
             setHistoryData(prev => prev.filter(item => {
                 let itemDomain = item.url || item.target_url;
                 try { itemDomain = new URL(itemDomain).hostname; } catch(e) {}
-                return itemDomain !== domain;
+                return String(itemDomain) !== String(domain);
             }));
         } catch (error) {
             console.error('Failed to delete domain history', error);
