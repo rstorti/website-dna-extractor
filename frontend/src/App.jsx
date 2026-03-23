@@ -304,22 +304,24 @@ function App() {
                                             margin: 0, 
                                             borderRadius: '12px', 
                                             border: 'none', 
-                                            background: 'rgba(255, 255, 255, 0.08)', 
-                                            color: 'var(--text-secondary)',
+                                            background: (url || profileUrl || youtubeUrl) ? 'var(--primary)' : 'rgba(255, 255, 255, 0.08)', 
+                                            color: (url || profileUrl || youtubeUrl) ? '#000000' : 'var(--text-secondary)',
                                             fontSize: '1.2rem',
                                             cursor: (loading || (!url && !profileUrl && !youtubeUrl)) ? 'not-allowed' : 'pointer',
-                                            transition: 'all 0.3s ease'
+                                            transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                                            opacity: loading ? 0.7 : 1,
+                                            transform: loading ? 'scale(0.98)' : 'scale(1)'
                                         }}
-                                        onMouseEnter={(e) => { if(!(loading || (!url && !profileUrl && !youtubeUrl))) { e.currentTarget.style.background = 'var(--primary)'; e.currentTarget.style.color = '#000'; e.currentTarget.style.transform = 'scale(1.02)'; }}}
-                                        onMouseLeave={(e) => { if(!(loading || (!url && !profileUrl && !youtubeUrl))) { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.transform = 'scale(1)'; }}}
+                                        onMouseEnter={(e) => { if(!(loading || (!url && !profileUrl && !youtubeUrl))) { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.boxShadow = '0 8px 30px var(--primary-glow)'; }}}
+                                        onMouseLeave={(e) => { if(!(loading || (!url && !profileUrl && !youtubeUrl))) { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}}
                                     >
-                                        {loading ? <div className="loader"></div> : (
+                                        {loading ? <div className="loader" style={{borderColor: '#000', borderBottomColor: 'transparent'}}></div> : (
                                             <span style={{ fontWeight: '700', color: 'inherit' }}>Extract Info</span>
                                         )}
                                     </button>
                                 </div>
                             </div>
-
+                            
                             {error && (
                                 <div className="error-box">
                                     <strong>⚠️ Extraction Failed:</strong> {error}
@@ -327,7 +329,7 @@ function App() {
                             )}
 
                             {loading && (
-                                <div className="loading-container" style={{ maxWidth: '800px', marginTop: '1rem' }}>
+                                <div className="loading-container" style={{ maxWidth: '850px', width: '100%', marginTop: '1rem' }}>
                                     <div className="progress-bar-wrapper">
                                         <div className="progress-bar-fill"></div>
                                     </div>
