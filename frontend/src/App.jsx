@@ -598,7 +598,7 @@ function App() {
                                                                     readOnly
                                                                     style={{ width: '16px', height: '16px', accentColor: 'var(--active-select)' }}
                                                                 />
-                                                                <span style={{ fontWeight: '500', flex: 1, color: selectedCtas.includes(cta) ? 'var(--active-select)' : 'var(--text-secondary)' }}>{cta}</span>
+                                                                <span style={{ fontWeight: '500', flex: 1, color: selectedCtas.includes(cta) ? 'var(--active-select)' : 'var(--text-secondary)', wordBreak: 'break-word' }}>{cta}</span>
                                                                 <svg onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(cta); }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{cursor: 'pointer', color: 'var(--text-secondary)'}} onMouseEnter={(e)=>e.currentTarget.style.color='var(--primary)'} onMouseLeave={(e)=>e.currentTarget.style.color='var(--text-secondary)'} title="Copy to clipboard"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                                                             </div>
                                                         ))}
