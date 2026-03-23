@@ -69,6 +69,24 @@ function App() {
         }
     }, [selectedSummaryType, summaryText, selectedCtas, selectedImages, selectedButtonStyle, selectedColors]);
 
+    useEffect(() => {
+        // Dynamic Theming: Update CSS root variables based on extracted brand DNA or user overrides
+        const accentColor = customPalettes['Button Accent'] || (result?.data?.icon_background_color_left !== '#000000' && result?.data?.icon_background_color_left !== '#FFFFFF' ? result?.data?.icon_background_color_left : null) || '#f99d32';
+        
+        if (accentColor.startsWith('#')) {
+            document.documentElement.style.setProperty('--primary', accentColor);
+            try {
+                let r = 0, g = 0, b = 0;
+                if (accentColor.length === 4) { r = "0x" + accentColor[1] + accentColor[1]; g = "0x" + accentColor[2] + accentColor[2]; b = "0x" + accentColor[3] + accentColor[3]; }
+                else if (accentColor.length === 7) { r = "0x" + accentColor[1] + accentColor[2]; g = "0x" + accentColor[3] + accentColor[4]; b = "0x" + accentColor[5] + accentColor[6]; }
+                document.documentElement.style.setProperty('--primary-glow', `rgba(${+r}, ${+g}, ${+b}, 0.4)`);
+            } catch(e) {}
+        } else {
+            document.documentElement.style.setProperty('--primary', '#f99d32');
+            document.documentElement.style.setProperty('--primary-glow', 'rgba(249, 157, 50, 0.4)');
+        }
+    }, [result, customPalettes]);
+
     const handleExtract = async () => {
         if (!url && !profileUrl) return;
         setLoading(true);
