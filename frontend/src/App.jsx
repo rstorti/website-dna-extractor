@@ -88,7 +88,7 @@ function App() {
     }, [result, customPalettes]);
 
     const handleExtract = async () => {
-        if (!url && !profileUrl) return;
+        if (!url && !profileUrl && !youtubeUrl) return;
         setLoading(true);
         setError(null);
         setResult(null);
@@ -139,7 +139,7 @@ function App() {
             // Instantly sync the current extraction to local history UI
             setHistoryData(prev => [{ 
                 id: new Date().getTime().toString(),
-                url: url || profileUrl, 
+                url: url || profileUrl || youtubeUrl, 
                 timestamp: new Date().toISOString(), 
                 success: true, 
                 payload: data 
