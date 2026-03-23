@@ -298,7 +298,8 @@ function App() {
                                         onClick={handleExtract} 
                                         disabled={loading || (!url && !profileUrl && !youtubeUrl)} 
                                         style={{ 
-                                            height: '100%', 
+                                            height: '54px', 
+                                            alignSelf: 'center',
                                             minWidth: '180px', 
                                             display: 'flex', 
                                             flexDirection: 'row', 
@@ -773,6 +774,7 @@ function App() {
                                                     },
                                                     // Actionables
                                                     selected_ctas: selectedCtas,
+                                                    social_links: result.socialMediaLinks || [],
                                                     // Extra fields
                                                     campaign_type: result.data?.campaign_type,
                                                     campaign_time_zone: result.data?.campaign_time_zone,
