@@ -29,12 +29,27 @@ async function extractYoutubeDetails(url) {
         }
 
         const item = response.data.items[0].snippet;
+        const channelId = item.channelId;
+        
+        let channelAvatar = null;
+        try {
+            const channelApiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${channelId}&key=${YOUTUBE_API_KEY}`;
+            const channelResponse = await axios.get(channelApiUrl);
+            if (channelResponse.data.items && channelResponse.data.items.length > 0) {
+                const cSnippet = channelResponse.data.items[0].snippet;
+                // High is typically 240x240 or 256x256, perfect for logo dimensions
+                channelAvatar = cSnippet.thumbnails?.high?.url || cSnippet.thumbnails?.default?.url;
+            }
+        } catch (e) {
+            console.error('Failed to fetch channel secondary data for logo:', e.message);
+        }
         
         return {
             title: item.title,
             channel: item.channelTitle,
             description: item.description,
             publishedAt: item.publishedAt,
+            channelLogo: channelAvatar,
             thumbnail: item.thumbnails?.maxres?.url || item.thumbnails?.high?.url || item.thumbnails?.default?.url
         };
     } catch (error) {

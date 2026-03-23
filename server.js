@@ -186,8 +186,8 @@ app.post('/api/extract', async (req, res) => {
         let baseData = activeMainResult ? activeMainResult.mappedData : {};
         if (!activeMainResult && aiYoutubeData) {
             baseData.name = activeVerificationResult?.verified_data?.name || aiYoutubeData.channel || "Unknown Brand";
-            baseData.image = aiYoutubeData.thumbnail || null;
-            if (aiYoutubeData.thumbnail) baseData.featuredImages = [aiYoutubeData.thumbnail];
+            baseData.image = aiYoutubeData.channelLogo || aiYoutubeData.thumbnail || null;
+            if (baseData.image) baseData.featuredImages = [baseData.image];
         }
 
         if (activeMainResult || activeVerificationResult) {

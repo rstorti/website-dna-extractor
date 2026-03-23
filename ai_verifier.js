@@ -65,7 +65,7 @@ async function verifyDNA(mappedData, screenshotPath, logoPath, youtubeData = nul
             5. IMPORTANT: Look at the SECOND attached image (if present), which the script chose as the company's "Logo". Is this image ACTUALLY the company's main brand logo? Look at the screenshot to confirm. If that second image is a generic photo, a banner, a user avatar, or NOT a real logo, state this in your verification notes and FORCIBLY SET the "image" field in "verified_data" to null. If it IS the correct logo, keep the "image" field intact. 
             6. Generate a concise, engaging 'website_summary' of the company based purely on the website JSON provided. If the website JSON lacks sufficient textual context to form a summary, output an empty string ("") instead of hallucinating one.
             ${youtubeData ? `
-            7. From the YouTube Description provided above, extract EVERY SINGLE URL, link, or Call to Action (CTA) mentioned (including sources, references, articles, and traditional CTAs like Subscribe/Donate). Format each entry as a single string combining BOTH the descriptive actionable phrase AND the literal URL (e.g., "View PolitiFact's list: https://www.politifact.com/...") and add them ALL to the 'youtube_ctas' array. Do not leave any URLs behind.
+            7. From the YouTube Description provided above, extract EVERY SINGLE URL, link, or Call to Action (CTA) mentioned (including sources, references, articles, and traditional CTAs like Subscribe/Donate). For each CTA, use your AI reasoning to create a highly compelling, clickable 'button_name' (strictly MAXIMUM 30 characters) written in the bold, minimalist, heavily-curated marketing voice of Steve Jobs (e.g. "Experience the Magic", "Read the Report"). Combine this button name with the absolute 'url' and the original 'context' into a JSON object, and add them ALL to the 'youtube_ctas' array. Do not leave any URLs behind.
             8. From the YouTube Description provided above, extract any Social Media profile links and add them as an array of strings called 'youtube_social_links'.
             9. Generate a compelling and interesting 'youtube_summary' based ONLY on the YouTube description. This summary should naturally be engaging and subtly encourage people to engage with the CTAs.
             10. Generate a 'combined_summary' that merges the website summary and the youtube summary seamlessly.
@@ -84,7 +84,13 @@ async function verifyDNA(mappedData, screenshotPath, logoPath, youtubeData = nul
                "verified_data": { 
                   "name": "The definitive name of the company or brand (infer from context if missing)",
                   "website_summary": "A concise summary of the company based on the website extraction"${youtubeData ? `,
-                  "youtube_ctas": ["Subscribe to our channel", "Link to our latest product..."],
+                  "youtube_ctas": [
+                    {
+                       "button_name": "Steve Jobs style CTA (max 30 chars)",
+                       "url": "https://...",
+                       "context": "Original descriptive context about this link"
+                    }
+                  ],
                   "youtube_social_links": ["https://twitter.com/example"],
                   "youtube_summary": "A concise summary based on the YouTube description",
                   "combined_summary": "A merged summary of both the website and YouTube descriptions"

@@ -22,6 +22,7 @@ function App() {
     const [selectedButtonStyle, setSelectedButtonStyle] = useState(null);
     const [selectedColors, setSelectedColors] = useState([]);
     const [customPalettes, setCustomPalettes] = useState({});
+    const [ctaEdits, setCtaEdits] = useState({});
     const [expandedDomains, setExpandedDomains] = useState({});
     const [isGeneratingJson, setIsGeneratingJson] = useState(false);
 
@@ -123,6 +124,7 @@ function App() {
                 ...(verified.youtube_ctas || []),
                 ...(data.ctas || [])
             ]);
+            setCtaEdits({}); // Reset CTA edits on new extraction
             setSelectedImages(data.data?.image ? [data.data.image] : []);
             
             const btnStyles = data.data?.buttonStyles || data.buttonStyles || [];
@@ -369,7 +371,7 @@ function App() {
                                                     onClick={(e) => handleForceDownload(e, result.data.image, 'extracted_logo_256.png')}
                                                     style={{ display: 'flex', alignItems: 'center', position: 'absolute', bottom: '-40px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--primary)', color: 'var(--primary)', padding: '0.2rem 0.6rem', borderRadius: '20px', textDecoration: 'none', fontWeight: '500', fontSize: '0.7rem', whiteSpace: 'nowrap', backdropFilter: 'blur(2px)', transition: 'all 0.2s ease', cursor: 'pointer' }}
                                                 >
-                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '0.4rem' }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '0.4rem' }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                                                     Download
                                                 </a>
                                             </>
@@ -538,7 +540,7 @@ function App() {
                                                         onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'rgba(0,0,0,0.7)'; }}
                                                         onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.85'; e.currentTarget.style.background = 'rgba(0,0,0,0.5)'; }}
                                                     >
-                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '0.5rem' }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '0.5rem' }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                                                         Download
                                                     </a>
                                                 </div>
@@ -649,23 +651,41 @@ function App() {
                                                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.541 12 3.541 12 3.541s-7.505 0-9.377.509A3.016 3.016 0 0 0 .501 6.186C0 8.07 0 12 0 12s0 3.93.501 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.377.505 9.377.505s7.505 0 9.377-.505a3.016 3.016 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
                                                         From YouTube Video Description
                                                     </h4>
-                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
-                                                        {result.data.youtube_ctas.map((cta, idx) => (
-                                                            <div key={`yt_${idx}`} style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', background: 'rgba(0,0,0,0.5)', padding: '0.6rem 1rem', borderRadius: 'var(--radius-sm)', border: selectedCtas.includes(cta) ? `1px solid ${showJsonPreview ? '#4caf50' : '#ff4b4b'}` : '1px solid transparent', cursor: 'pointer', transition: 'all 0.2s ease' }}
-                                                                onClick={() => {
-                                                                    if (selectedCtas.includes(cta)) setSelectedCtas(selectedCtas.filter(c => c !== cta));
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                                        {result.data.youtube_ctas.map((cta, idx) => {
+                                                            // Match exactly since CTAs are now objects {button_name, url, context}
+                                                            const isSelected = selectedCtas.some(c => c.url === cta.url && c.context === cta.context);
+                                                            const displayButtonName = ctaEdits[cta.url] !== undefined ? ctaEdits[cta.url] : cta.button_name;
+                                                            return (
+                                                            <div key={`yt_${idx}`} style={{ display: 'flex', alignItems: 'stretch', gap: '1.5rem', background: 'rgba(0,0,0,0.4)', padding: '1rem', borderRadius: 'var(--radius-sm)', border: isSelected ? `1px solid ${showJsonPreview ? '#4caf50' : '#ff4b4b'}` : '1px solid transparent', transition: 'all 0.2s ease', minHeight: '80px' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={() => {
+                                                                    if (isSelected) setSelectedCtas(selectedCtas.filter(c => !(c.url === cta.url && c.context === cta.context)));
                                                                     else setSelectedCtas([...selectedCtas, cta]);
                                                                 }}>
-                                                                <input 
-                                                                    type="checkbox" 
-                                                                    checked={selectedCtas.includes(cta)}
-                                                                    readOnly
-                                                                    style={{ width: '16px', height: '16px', accentColor: showJsonPreview ? '#4caf50' : '#ff4b4b' }}
-                                                                />
-                                                                <span style={{ fontWeight: '500', flex: 1, color: selectedCtas.includes(cta) ? 'white' : 'var(--text-color)' }}>{cta}</span>
-                                                                <svg onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(cta); }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{cursor: 'pointer', color: selectedCtas.includes(cta) ? 'white' : 'var(--text-secondary)'}} onMouseEnter={(e)=>e.currentTarget.style.color='#ff4b4b'} onMouseLeave={(e)=>e.currentTarget.style.color=selectedCtas.includes(cta)?'white':'var(--text-secondary)'} title="Copy to clipboard"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                                                    <input 
+                                                                        type="checkbox" 
+                                                                        checked={isSelected}
+                                                                        readOnly
+                                                                        style={{ width: '20px', height: '20px', accentColor: showJsonPreview ? '#4caf50' : '#ff4b4b', cursor: 'pointer' }}
+                                                                    />
+                                                                </div>
+                                                                <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1.5rem', alignItems: 'center' }}>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', borderRight: '1px dashed rgba(255, 255, 255, 0.1)', paddingRight: '1.5rem' }}>
+                                                                        <label style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 'bold' }}>EDITABLE BUTTON NAME (Steve Jobs Voice)</label>
+                                                                        <input 
+                                                                            type="text"
+                                                                            value={displayButtonName}
+                                                                            onChange={(e) => setCtaEdits({ ...ctaEdits, [cta.url]: e.target.value })}
+                                                                            style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'white', padding: '0.6rem 0.8rem', borderRadius: 'var(--radius-sm)', fontSize: '0.95rem' }}
+                                                                        />
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', overflow: 'hidden' }}>
+                                                                        <a href={cta.url} target="_blank" rel="noreferrer" style={{ color: 'var(--active-select)', textDecoration: 'none', fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cta.url}</a>
+                                                                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontStyle: 'italic', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>"{cta.context}"</span>
+                                                                    </div>
+                                                                </div>
                                                             </div>
-                                                        ))}
+                                                        )})}
                                                     </div>
                                                 </div>
                                             )}
@@ -773,7 +793,15 @@ function App() {
                                                         accent: customPalettes['Button Accent'] || result.data?.icon_background_color_left
                                                     },
                                                     // Actionables
-                                                    selected_ctas: selectedCtas,
+                                                    selected_ctas: selectedCtas.map(cta => {
+                                                        if (typeof cta === 'object' && cta.url) {
+                                                            return {
+                                                                ...cta,
+                                                                button_name: ctaEdits[cta.url] !== undefined ? ctaEdits[cta.url] : cta.button_name
+                                                            };
+                                                        }
+                                                        return cta;
+                                                    }),
                                                     social_links: result.socialMediaLinks || [],
                                                     // Extra fields
                                                     campaign_type: result.data?.campaign_type,
