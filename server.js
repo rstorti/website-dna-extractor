@@ -184,10 +184,10 @@ app.post('/api/extract', async (req, res) => {
         let activeVerificationResult = verificationResult || profileVerificationResult;
 
         let baseData = activeMainResult ? activeMainResult.mappedData : {};
-        if (!activeMainResult && youtubeData) {
-            baseData.name = activeVerificationResult?.verified_data?.name || youtubeData.channel || "Unknown Brand";
-            baseData.image = youtubeData.thumbnail || null;
-            if (youtubeData.thumbnail) baseData.featuredImages = [youtubeData.thumbnail];
+        if (!activeMainResult && aiYoutubeData) {
+            baseData.name = activeVerificationResult?.verified_data?.name || aiYoutubeData.channel || "Unknown Brand";
+            baseData.image = aiYoutubeData.thumbnail || null;
+            if (aiYoutubeData.thumbnail) baseData.featuredImages = [aiYoutubeData.thumbnail];
         }
 
         if (activeMainResult || activeVerificationResult) {
@@ -332,7 +332,7 @@ app.delete('/api/history', async (req, res) => {
             localHistory = localHistory.filter(item => {
                 let itemDomain = item.target_url;
                 try { itemDomain = new URL(item.target_url).hostname; } catch (e) { }
-                return itemDomain !== domain;
+                return String(itemDomain) !== String(domain);
             });
         } else if (timestamp) {
             localHistory = localHistory.filter(item => item.timestamp !== timestamp);
