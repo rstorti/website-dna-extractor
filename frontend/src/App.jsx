@@ -217,7 +217,7 @@ function App() {
                             <h1 className="brand-font" style={{ marginBottom: '0.5rem', fontSize: '2.5rem' }}>Create Your Campaign</h1>
                             <h3 style={{ color: 'var(--primary)', fontWeight: '500', fontSize: '1.4rem', marginTop: 0, marginBottom: '1rem' }}>Most content gets watched and forgotten.</h3>
                             <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '1.1rem', lineHeight: '1.6' }}>
-                                A Minfo campaign gives your audience a seamless connection to what interests them at the moment of curiosity - and gives you proof it worked.
+                                A Minfo campaign gives your audience a seamless accessible connection to what interests them at the moment of curiosity - and gives you proof it worked.
                             </p>
                             <p style={{ color: 'var(--text-secondary)', marginBottom: '2.5rem', fontSize: '1.1rem', lineHeight: '1.6' }}>
                                 Add either or all of the URLs below. Minfo pulls your brand details and content style automatically, then builds a draft campaign for you to review and make your own.
