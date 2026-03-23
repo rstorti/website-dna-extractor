@@ -289,20 +289,20 @@ function App() {
                                         </button>
                                     </div>
                                 </div>
-                                <div style={{ display: 'flex', flexShrink: 0, paddingLeft: '1rem' }}>
+                                <div style={{ display: 'flex', flexShrink: 0, marginLeft: '2rem' }}>
                                     <button 
                                         className="btn-extract-custom" 
                                         onClick={handleExtract} 
                                         disabled={loading || (!url && !profileUrl && !youtubeUrl)} 
                                         style={{ 
                                             height: '100%', 
-                                            minWidth: '150px', 
+                                            minWidth: '180px', 
                                             display: 'flex', 
                                             flexDirection: 'row', 
                                             justifyContent: 'center', 
                                             alignItems: 'center', 
                                             margin: 0, 
-                                            borderRadius: 'var(--radius-md)', 
+                                            borderRadius: '12px', 
                                             border: 'none', 
                                             background: 'rgba(255, 255, 255, 0.08)', 
                                             color: 'var(--text-secondary)',
@@ -314,10 +314,7 @@ function App() {
                                         onMouseLeave={(e) => { if(!(loading || (!url && !profileUrl && !youtubeUrl))) { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.transform = 'scale(1)'; }}}
                                     >
                                         {loading ? <div className="loader"></div> : (
-                                            <>
-                                                <span style={{ fontWeight: '800', color: 'inherit', marginRight: '6px' }}>Extract</span>
-                                                <span style={{ fontWeight: '400', color: 'inherit', opacity: 0.8 }}>Info</span>
-                                            </>
+                                            <span style={{ fontWeight: '700', color: 'inherit' }}>Extract Info</span>
                                         )}
                                     </button>
                                 </div>
