@@ -183,15 +183,22 @@ app.post('/api/extract', async (req, res) => {
         let activeMainResult = extractionResult || profileExtractionResult;
         let activeVerificationResult = verificationResult || profileVerificationResult;
 
-        if (activeMainResult) {
+        let baseData = activeMainResult ? activeMainResult.mappedData : {};
+        if (!activeMainResult && aiYoutubeData) {
+            baseData.name = activeVerificationResult?.verified_data?.name || aiYoutubeData.channel || "Unknown Brand";
+            baseData.image = aiYoutubeData.thumbnail || null;
+            if (aiYoutubeData.thumbnail) baseData.featuredImages = [aiYoutubeData.thumbnail];
+        }
+
+        if (activeMainResult || activeVerificationResult) {
             if (!activeVerificationResult || !activeVerificationResult.verified_data) {
                 console.warn("\n⚠️ AI Verification failed. Returning raw extracted data.");
-                finalResult = activeMainResult.mappedData;
+                finalResult = baseData;
                 isVerified = false;
             } else {
                 console.log("\n✅ Stage 2 Complete: AI Vision Certification applied.");
                 finalResult = { 
-                    ...activeMainResult.mappedData, 
+                    ...baseData, 
                     ...activeVerificationResult.verified_data 
                 };
             }

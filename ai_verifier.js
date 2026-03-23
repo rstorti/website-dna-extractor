@@ -82,6 +82,7 @@ async function verifyDNA(mappedData, screenshotPath, logoPath, youtubeData = nul
             Respond ONLY with a valid JSON object matching this exact structure (NO comments, NO extra text):
             {
                "verified_data": { 
+                  "name": "The definitive name of the company or brand (infer from context if missing)",
                   "website_summary": "A concise summary of the company based on the website extraction"${youtubeData ? `,
                   "youtube_ctas": ["Subscribe to our channel", "Link to our latest product..."],
                   "youtube_social_links": ["https://twitter.com/example"],

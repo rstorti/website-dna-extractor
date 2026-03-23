@@ -34,7 +34,8 @@ async function extractYoutubeDetails(url) {
             title: item.title,
             channel: item.channelTitle,
             description: item.description,
-            publishedAt: item.publishedAt
+            publishedAt: item.publishedAt,
+            thumbnail: item.thumbnails?.maxres?.url || item.thumbnails?.high?.url || item.thumbnails?.default?.url
         };
     } catch (error) {
         let errorMessage = error.message;
