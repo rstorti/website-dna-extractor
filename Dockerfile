@@ -9,6 +9,9 @@ WORKDIR /usr/src/app
 # Switch to root temporarily to perform installation
 USER root
 
+# Setup Puppeteer Cache in the app folder so it survives user switching
+ENV PUPPETEER_CACHE_DIR=/usr/src/app/.cache
+
 # Copy package configurations
 COPY package*.json ./
 COPY frontend/package*.json ./frontend/
@@ -25,8 +28,8 @@ COPY . .
 # Build the Vite frontend application
 RUN cd frontend && npm run build
 
-# Change permissions so the node user can write to outputs and history
-RUN mkdir -p /usr/src/app/outputs && chown -R pptruser:pptruser /usr/src/app/outputs
+# Change permissions so the node user can access the Chrome cache and write to outputs
+RUN mkdir -p /usr/src/app/outputs && chown -R pptruser:pptruser /usr/src/app
 
 # Drop back to secure user
 USER pptruser
