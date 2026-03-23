@@ -106,7 +106,18 @@ function App() {
                 signal: controller.signal
             });
             clearTimeout(timeoutId);
-            const data = await response.json();
+            
+            const rawText = await response.text();
+            let data;
+            try {
+                data = JSON.parse(rawText);
+            } catch (err) {
+                if (response.status >= 500) {
+                     throw new Error(`Server Gateway Error (${response.status}): The Render backend might be sleeping or crashed. Please wait 1 minute and click Extract again. Raw: ${rawText.substring(0, 50)}`);
+                }
+                throw new Error(`Invalid JSON Response (${response.status}): The backend returned non-JSON. This usually happens if the server hasn't been deployed yet or Netlify connection timed out.`);
+            }
+
             if (!response.ok) throw new Error(data.error || 'Failed to extract DNA');
             
             setResult(data);
