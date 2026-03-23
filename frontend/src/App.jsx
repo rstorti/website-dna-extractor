@@ -119,7 +119,10 @@ function App() {
                 raw_youtube: data.youtubeData?.description || ''
             });
             setSelectedSummaryType('website');
-            setSelectedCtas([]);
+            setSelectedCtas([
+                ...(verified.youtube_ctas || []),
+                ...(data.ctas || [])
+            ]);
             setSelectedImages(data.data?.image ? [data.data.image] : []);
             
             const btnStyles = data.data?.buttonStyles || data.buttonStyles || [];

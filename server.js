@@ -184,10 +184,10 @@ app.post('/api/extract', async (req, res) => {
         let activeVerificationResult = verificationResult || profileVerificationResult;
 
         let baseData = activeMainResult ? activeMainResult.mappedData : {};
-        if (!activeMainResult && aiYoutubeData) {
-            baseData.name = activeVerificationResult?.verified_data?.name || aiYoutubeData.channel || "Unknown Brand";
-            baseData.image = aiYoutubeData.thumbnail || null;
-            if (aiYoutubeData.thumbnail) baseData.featuredImages = [aiYoutubeData.thumbnail];
+        if (!activeMainResult && youtubeData) {
+            baseData.name = activeVerificationResult?.verified_data?.name || youtubeData.channel || "Unknown Brand";
+            baseData.image = youtubeData.thumbnail || null;
+            if (youtubeData.thumbnail) baseData.featuredImages = [youtubeData.thumbnail];
         }
 
         if (activeMainResult || activeVerificationResult) {
@@ -255,7 +255,7 @@ app.post('/api/extract', async (req, res) => {
         try {
             const historyItem = {
                 id: new Date().getTime().toString(),
-                target_url: targetUrl || targetProfileUrl,
+                target_url: targetUrl || targetProfileUrl || youtubeUrl,
                 timestamp: new Date().toISOString(),
                 success: true,
                 payload: finalPayload
