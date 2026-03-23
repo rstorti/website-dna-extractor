@@ -1,0 +1,40 @@
+{
+  "name": "website-dna-extractor",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js",
+    "build": "cd frontend && npm install && npm run build",
+    "server": "npx nodemon --ignore outputs/ --ignore frontend/ server.js",
+    "client": "cd frontend && npm run dev",
+    "dev": "concurrently \"npm run server\" \"npm run client\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@google-cloud/aiplatform": "^6.4.0",
+    "@google-cloud/vertexai": "^1.10.0",
+    "@google/generative-ai": "^0.24.1",
+    "@supabase/supabase-js": "^2.97.0",
+    "axios": "^1.13.5",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "google-auth-library": "^10.5.0",
+    "https-proxy-agent": "^7.0.6",
+    "pdf-parse": "^2.4.5",
+    "pdf2json": "^4.0.2",
+    "pg": "^8.19.0",
+    "puppeteer": "^24.37.5",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "sharp": "^0.34.5",
+    "wrap-text": "^1.0.10"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

@@ -1,0 +1,9 @@
+node_modules/
+frontend/node_modules/
+frontend/dist/
+outputs/*
+!outputs/.gitkeep
+.env
+.DS_Store
+*.log
+western-verve-*.json

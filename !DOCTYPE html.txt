@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Website DNA Extractor - Pomelli Standard</title>
+<style>
+    :root {
+        --bg: #1e1e20;
+        --accent: #f99d32;
+        --glass-bg: rgba(255, 255, 255, 0.03);
+        --glass-border: rgba(255, 255, 255, 0.08);
+        --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    }
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+    body { background-color: var(--bg); color: white; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+    .glass { background: var(--glass-bg); border: 1px solid var(--glass-border); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: var(--glass-shadow); border-radius: 16px; }
+    .sidebar { width: 280px; padding: 24px; border-right: 1px solid var(--glass-border); background: rgba(0,0,0,0.2); display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+    .main { flex: 1; padding: 40px; overflow-y: auto; display: flex; flex-direction: column; gap: 24px; }
+    h3, h4 { margin: 0; font-weight: 600; letter-spacing: 0.5px; }
+    h3 { color: var(--accent); }
+    .history-card { padding: 12px; border-radius: 8px; cursor: pointer; transition: background 0.2s; font-size: 14px; }
+    .history-card:hover { background: rgba(255,255,255,0.05); }
+    .url-bar { display: flex; padding: 24px; gap: 16px; align-items: center; }
+    .url-bar input { flex: 1; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); color: white; padding: 16px 20px; border-radius: 8px; font-size: 16px; outline: none; }
+    .url-bar input:focus { border-color: var(--accent); }
+    .primary-btn { background: var(--accent); color: #000; font-weight: 700; border: none; padding: 16px 32px; border-radius: 8px; cursor: pointer; font-size: 16px; transition: 0.2s; }
+    .primary-btn:hover { opacity: 0.9; }
+    .primary-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .loading-container { padding: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; text-align: center; }
+    .spinner { width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.1); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .hidden { display: none !important; }
+    .top-header { display: flex; padding: 24px; gap: 32px; align-items: center; }
+    .logo-box { background: rgba(255,255,255,0.05); padding: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; min-width: 150px; }
+    .logo-box img { max-width: 120px; height: auto; }
+    .desc-box p { margin: 0; line-height: 1.6; color: #ddd; font-size: 15px; }
+    .data-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .section { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+    .pills { display: flex; gap: 12px; flex-wrap: wrap; }
+    .pill { background: rgba(249, 157, 50, 0.1); color: var(--accent); border: 1px solid rgba(249, 157, 50, 0.3); padding: 8px 16px; border-radius: 999px; font-size: 14px; cursor: pointer;}
+    .btn-preview { display: flex; gap: 16px; align-items: center; }
+    .extracted-btn { border: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; cursor: pointer; }
+    .grid-2x2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .img-container { position: relative; aspect-ratio: 1; border-radius: 12px; overflow: hidden; border: 1px solid var(--glass-border); }
+    .img-container img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s ease; }
+    .img-container:hover img { transform: scale(1.05); }
+    .text-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 42px; font-weight: 900; text-shadow: 3px 3px 8px rgba(0,0,0,0.9); text-align: center; width: 90%; z-index: 5; pointer-events: none; }
+    .download-btn { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.5); border: 1px solid var(--accent); color: var(--accent); padding: 8px 20px; border-radius: 999px; display: flex; align-items: center; gap: 8px; cursor: pointer; z-index: 10; font-size: 14px; font-weight: 600; backdrop-filter: blur(4px); }
+    .download-btn svg { width: 16px; height: 16px; stroke: var(--accent); fill: none; stroke-width: 2.5; }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+    <h3>History</h3>
+    <div id="history-list">
+        <div class="history-card glass">
+            <strong>stripe.com</strong><br>
+            <span style="color: #aaa;">2 days ago</span>
+        </div>
+    </div>
+</aside>
+
+<main class="main">
+    <div class="glass url-bar">
+        <input type="text" id="url-input" placeholder="Enter target URL to extract Business DNA..." value="https://example.com" />
+        <button class="primary-btn" id="extract-btn" onclick="runExtractionPipeline()">Extract DNA</button>
+    </div>
+    
+    <div id="loading-state" class="glass loading-container hidden">
+        <div class="spinner"></div>
+        <h4 id="loading-text" style="color: var(--accent); margin:0;">Scraping DOM (Headless Chrome)...</h4>
+        <p id="loading-subtext" style="color:#aaa; margin:0; font-size:14px;">Initializing Puppeteer stealth navigation</p>
+    </div>
+
+    <div id="dashboard" class="hidden" style="display: flex; flex-direction: column; gap: 24px;">
+        <div class="glass top-header">
+            <div class="logo-box">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Google_2015_logo.svg/2560px-Google_2015_logo.svg.png" alt="Logo" />
+            </div>
+            <div class="desc-box">
+                <p><strong>Gemini DNA Synthesis:</strong> A cutting-edge digital technology platform emphasizing clean, accessible design. The brand tone is authoritative yet approachable, utilizing a minimalist white/dark aesthetic heavily accented by bright interactions.</p>
+            </div>
+        </div>
+
+        <div class="data-row">
+            <div class="glass section">
+                <h4>Social Media Identity</h4>
+                <div class="pills">
+                    <div class="pill">Facebook</div>
+                    <div class="pill">Twitter</div>
+                    <div class="pill">LinkedIn</div>
+                </div>
+            </div>
+            <div class="glass section">
+                <h4>Extracted Call-to-Actions</h4>
+                <div class="btn-preview">
+                    <button class="extracted-btn" style="background: #1a73e8; color: #ffffff;">Primary Action</button>
+                    <button class="extracted-btn" style="background: #ffffff; color: #1a73e8; border: 1px solid #1a73e8;">Secondary CTA</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass section">
+            <h4>Generated Assets (Strict 2x2 Grid)</h4>
+            <div class="grid-2x2">
+                <div class="img-container">
+                    <img src="https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=640&h=640&fit=crop" alt="Clean A" />
+                    <a class="download-btn"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Download</a>
+                </div>
+                <div class="img-container">
+                    <img src="https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=640&h=640&fit=crop" alt="Text A" />
+                    <div class="text-overlay">INNOVATE FASTER.</div>
+                    <a class="download-btn"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Download</a>
+                </div>
+                <div class="img-container">
+                    <img src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=640&h=640&fit=crop" alt="Clean B" />
+                    <a class="download-btn"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Download</a>
+                </div>
+                <div class="img-container">
+                    <img src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=640&h=640&fit=crop" alt="Text B" />
+                    <div class="text-overlay">THE FUTURE IS NOW.</div>
+                    <a class="download-btn"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Download</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script>
+    function runExtractionPipeline() {
+        const btn = document.getElementById('extract-btn');
+        const input = document.getElementById('url-input').value;
+        if(!input) return;
+        
+        btn.disabled = true;
+        document.getElementById('dashboard').classList.add('hidden');
+        document.getElementById('loading-state').classList.remove('hidden');
+        
+        const text = document.getElementById('loading-text');
+        const subtext = document.getElementById('loading-subtext');
+        
+        setTimeout(() => { text.innerText = 'Analyzing with Gemini Pro...'; subtext.innerText = 'Parsing JSON payload to extract descriptive brand DNA'; }, 1500);
+        setTimeout(() => { text.innerText = 'Vertex AI: Imagen 3 Generation...'; subtext.innerText = 'Synthesizing Prompt A (1:1 Aspect Ratio)'; }, 3000);
+        setTimeout(() => { subtext.innerText = 'Synthesizing Prompt B (Waiting 2.5s for rate limits)'; }, 4500);
+        setTimeout(() => { text.innerText = 'Autonomous Vision Engine...'; subtext.innerText = 'Computing mathematical entropy via sharp.stats() for text placement'; }, 6500);
+        setTimeout(() => {
+            document.getElementById('loading-state').classList.add('hidden');
+            document.getElementById('dashboard').classList.remove('hidden');
+            text.innerText = 'Scraping DOM (Headless Chrome)...';
+            subtext.innerText = 'Initializing Puppeteer stealth navigation';
+            btn.disabled = false;
+            
+            const list = document.getElementById('history-list');
+            const item = document.createElement('div');
+            item.className = 'history-card glass';
+            item.innerHTML = `<strong>${input}</strong><br><span style="color: #aaa;">Just now</span>`;
+            list.insertBefore(item, list.firstChild);
+        }, 8500);
+    }
+</script>
+</body>
+</html>
