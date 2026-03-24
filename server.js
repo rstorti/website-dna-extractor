@@ -243,7 +243,9 @@ app.post('/api/extract', async (req, res) => {
                 if (!cta || !cta.url) return true;
                 const cUrl = cta.url.toLowerCase().replace(/\/$/, ""); 
                 return !combinedSocialLinks.some(sLink => {
+                    if (!sLink || typeof sLink !== 'string' || sLink.length < 5) return false;
                     const cleanSocial = sLink.toLowerCase().replace(/\/$/, "");
+                    if (cleanSocial.length < 5) return false;
                     return cUrl === cleanSocial || cUrl.includes(cleanSocial);
                 });
             });
