@@ -236,6 +236,18 @@ app.post('/api/extract', async (req, res) => {
                 }
             });
         }
+        
+        // Strict Programmatic Filter: Ensure social links don't duplicate into CTAs
+        if (finalResult && Array.isArray(finalResult.youtube_ctas)) {
+            finalResult.youtube_ctas = finalResult.youtube_ctas.filter(cta => {
+                if (!cta || !cta.url) return true;
+                const cUrl = cta.url.toLowerCase().replace(/\/$/, ""); 
+                return !combinedSocialLinks.some(sLink => {
+                    const cleanSocial = sLink.toLowerCase().replace(/\/$/, "");
+                    return cUrl === cleanSocial || cUrl.includes(cleanSocial);
+                });
+            });
+        }
 
         const finalPayload = {
             success: true,
