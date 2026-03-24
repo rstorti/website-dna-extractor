@@ -3,7 +3,8 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const fs = require('fs/promises');
 
 // Ensure API key is available
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "missing_gemini_key");
+const FALLBACK_GEMINI_KEY = process.env.GEMINI_API_KEY || "AIzaSyAkA1gkti2KYzmvBFKZ1sPX7bjqpdubHOw";
+const genAI = new GoogleGenerativeAI(FALLBACK_GEMINI_KEY);
 
 /**
  * Converts a local file into the format required by the Gemini API.
