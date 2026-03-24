@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import './index.css';
 import './loading.css';
 
-const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '' : 'https://website-dna-extractor.onrender.com';
+const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '' : 'https://website-dna-extractor-3.onrender.com';
 
 function App() {
     const [url, setUrl] = useState('');
