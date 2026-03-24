@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || process.env.VITE_YOUTUBE_API_KEY;
 
 /**
  * Extracts the video ID from various YouTube URL formats.
@@ -17,41 +17,80 @@ function extractVideoId(url) {
 async function extractYoutubeDetails(url) {
     try {
         const videoId = extractVideoId(url);
-        if (!videoId) {
-            throw new Error('Invalid YouTube URL');
-        }
+        if (videoId) {
+            const apiUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${YOUTUBE_API_KEY}`;
+            const response = await axios.get(apiUrl);
 
-        const apiUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${YOUTUBE_API_KEY}`;
-        const response = await axios.get(apiUrl);
-
-        if (!response.data.items || response.data.items.length === 0) {
-            throw new Error('Video not found or is private');
-        }
-
-        const item = response.data.items[0].snippet;
-        const channelId = item.channelId;
-        
-        let channelAvatar = null;
-        try {
-            const channelApiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${channelId}&key=${YOUTUBE_API_KEY}`;
-            const channelResponse = await axios.get(channelApiUrl);
-            if (channelResponse.data.items && channelResponse.data.items.length > 0) {
-                const cSnippet = channelResponse.data.items[0].snippet;
-                // High is typically 240x240 or 256x256, perfect for logo dimensions
-                channelAvatar = cSnippet.thumbnails?.high?.url || cSnippet.thumbnails?.default?.url;
+            if (!response.data.items || response.data.items.length === 0) {
+                throw new Error('Video not found or is private');
             }
-        } catch (e) {
-            console.error('Failed to fetch channel secondary data for logo:', e.message);
+
+            const item = response.data.items[0].snippet;
+            const channelId = item.channelId;
+            
+            let channelAvatar = null;
+            try {
+                const channelApiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${channelId}&key=${YOUTUBE_API_KEY}`;
+                const channelResponse = await axios.get(channelApiUrl);
+                if (channelResponse.data.items && channelResponse.data.items.length > 0) {
+                    const cSnippet = channelResponse.data.items[0].snippet;
+                    // High is typically 240x240 or 256x256, perfect for logo dimensions
+                    channelAvatar = cSnippet.thumbnails?.high?.url || cSnippet.thumbnails?.default?.url;
+                }
+            } catch (e) {
+                console.error('Failed to fetch channel secondary data for logo:', e.message);
+            }
+            
+            return {
+                title: item.title,
+                channel: item.channelTitle,
+                description: item.description,
+                publishedAt: item.publishedAt,
+                channelLogo: channelAvatar,
+                thumbnail: item.thumbnails?.maxres?.url || item.thumbnails?.high?.url || item.thumbnails?.default?.url
+            };
         }
-        
-        return {
-            title: item.title,
-            channel: item.channelTitle,
-            description: item.description,
-            publishedAt: item.publishedAt,
-            channelLogo: channelAvatar,
-            thumbnail: item.thumbnails?.maxres?.url || item.thumbnails?.high?.url || item.thumbnails?.default?.url
-        };
+
+        // It is not a video URL, let's see if it's a channel URL
+        const handleMatch = url.match(/youtube\.com\/@([^#\&\?\/]+)/);
+        const idMatch = url.match(/youtube\.com\/channel\/([^#\&\?\/]+)/);
+
+        if (handleMatch || idMatch) {
+            let channelApiUrl = '';
+            if (handleMatch) {
+                channelApiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails&forHandle=@${handleMatch[1]}&key=${YOUTUBE_API_KEY}`;
+            } else if (idMatch) {
+                channelApiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails&id=${idMatch[1]}&key=${YOUTUBE_API_KEY}`;
+            }
+
+            const channelResponse = await axios.get(channelApiUrl);
+
+            if (!channelResponse.data.items || channelResponse.data.items.length === 0) {
+                throw new Error('Channel not found or is private');
+            }
+
+            // Instead of just looking at the channel description (which has no CTAs), 
+            // find the "Uploads" playlist to grab the channel's single newest video.
+            const uploadsPlaylistId = channelResponse.data.items[0].contentDetails?.relatedPlaylists?.uploads;
+            if (!uploadsPlaylistId) {
+                throw new Error('Channel has no uploads playlist.');
+            }
+
+            const playlistUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=1&key=${YOUTUBE_API_KEY}`;
+            const playlistResponse = await axios.get(playlistUrl);
+            
+            if (!playlistResponse.data.items || playlistResponse.data.items.length === 0) {
+                throw new Error('Channel has no uploaded videos.');
+            }
+
+            // Extract the latest video ID and recurse to extract it just like a normal video URL
+            const latestVideoId = playlistResponse.data.items[0].snippet.resourceId.videoId;
+            return extractYoutubeDetails(`https://www.youtube.com/watch?v=${latestVideoId}`);
+        }
+
+        // None matched
+        throw new Error('Invalid YouTube URL');
+
     } catch (error) {
         let errorMessage = error.message;
         if (error.response && error.response.data && error.response.data.error) {

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import './index.css';
 import './loading.css';
 
-const API_BASE_URL = window.location.hostname === 'localhost' ? '' : 'https://website-dna-extractor.onrender.com';
+const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '' : 'https://website-dna-extractor.onrender.com';
 
 function App() {
     const [url, setUrl] = useState('');
@@ -96,9 +96,9 @@ function App() {
         setError(null);
         setResult(null);
 
-        // Implement a timeout to prevent hanging forever
+        // Implement a timeout to prevent hanging forever (allowing slow Render spin-ups)
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 180000); // 3-minute timeout
+        const timeoutId = setTimeout(() => controller.abort(), 300000); // 5-minute timeout
 
         try {
             const response = await fetch(`${API_BASE_URL}/api/extract`, {
