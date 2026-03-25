@@ -122,6 +122,12 @@ app.post('/api/extract', async (req, res) => {
             rawYoutubeData = await extractYoutubeDetails(youtubeUrl.trim());
             if (rawYoutubeData && rawYoutubeData.error) {
                 console.warn("⚠️ YouTube API failed: ", rawYoutubeData.error);
+                
+                // FATAL: If the API error is explicitly about a missing/invalid key, do NOT fallback to puppeteer as it will slow down extraction and fail anyway.
+                if (rawYoutubeData.error.includes("API key not valid") || rawYoutubeData.error.includes("Daily Limit Exceeded")) {
+                    return res.status(500).json({ error: "YOUTUBE API ERROR: The VITE_YOUTUBE_API_KEY is missing or invalid in your Render.com Environment Variables! Please add it to the dashboard to extract YouTube CTAs." });
+                }
+
                 console.log("🚀 Agent Fallback: Booting Puppeteer to visually extract YouTube DOM...");
                 
                 const fallbackData = await scrapeYoutubeFallback(youtubeUrl.trim());
