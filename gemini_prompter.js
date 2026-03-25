@@ -84,7 +84,7 @@ async function analyzeImageForTextPlacement(imageBuffer) {
     try {
         const vertex_ai = new VertexAI({ project: process.env.GCP_PROJECT_ID, location: LOCATION });
         const model = vertex_ai.getGenerativeModel({
-            model: 'gemini-1.5-flash', // fast for vision
+            model: 'gemini-2.5-flash', // fast for vision
             generationConfig: {
                 "maxOutputTokens": 10,
                 "temperature": 0.2, // low temp for deterministic classification

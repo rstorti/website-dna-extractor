@@ -10,7 +10,7 @@ const { verifyDNA } = require('./ai_verifier.js');
 const { extractYoutubeDetails } = require('./youtube_extractor.js');
 const { supabase } = require('./supabaseClient');
 
-const app = express();
+const app = express(); 
 const PORT = process.env.PORT || 3001;
 const HISTORY_FILE = path.join(__dirname, 'outputs', 'history.json');
 
@@ -270,6 +270,9 @@ app.post('/api/extract', async (req, res) => {
             const historyItem = {
                 id: new Date().getTime().toString(),
                 target_url: targetUrl || targetProfileUrl || youtubeUrl,
+                website_url: targetUrl,
+                youtube_url: youtubeUrl,
+                profile_url: targetProfileUrl,
                 timestamp: new Date().toISOString(),
                 success: true,
                 payload: finalPayload

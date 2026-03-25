@@ -444,6 +444,85 @@ function App() {
                                     </div>
                                 </div>
 
+                                {/* 2. Social Media Presence */}
+                                {result.socialMediaLinks?.length > 0 && (
+                                    <div className="glass-panel">
+                                        <h3 className="panel-title">🌐 Social Media Links</h3>
+                                        <div className="social-icons-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', width: '100%', alignItems: 'start' }}>
+                                            {(() => {
+                                                // Group by platform
+                                                const grouped = {
+                                                    Facebook: [],
+                                                    'Twitter/X': [],
+                                                    Instagram: [],
+                                                    LinkedIn: [],
+                                                    YouTube: [],
+                                                    Other: []
+                                                };
+                                                const icons = {
+                                                    Facebook: <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.879V14.89h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.989C18.343 21.129 22 16.99 22 12c0-5.523-4.477-10-10-10z" /></svg>,
+                                                    'Twitter/X': <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>,
+                                                    Instagram: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>,
+                                                    LinkedIn: <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" /></svg>,
+                                                    YouTube: <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.541 12 3.541 12 3.541s-7.505 0-9.377.509A3.016 3.016 0 0 0 .501 6.186C0 8.07 0 12 0 12s0 3.93.501 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.377.505 9.377.505s7.505 0 9.377-.505a3.016 3.016 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" /></svg>,
+                                                    Other: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                                                };
+
+                                                result.socialMediaLinks.forEach(link => {
+                                                    if (link.includes('facebook.com')) grouped.Facebook.push(link);
+                                                    else if (link.includes('twitter.com') || link.includes('x.com')) grouped['Twitter/X'].push(link);
+                                                    else if (link.includes('instagram.com')) grouped.Instagram.push(link);
+                                                    else if (link.includes('linkedin.com')) grouped.LinkedIn.push(link);
+                                                    else if (link.includes('youtube.com')) grouped.YouTube.push(link);
+                                                    else grouped.Other.push(link);
+                                                });
+
+                                                return Object.entries(grouped)
+                                                    .filter(([platform, links]) => links.length > 0)
+                                                    .map(([platform, links], idx) => (
+                                                        <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: 'var(--radius-md)', width: '100%' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', fontWeight: 'bold' }}>
+                                                                    <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text-color)' }}>{icons[platform]}</span>
+                                                                    <span>{platform}</span>
+                                                                    {links.length > 1 && (
+                                                                        <span style={{ fontSize: '0.8rem', background: 'var(--surface-color)', padding: '0.2rem 0.5rem', borderRadius: 'var(--radius-sm)' }}>
+                                                                            {links.length} accounts found
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+                                                                {links.map((link, lIdx) => (
+                                                                    <div key={lIdx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.05)', padding: '0.5rem 0.8rem', borderRadius: 'var(--radius-sm)' }}>
+                                                                        <a href={link} target="_blank" rel="noreferrer" style={{ color: 'var(--primary)', textDecoration: 'none', fontSize: '0.9rem', wordBreak: 'break-all', marginRight: '1rem' }}>
+                                                                            {link}
+                                                                        </a>
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                navigator.clipboard.writeText(link);
+                                                                                const btn = e.currentTarget;
+                                                                                btn.style.background = 'rgba(255, 152, 0, 0.2)';
+                                                                                setTimeout(() => btn.style.background = 'var(--surface-color)', 200);
+                                                                            }}
+                                                                            style={{ background: 'var(--surface-color)', color: 'var(--primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.4rem', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s ease' }}
+                                                                            title="Copy Link"
+                                                                        >
+                                                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                                                            </svg>
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    ));
+                                            })()}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* 3. Hero Images Grid */}
                                 {result.featuredImages?.length > 0 && (
                                     <div className="glass-panel">
@@ -547,112 +626,6 @@ function App() {
                                     </div>
                                 )}
 
-                                {/* 2. Social Media Presence */}
-                                {result.socialMediaLinks?.length > 0 && (
-                                    <div className="glass-panel" style={{ gridColumn: '1 / -1' }}>
-                                        <h3 className="panel-title">🌐 Social Media Links</h3>
-                                        <div className="social-icons-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', width: '100%', alignItems: 'start' }}>
-                                            {(() => {
-                                                // Group by platform
-                                                const grouped = {
-                                                    Facebook: [],
-                                                    'Twitter/X': [],
-                                                    Instagram: [],
-                                                    LinkedIn: [],
-                                                    YouTube: [],
-                                                    TikTok: [],
-                                                    Other: []
-                                                };
-                                                const icons = {
-                                                    Facebook: <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.879V14.89h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.989C18.343 21.129 22 16.99 22 12c0-5.523-4.477-10-10-10z" /></svg>,
-                                                    'Twitter/X': <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>,
-                                                    Instagram: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>,
-                                                    LinkedIn: <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" /></svg>,
-                                                    YouTube: <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.541 12 3.541 12 3.541s-7.505 0-9.377.509A3.016 3.016 0 0 0 .501 6.186C0 8.07 0 12 0 12s0 3.93.501 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.377.505 9.377.505s7.505 0 9.377-.505a3.016 3.016 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" /></svg>,
-                                                    TikTok: <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93v7.2c0 1.96-.52 3.94-1.61 5.54-1.12 1.64-2.84 2.8-4.82 3.09-1.92.29-3.95.03-5.69-.9-1.62-.87-2.91-2.28-3.56-4.01-.65-1.74-.6-3.72.13-5.39.75-1.72 2.21-3.08 3.94-3.71 1.68-.61 3.57-.6 5.17.15v4.14c-1.04-.3-2.16-.14-3.08.38-.93.53-1.58 1.48-1.71 2.56-.13 1.05.21 2.13.91 2.91.73.81 1.83 1.18 2.9 1.05 1.1-.13 2.08-.85 2.52-1.85.45-.98.47-2.13.43-3.21V.02z" /></svg>,
-                                                    Other: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-                                                };
-
-                                                const uniqueLinksMap = new Map();
-
-                                                result.socialMediaLinks.forEach(link => {
-                                                    try {
-                                                        const urlObj = new URL(link);
-                                                        let hostname = urlObj.hostname.toLowerCase().replace(/^www\./, '');
-                                                        let pathname = urlObj.pathname.toLowerCase().replace(/\/$/, '');
-                                                        // Force Twitter to X for deduplication comparison
-                                                        if (hostname === 'twitter.com') hostname = 'x.com';
-                                                        
-                                                        const normalizedKey = `${hostname}${pathname}`;
-                                                        
-                                                        if (!uniqueLinksMap.has(normalizedKey)) {
-                                                            // For display, clean the URL but keep original case of the path, forcing https
-                                                            let cleanDisplayUrl = `https://${urlObj.hostname.replace(/^www\./, '')}${urlObj.pathname.replace(/\/$/, '')}`;
-                                                            uniqueLinksMap.set(normalizedKey, cleanDisplayUrl);
-                                                        }
-                                                    } catch (e) {
-                                                        // Fallback safely if it's somehow completely unparseable
-                                                        uniqueLinksMap.set(link.toLowerCase(), link);
-                                                    }
-                                                });
-                                                
-                                                Array.from(uniqueLinksMap.values()).forEach(link => {
-                                                    const cleanLink = link.toLowerCase();
-                                                    if (cleanLink.includes('facebook.com')) grouped.Facebook.push(link);
-                                                    else if (cleanLink.includes('twitter.com') || cleanLink.includes('x.com')) grouped['Twitter/X'].push(link);
-                                                    else if (cleanLink.includes('instagram.com')) grouped.Instagram.push(link);
-                                                    else if (cleanLink.includes('linkedin.com')) grouped.LinkedIn.push(link);
-                                                    else if (cleanLink.includes('youtube.com')) grouped.YouTube.push(link);
-                                                    else if (cleanLink.includes('tiktok.com')) grouped.TikTok.push(link);
-                                                    else grouped.Other.push(link);
-                                                });
-
-                                                return Object.entries(grouped)
-                                                    .filter(([platform, links]) => links.length > 0)
-                                                    .map(([platform, links], idx) => (
-                                                        <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: 'var(--radius-md)', width: '100%' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', fontWeight: 'bold' }}>
-                                                                    <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text-color)' }}>{icons[platform]}</span>
-                                                                    <span>{platform}</span>
-                                                                    {links.length > 1 && (
-                                                                        <span style={{ fontSize: '0.8rem', background: 'var(--surface-color)', padding: '0.2rem 0.5rem', borderRadius: 'var(--radius-sm)' }}>
-                                                                            {links.length} accounts found
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
-                                                                {links.map((link, lIdx) => (
-                                                                    <div key={lIdx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.05)', padding: '0.5rem 0.8rem', borderRadius: 'var(--radius-sm)' }}>
-                                                                        <a href={link} target="_blank" rel="noreferrer" style={{ color: 'var(--primary)', textDecoration: 'none', fontSize: '0.9rem', wordBreak: 'break-all', marginRight: '1rem' }}>
-                                                                            {link}
-                                                                        </a>
-                                                                        <button
-                                                                            onClick={(e) => {
-                                                                                navigator.clipboard.writeText(link);
-                                                                                const btn = e.currentTarget;
-                                                                                btn.style.background = 'rgba(255, 152, 0, 0.2)';
-                                                                                setTimeout(() => btn.style.background = 'var(--surface-color)', 200);
-                                                                            }}
-                                                                            style={{ background: 'var(--surface-color)', color: 'var(--primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.4rem', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s ease' }}
-                                                                            title="Copy Link"
-                                                                        >
-                                                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                                                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                                                                            </svg>
-                                                                        </button>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    ));
-                                            })()}
-                                        </div>
-                                    </div>
-                                )}
-
                                 {/* 4b. Extracted CTAs (Website & YouTube) */}
                                 {((result.ctas && result.ctas.length > 0) || (result.data?.youtube_ctas && result.data.youtube_ctas.length > 0)) && (
                                     <div className="glass-panel" style={{ gridColumn: '1 / -1' }}>
@@ -664,42 +637,22 @@ function App() {
                                                 <div>
                                                     <h4 style={{ color: 'var(--text-secondary)', marginBottom: '1rem', marginTop: 0 }}>From Website</h4>
                                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
-                                                        {result.ctas.map((cta, idx) => {
-                                                            const isSelected = selectedCtas.includes(cta);
-                                                            const displayValue = ctaEdits[cta] !== undefined ? ctaEdits[cta] : cta;
-                                                            return (
-                                                            <div key={`web_${idx}`} style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', background: 'var(--surface-color)', padding: '0.8rem 1rem', borderRadius: 'var(--radius-sm)', border: isSelected ? '1px solid var(--active-select)' : '1px solid var(--border-color)', maxWidth: '300px', flex: '1 1 auto' }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', cursor: 'pointer' }}
-                                                                    onClick={() => {
-                                                                        if (isSelected) setSelectedCtas(selectedCtas.filter(c => c !== cta));
-                                                                        else setSelectedCtas([...selectedCtas, cta]);
-                                                                    }}>
-                                                                    <input 
-                                                                        type="checkbox" 
-                                                                        checked={isSelected}
-                                                                        readOnly
-                                                                        style={{ width: '16px', height: '16px', accentColor: 'var(--active-select)', cursor: 'pointer' }}
-                                                                    />
-                                                                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                                                                        <span style={{ fontWeight: '500', color: isSelected ? 'var(--active-select)' : 'var(--text-secondary)', fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Original Name:</span>
-                                                                        <em style={{ fontWeight: '500', color: isSelected ? 'var(--active-select)' : 'var(--text-secondary)', fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', opacity: 0.8 }}>{cta}</em>
-                                                                    </div>
-                                                                    <svg onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(cta); }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{cursor: 'pointer', color: 'var(--text-secondary)'}} onMouseEnter={(e)=>e.currentTarget.style.color='var(--primary)'} onMouseLeave={(e)=>e.currentTarget.style.color='var(--text-secondary)'} title="Copy Original Text"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                                                                </div>
-                                                                {isSelected && (
-                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: '0.5rem', marginTop: '0.2rem' }}>
-                                                                        <label style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 'bold' }}>EDITABLE CTA NAME</label>
-                                                                        <input 
-                                                                            type="text"
-                                                                            value={displayValue}
-                                                                            onClick={(e) => e.stopPropagation()}
-                                                                            onChange={(e) => setCtaEdits({ ...ctaEdits, [cta]: e.target.value })}
-                                                                            style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'white', padding: '0.5rem 0.6rem', borderRadius: 'var(--radius-sm)', fontSize: '0.9rem' }}
-                                                                        />
-                                                                    </div>
-                                                                )}
+                                                        {result.ctas.map((cta, idx) => (
+                                                            <div key={`web_${idx}`} style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', background: 'var(--surface-color)', padding: '0.5rem 1rem', borderRadius: 'var(--radius-sm)', border: selectedCtas.includes(cta) ? '1px solid var(--active-select)' : '1px solid var(--border-color)', cursor: 'pointer' }}
+                                                                onClick={() => {
+                                                                    if (selectedCtas.includes(cta)) setSelectedCtas(selectedCtas.filter(c => c !== cta));
+                                                                    else setSelectedCtas([...selectedCtas, cta]);
+                                                                }}>
+                                                                <input 
+                                                                    type="checkbox" 
+                                                                    checked={selectedCtas.includes(cta)}
+                                                                    readOnly
+                                                                    style={{ width: '16px', height: '16px', accentColor: 'var(--active-select)' }}
+                                                                />
+                                                                <span style={{ fontWeight: '500', flex: 1, color: selectedCtas.includes(cta) ? 'var(--active-select)' : 'var(--text-secondary)', wordBreak: 'break-word' }}>{cta}</span>
+                                                                <svg onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(cta); }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{cursor: 'pointer', color: 'var(--text-secondary)'}} onMouseEnter={(e)=>e.currentTarget.style.color='var(--primary)'} onMouseLeave={(e)=>e.currentTarget.style.color='var(--text-secondary)'} title="Copy to clipboard"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                                                             </div>
-                                                        )})}
+                                                        ))}
                                                     </div>
                                                 </div>
                                             )}
@@ -860,7 +813,7 @@ function App() {
                                                                 button_name: ctaEdits[cta.url] !== undefined ? ctaEdits[cta.url] : cta.button_name
                                                             };
                                                         }
-                                                        return ctaEdits[cta] !== undefined ? ctaEdits[cta] : cta;
+                                                        return cta;
                                                     }),
                                                     social_links: result.socialMediaLinks || [],
                                                     // Extra fields
@@ -922,8 +875,8 @@ function App() {
                             {(() => {
                                 if (!historyData || historyData.length === 0) return <p>No history available. Run an extraction first!</p>;
                                 const grouped = historyData.reduce((acc, curr) => {
-                                    let domain = curr.target_url || curr.url;
-                                    try { domain = new URL(curr.target_url || curr.url).hostname; } catch (e) { }
+                                    let domain = curr.url;
+                                    try { domain = new URL(curr.url).hostname; } catch (e) { }
                                     if (!acc[domain]) acc[domain] = [];
                                     acc[domain].push(curr);
                                     return acc;
@@ -955,7 +908,7 @@ function App() {
                                                 </div>
                                                 <div style={{ width: 'calc(100% - 150px)', overflow: 'hidden' }}>
                                                     <h3 style={{ fontSize: '1.2rem', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                        <a href={latest.target_url || latest.url} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }} onClick={(e) => e.stopPropagation()}>
+                                                        <a href={latest.url} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }} onClick={(e) => e.stopPropagation()}>
                                                             {domain.replace(/^www\./i, '')}
                                                         </a>
                                                     </h3>

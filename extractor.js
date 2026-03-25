@@ -308,7 +308,11 @@ async function extractDNA(url) {
       if (data.buttonStyles.length === 0 && buttonStyles.length > 0) {
         data.buttonStyles = [buttonStyles[0]];
       }
-      data.ctas = validButtons.map(b => b.text.trim()).filter((v, i, a) => a.indexOf(v) === i).slice(0, 15);
+      data.ctas = validButtons
+        .map(b => b.text.trim())
+        .filter((v, i, a) => a.indexOf(v) === i)
+        .filter(v => !/facebook|twitter|instagram|tiktok|linkedin|youtube|\bx\b/i.test(v))
+        .slice(0, 15);
 
       // Scrape explicitly applied background-images (like the NAB Hero Banners)
       document.querySelectorAll('div, section, header, figure').forEach(el => {
