@@ -188,7 +188,11 @@ async function extractDNA(url) {
         throw err;
       }
     }
-    console.log(`✅ Page loaded. Executing Anti-Bot WAF Verification...`);
+    
+    // Explicit hardcoded lag. Free tier CPUs bottleneck client-side JS rendering logic so SPAs (React) might still be blank exactly exactly at 'networkidle2'.
+    await new Promise(r => setTimeout(r, 6000));
+    
+    console.log(`✅ Page loaded and Javascript mounted. Executing Anti-Bot WAF Verification...`);
 
     // --- Anti-Bot & Enterprise WAF Firewall Check ---
     const pageTitle = await page.title();
