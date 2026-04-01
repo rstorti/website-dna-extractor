@@ -28,8 +28,8 @@ const env = {
     FIRECRAWLER_API_KEY: optional('FIRECRAWLER_API_KEY'),
 
     // Supabase
-    SUPABASE_URL: required('SUPABASE_URL'),
-    SUPABASE_ANON_KEY: required('SUPABASE_ANON_KEY'),
+    SUPABASE_URL: optional('SUPABASE_URL'),
+    SUPABASE_ANON_KEY: optional('SUPABASE_ANON_KEY'),
 
     // GCP & Vertex (used for feature image emulation, etc.)
     GCP_PROJECT_ID: optional('GCP_PROJECT_ID'),
