@@ -1171,6 +1171,9 @@ function App() {
                                                                 ];
                                                                 setSelectedColors(histColorsToSelect.filter(c => c.hex).map(c => c.label));
 
+                                                                setUrl(entry.target_url || entry.url || '');
+                                                                setYoutubeUrl(entry.youtube_url || '');
+                                                                setProfileUrl(entry.profile_url || '');
                                                                 setResult(entry.payload);
                                                                 setShowJsonPreview(false);
                                                                 setActiveTab('Dashboard');

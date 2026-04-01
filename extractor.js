@@ -37,12 +37,17 @@ async function autoScroll(page) {
     await new Promise((resolve) => {
       let totalHeight = 0;
       const distance = 100;
+      let scrolls = 0;
+      
       const timer = setInterval(() => {
         const scrollHeight = document.body.scrollHeight;
         window.scrollBy(0, distance);
         totalHeight += distance;
+        scrolls++;
 
-        if (totalHeight >= scrollHeight - window.innerHeight) {
+        // Stop if we reach bottom OR if we scroll 80 times (max runtime ~8000ms / 8000px depth)
+        // This is crucial for infinite scroll sites like lbc.co.uk which trap the agent in loops.
+        if (totalHeight >= scrollHeight - window.innerHeight || scrolls >= 80) {
           clearInterval(timer);
           resolve();
         }
