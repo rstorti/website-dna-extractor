@@ -11,6 +11,11 @@ const { supabase } = require('./supabaseClient');
 const env = require('./config/env');
 
 async function uploadToSupabase(filename, buffer, mimeType = 'image/jpeg') {
+  if (!env.SUPABASE_URL || env.SUPABASE_URL.includes("missing.supabase.co")) {
+    console.log(`⚠️ Supabase credentials missing. Bypassing cloud upload for ${filename} to prevent network hangs.`);
+    return `/outputs/${filename}`;
+  }
+
   try {
     const { error } = await supabase.storage
       .from('outputs')
