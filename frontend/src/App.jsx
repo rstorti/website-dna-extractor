@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import './index.css';
 import './loading.css';
 
-// Standard Lovable/Vite dynamic environment parsing, falling back to Render.com hardcode if not supplied
+// Dynamic environment fallback for Live deployments
 const API_BASE_URL = import.meta.env.VITE_API_URL || ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '' : 'https://website-dna-extractor.onrender.com');
 
 function App() {
