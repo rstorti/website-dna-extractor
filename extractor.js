@@ -532,7 +532,7 @@ async function extractDNA(url) {
     await fs.mkdir(outputDir, { recursive: true });
 
     const timestamp = new Date().getTime();
-    const screenshotFilename = `screenshot_${timestamp}.png`;
+    const screenshotFilename = `screenshot_${timestamp}.jpg`;
     const screenshotPath = path.join(outputDir, screenshotFilename);
 
     // Calculate the absolute deepest scrolling content on the page (bypassing 100vh limits)
@@ -547,8 +547,8 @@ async function extractDNA(url) {
                 if (totalH > maxBottom) maxBottom = totalH;
             }
         }
-        // Force minimum 800, max 10000 so we don't crash Puppeteer memory
-        return Math.min(Math.max(maxBottom, 800), 10000);
+        // Force minimum 800, max 4000 so we don't crash Puppeteer memory on Render Free Tier
+        return Math.min(Math.max(maxBottom, 800), 4000);
     }).catch(() => 1080); // Fallback to 1080 if evaluate fails
 
     console.log(`📐 Resizing viewport physically to ${Math.ceil(contentHeight)}px to un-truncate SPAs...`);
@@ -557,7 +557,8 @@ async function extractDNA(url) {
     // Wait for the browser rendering engine to layout the new massive viewport
     await new Promise(r => setTimeout(r, 800));
 
-    await page.screenshot({ path: screenshotPath, fullPage: true });
+    // Fullpage screenshots cause silent Out-Of-Memory crashes on 512MB instances.
+    await page.screenshot({ path: screenshotPath, fullPage: false, type: 'jpeg', quality: 70 });
     console.log(`🖼️ Screenshot saved locally to: ${screenshotPath}`);
 
     // Upload screenshot to Supabase
