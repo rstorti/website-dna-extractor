@@ -41,7 +41,7 @@ async function autoScroll(page) {
   await page.evaluate(async () => {
     await new Promise((resolve) => {
       let totalHeight = 0;
-      const distance = 100;
+      const distance = 600;
       let scrolls = 0;
       
       const timer = setInterval(() => {
@@ -50,13 +50,13 @@ async function autoScroll(page) {
         totalHeight += distance;
         scrolls++;
 
-        // Stop if we reach bottom OR if we scroll 80 times (max runtime ~8000ms / 8000px depth)
+        // Stop if we reach bottom OR if we scroll 15 times (max runtime ~3750ms)
         // This is crucial for infinite scroll sites like lbc.co.uk which trap the agent in loops.
-        if (totalHeight >= scrollHeight - window.innerHeight || scrolls >= 80) {
+        if (totalHeight >= scrollHeight - window.innerHeight || scrolls >= 15) {
           clearInterval(timer);
           resolve();
         }
-      }, 100);
+      }, 250);
     });
   });
 }
@@ -667,16 +667,16 @@ async function extractDNA(url) {
         const width = info.width;
 
         let topVariance = 0, midVariance = 0;
-        // Analyze Top Zone (y: 50-180)
-        for (let y = 50; y < 180; y += 2) {
-          for (let x = 0; x < width; x += 10) {
+        // Analyze Top Zone (y: 50-180) using much larger strides for low-CPU environments
+        for (let y = 50; y < 180; y += 10) {
+          for (let x = 0; x < width; x += 20) {
             const idx = (y * width + x) * info.channels;
             topVariance += Math.abs(data[idx] - data[idx + info.channels]);
           }
         }
         // Analyze Middle Zone (y: 230-380)
-        for (let y = 230; y < 380; y += 2) {
-          for (let x = 0; x < width; x += 10) {
+        for (let y = 230; y < 380; y += 10) {
+          for (let x = 0; x < width; x += 20) {
             const idx = (y * width + x) * info.channels;
             midVariance += Math.abs(data[idx] - data[idx + info.channels]);
           }
