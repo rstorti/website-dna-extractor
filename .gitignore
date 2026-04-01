@@ -4,6 +4,8 @@ frontend/dist/
 outputs/*
 !outputs/.gitkeep
 .env
+.env.local
+.secret*
 .DS_Store
 *.log
 western-verve-*.json

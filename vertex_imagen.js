@@ -1,9 +1,9 @@
 const { PredictionServiceClient, helpers } = require('@google-cloud/aiplatform');
 const sharp = require('sharp');
-require('dotenv').config();
+const env = require('./config/env');
 
 // Default GCP Region and Models for Imagen Vertex AI
-const LOCATION = process.env.GCP_LOCATION || 'us-central1';
+const LOCATION = env.GCP_LOCATION;
 const MODEL_ID = 'imagen-3.0-generate-001'; // Vision model for native 1:1 text-to-image
 
 /**
@@ -12,8 +12,8 @@ const MODEL_ID = 'imagen-3.0-generate-001'; // Vision model for native 1:1 text-
  * Returns a new image buffer, or null if auth/API fails.
  */
 async function generateBrandHero(prompt) {
-    if (!process.env.GCP_PROJECT_ID) {
-        console.warn("⚠️  [Vertex AI] GCP_PROJECT_ID is missing from .env. Skipping image generation.");
+    if (!env.GCP_PROJECT_ID) {
+        console.warn("⚠️  [Vertex AI] GCP_PROJECT_ID is missing from Lovable environment Secrets. Skipping image generation.");
         return null; // Graceful fallback
     }
 
@@ -26,7 +26,7 @@ async function generateBrandHero(prompt) {
         };
         const predictionServiceClient = new PredictionServiceClient(clientOptions);
 
-        const projectId = process.env.GCP_PROJECT_ID;
+        const projectId = env.GCP_PROJECT_ID;
         // Construct the model endpoint path
         const endpoint = `projects/${projectId}/locations/${LOCATION}/publishers/google/models/${MODEL_ID}`;
 

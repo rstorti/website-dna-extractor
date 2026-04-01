@@ -1,5 +1,5 @@
-// Load dot-env keys dynamically
-require('dotenv').config();
+// Load and validate environment variables immediately
+const env = require('./config/env');
 
 const express = require('express');
 const cors = require('cors');
@@ -11,7 +11,7 @@ const { extractYoutubeDetails } = require('./youtube_extractor.js');
 const { supabase } = require('./supabaseClient');
 
 const app = express(); 
-const PORT = process.env.PORT || 3001;
+const PORT = env.PORT;
 const HISTORY_FILE = path.join(__dirname, 'outputs', 'history.json');
 
 app.use(cors());

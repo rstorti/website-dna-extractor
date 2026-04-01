@@ -8,6 +8,7 @@ const sharp = require('sharp');
 const { generateBrandHero } = require('./vertex_imagen');
 const { generateHeroPrompts, analyzeImageForTextPlacement } = require('./gemini_prompter');
 const { supabase } = require('./supabaseClient');
+const env = require('./config/env');
 
 async function uploadToSupabase(filename, buffer, mimeType = 'image/jpeg') {
   try {
@@ -63,12 +64,20 @@ async function scrapeYoutubeFallback(url) {
     console.log(`\n🕵️‍♂️ PUPPETEER FALLBACK: Scraping YouTube DOM for ${url}...`);
     browser = await puppeteer.launch({
       headless: "new",
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
+      executablePath: env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     const page = await browser.newPage();
     
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    try {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    } catch (err) {
+      if (err.message && err.message.toLowerCase().includes('timeout')) {
+        console.log(`⚠️ YouTube navigation timeout for ${url}. Attempting to salvage loaded DOM...`);
+      } else {
+        throw err;
+      }
+    }
     
     // Handle EU consent or 'Before you continue' dialogs
     try {
@@ -155,7 +164,7 @@ async function extractDNA(url) {
 
   const browser = await puppeteer.launch({
     headless: 'new',
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
+    executablePath: env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
     ignoreHTTPSErrors: true,
     args: [
       '--no-sandbox',
@@ -175,17 +184,29 @@ async function extractDNA(url) {
 
   try {
     try {
-      await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
     } catch (err) {
-      // Automatic fallback for apex domains with broken SSL (e.g., minfo.com -> www.minfo.com)
-      const parsedUrl = new URL(url);
-      if (!parsedUrl.hostname.startsWith('www.')) {
-        console.log(`⚠️ Connection to ${url} failed(${err.message}).Attempting fallback to www subdomain...`);
-        parsedUrl.hostname = 'www.' + parsedUrl.hostname;
-        url = parsedUrl.toString();
-        await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+      if (err.message && err.message.toLowerCase().includes('timeout')) {
+        console.log(`⚠️ Navigation timeout for ${url}. Site might be heavy with ad-trackers. Proceeding with partially loaded DOM...`);
       } else {
-        throw err;
+        // Automatic fallback for apex domains with broken SSL (e.g., minfo.com -> www.minfo.com)
+        const parsedUrl = new URL(url);
+        if (!parsedUrl.hostname.startsWith('www.')) {
+          console.log(`⚠️ Connection to ${url} failed (${err.message}). Attempting fallback to www subdomain...`);
+          parsedUrl.hostname = 'www.' + parsedUrl.hostname;
+          url = parsedUrl.toString();
+          try {
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+          } catch (fallbackErr) {
+            if (fallbackErr.message && fallbackErr.message.toLowerCase().includes('timeout')) {
+              console.log(`⚠️ Fallback navigation timeout for ${url}. Proceeding with partially loaded DOM...`);
+            } else {
+              throw fallbackErr;
+            }
+          }
+        } else {
+          throw err;
+        }
       }
     }
     
@@ -282,6 +303,15 @@ async function extractDNA(url) {
         }
         if (paddingStr.trim() === '0px 0px 0px 0px') paddingStr = '0px';
 
+        const btnText = btn.innerText ? btn.innerText.trim() : "";
+        let btnUrl = "";
+        if (btn.tagName.toLowerCase() === 'a' && btn.href) {
+            btnUrl = btn.href;
+        } else {
+            const parentA = btn.closest('a');
+            if (parentA && parentA.href) btnUrl = parentA.href;
+        }
+
         buttonStyles.push({
           backgroundColor: style.backgroundColor,
           color: style.color,
@@ -289,7 +319,8 @@ async function extractDNA(url) {
           shape: shape,
           fontFamily: style.fontFamily,
           padding: paddingStr,
-          text: btn.innerText ? btn.innerText.trim() : ""
+          text: btnText,
+          url: btnUrl
         });
 
         if (style.backgroundColor && style.backgroundColor !== 'rgba(0, 0, 0, 0)') {
@@ -312,11 +343,41 @@ async function extractDNA(url) {
       if (data.buttonStyles.length === 0 && buttonStyles.length > 0) {
         data.buttonStyles = [buttonStyles[0]];
       }
-      data.ctas = validButtons
-        .map(b => b.text.trim())
-        .filter((v, i, a) => a.indexOf(v) === i)
-        .filter(v => !/facebook|twitter|instagram|tiktok|linkedin|youtube|\bx\b/i.test(v))
-        .slice(0, 15);
+
+      const uniqueCtasMap = new Map();
+      validButtons.forEach(b => {
+        if (!/facebook|twitter|instagram|tiktok|linkedin|youtube|\bx\b/i.test(b.text)) {
+            if (b.url && b.url.startsWith('http')) {
+                const key = b.url.toLowerCase();
+                if (!uniqueCtasMap.has(key)) {
+                    uniqueCtasMap.set(key, {
+                        button_name: b.text,
+                        url: b.url,
+                        context: "Website Main Button"
+                    });
+                }
+            }
+        }
+      });
+
+      // Also grab regular contextual links that aren't styled as buttons but might be CTAs
+      document.querySelectorAll('a').forEach(a => {
+          const text = a.innerText ? a.innerText.trim() : "";
+          if (text && text.length > 2 && text.length < 30 && a.href && a.href.startsWith('http')) {
+              if (/^(shop|learning|read|experience|buy|get|start|join|sign|subscribe|book|register|view|explore|discover|our)\b/i.test(text)) {
+                   const key = a.href.toLowerCase();
+                   if (!uniqueCtasMap.has(key)) {
+                       uniqueCtasMap.set(key, {
+                           button_name: text,
+                           url: a.href,
+                           context: "Website Text LinkCTA"
+                       });
+                   }
+              }
+          }
+      });
+
+      data.ctas = Array.from(uniqueCtasMap.values()).slice(0, 15);
 
       // Scrape explicitly applied background-images (like the NAB Hero Banners)
       document.querySelectorAll('div, section, header, figure').forEach(el => {
@@ -673,9 +734,9 @@ async function extractDNA(url) {
       console.log(`🎨 Generating Base Image ${prefix}...`);
       
       const heroTimeout = new Promise((resolve) => setTimeout(() => {
-        console.warn(`⏳ Vertex AI Image Generation timed out after 3 seconds. Force-aborting for ${prefix} to prevent UI hang.`);
+        console.warn(`⏳ Vertex AI Image Generation timed out after 20 seconds. Force-aborting for ${prefix} to prevent UI hang.`);
         resolve(null);
-      }, 3000));
+      }, 20000));
       
       const rawBuffer = await Promise.race([
           generateBrandHero(prompt),

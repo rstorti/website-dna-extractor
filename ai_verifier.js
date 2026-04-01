@@ -1,9 +1,9 @@
-require('dotenv').config();
+const env = require('./config/env');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const fs = require('fs/promises');
 
 // Ensure API key is available
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "missing_gemini_key");
+const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY || "missing_gemini_key");
 
 /**
  * Converts a local file into the format required by the Gemini API.
@@ -22,8 +22,8 @@ async function fileToGenerativePart(filePath, mimeType) {
  * Runs the Gemini Vision Pro model to verify the extracted DNA.
  */
 async function verifyDNA(mappedData, screenshotPath, logoPath, youtubeData = null) {
-    if (!process.env.GEMINI_API_KEY) {
-        console.error("❌ Error: GEMINI_API_KEY is missing in .env");
+    if (!env.GEMINI_API_KEY) {
+        console.error("❌ Error: GEMINI_API_KEY is missing in Lovable settings");
         return null;
     }
 

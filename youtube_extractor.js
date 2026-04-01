@@ -1,6 +1,7 @@
 const axios = require('axios');
+const env = require('./config/env');
 
-const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || process.env.VITE_YOUTUBE_API_KEY;
+const YOUTUBE_API_KEY = env.YOUTUBE_API_KEY;
 
 /**
  * Extracts the video ID from various YouTube URL formats.

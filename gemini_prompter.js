@@ -1,16 +1,16 @@
 const { VertexAI } = require('@google-cloud/vertexai');
-require('dotenv').config();
+const env = require('./config/env');
 
-const LOCATION = process.env.GCP_LOCATION || 'us-central1';
+const LOCATION = env.GCP_LOCATION;
 
 async function generateHeroPrompts(dnaData) {
-    if (!process.env.GCP_PROJECT_ID) {
-        console.warn("⚠️  [Vertex Gemini] GCP_PROJECT_ID is missing from .env, cannot dynamically generate prompts.");
+    if (!env.GCP_PROJECT_ID) {
+        console.warn("⚠️  [Vertex Gemini] GCP_PROJECT_ID is missing from Lovable environment Secrets, cannot dynamically generate prompts.");
         return null;
     }
 
     // Initialize Vertex AI with the same project and location as Imagen
-    const vertex_ai = new VertexAI({ project: process.env.GCP_PROJECT_ID, location: LOCATION });
+    const vertex_ai = new VertexAI({ project: env.GCP_PROJECT_ID, location: LOCATION });
     const model = vertex_ai.getGenerativeModel({
         model: 'gemini-1.5-pro', // Using Gemini 1.5 Pro on Vertex AI
         generationConfig: {
@@ -72,7 +72,7 @@ Return ONLY a JSON object exactly matching this format:
 }
 
 async function analyzeImageForTextPlacement(imageBuffer) {
-    if (!process.env.GCP_PROJECT_ID) {
+    if (!env.GCP_PROJECT_ID) {
         return "TOP";
     }
 
@@ -82,7 +82,7 @@ async function analyzeImageForTextPlacement(imageBuffer) {
     // Let me implement the code that *would* work for vision.
 
     try {
-        const vertex_ai = new VertexAI({ project: process.env.GCP_PROJECT_ID, location: LOCATION });
+        const vertex_ai = new VertexAI({ project: env.GCP_PROJECT_ID, location: LOCATION });
         const model = vertex_ai.getGenerativeModel({
             model: 'gemini-2.5-flash', // fast for vision
             generationConfig: {

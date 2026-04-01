@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import './index.css';
 import './loading.css';
 
-const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '' : 'https://website-dna-extractor-3.onrender.com';
+// Standard Lovable/Vite dynamic environment parsing, falling back to Render.com hardcode if not supplied
+const API_BASE_URL = import.meta.env.VITE_API_URL || ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '' : 'https://website-dna-extractor-3.onrender.com');
 
 function App() {
     const [url, setUrl] = useState('');
@@ -73,8 +75,8 @@ function App() {
     }, [selectedSummaryType, summaryText, selectedCtas, selectedImages, selectedButtonStyle, selectedColors]);
 
     useEffect(() => {
-        // Dynamic Theming: Update CSS root variables based on extracted brand DNA or user overrides
-        const accentColor = customPalettes['Button Accent'] || (result?.data?.icon_background_color_left !== '#000000' && result?.data?.icon_background_color_left !== '#FFFFFF' ? result?.data?.icon_background_color_left : null) || '#f99d32';
+        // Dynamic Theming: Update CSS root variables based on user overrides only (automatic extraction disabled)
+        const accentColor = customPalettes['Button Accent'] || '#f99d32';
         
         if (accentColor.startsWith('#')) {
             document.documentElement.style.setProperty('--primary', accentColor);
@@ -213,6 +215,77 @@ function App() {
         e.preventDefault();
         // Route through our local backend to cleanly affix the filename without CORS issues
         window.location.href = `${API_BASE_URL}/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(title)}`;
+    };
+
+    const exportToExcel = () => {
+        if (!result) return;
+        const wb = XLSX.utils.book_new();
+
+        // 1. Descriptions & Meta
+        const metaData = [
+            ["Type", "Content"],
+            ["URL", result.data?.name || "Target URL"],
+            ["Website Summary", summaryText.website || ""],
+            ["YouTube Summary", summaryText.youtube || ""],
+            ["Combined Summary", summaryText.combined || ""],
+            ["Raw YouTube Description", summaryText.raw_youtube || ""]
+        ];
+        const wsMeta = XLSX.utils.aoa_to_sheet(metaData);
+        XLSX.utils.book_append_sheet(wb, wsMeta, "Descriptions");
+
+        // 2. CTAs
+        const ctahData = [["Source", "Name", "URL", "Context"]];
+        if (result.ctas) {
+            result.ctas.forEach(cta => {
+                if (typeof cta === 'object' && cta.url) {
+                    const displayValue = ctaEdits[cta.url] !== undefined ? ctaEdits[cta.url] : cta.button_name;
+                    ctahData.push(["Website", displayValue, cta.url, cta.context]);
+                } else {
+                    const displayValue = ctaEdits[cta] !== undefined ? ctaEdits[cta] : cta;
+                    ctahData.push(["Website", displayValue, "", ""]);
+                }
+            });
+        }
+        if (result.data?.youtube_ctas) {
+            result.data.youtube_ctas.forEach(cta => {
+                const displayValue = ctaEdits[cta.url] !== undefined ? ctaEdits[cta.url] : cta.button_name;
+                ctahData.push(["YouTube", displayValue, cta.url, cta.context]);
+            });
+        }
+        const wsCtas = XLSX.utils.aoa_to_sheet(ctahData);
+        XLSX.utils.book_append_sheet(wb, wsCtas, "CTAs");
+
+        // 3. Social Links
+        const socialData = [["URL"]];
+        if (result.socialMediaLinks) {
+            result.socialMediaLinks.forEach(link => socialData.push([link]));
+        }
+        const wsSocial = XLSX.utils.aoa_to_sheet(socialData);
+        XLSX.utils.book_append_sheet(wb, wsSocial, "Social Links");
+
+        // 4. Colors & Palette
+        const paletteData = [
+            ["Label", "Hex Value"],
+            ["Background Color", customPalettes['Background Color'] || result.data?.background_color || ""],
+            ["Foreground Color", customPalettes['Foreground Color'] || result.data?.foreground_color || ""],
+            ["App Bar Background", customPalettes['App Bar Background'] || result.data?.background_app_bar_color || ""],
+            ["App Bar Text", customPalettes['App Bar Text'] || result.data?.foreground_app_bar_color || ""],
+            ["Button Accent", customPalettes['Button Accent'] || result.data?.icon_background_color_left || ""]
+        ];
+        const wsColors = XLSX.utils.aoa_to_sheet(paletteData);
+        XLSX.utils.book_append_sheet(wb, wsColors, "Palette");
+        
+        // 5. Button Styles
+        const btnData = [["Shape", "Border Radius", "Background Hex", "Text Hex", "Font Family", "Padding"]];
+        if (result.buttonStyles) {
+            result.buttonStyles.forEach(btn => {
+                btnData.push([btn.shape || "", btn.borderRadius || "", btn.backgroundColorHex || btn.backgroundColor || "", btn.colorHex || btn.color || "", btn.fontFamily || "", btn.padding || ""]);
+            });
+        }
+        const wsBtn = XLSX.utils.aoa_to_sheet(btnData);
+        XLSX.utils.book_append_sheet(wb, wsBtn, "Button Styles");
+
+        XLSX.writeFile(wb, "WebsiteDNA_Extraction.xlsx");
     };
 
     return (
@@ -702,43 +775,82 @@ function App() {
                                             {result.ctas && result.ctas.length > 0 && (
                                                 <div>
                                                     <h4 style={{ color: 'var(--text-secondary)', marginBottom: '1rem', marginTop: 0 }}>From Website</h4>
-                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                                         {result.ctas.map((cta, idx) => {
-                                                            const isSelected = selectedCtas.includes(cta);
-                                                            const displayValue = ctaEdits[cta] !== undefined ? ctaEdits[cta] : cta;
-                                                            return (
-                                                            <div key={`web_${idx}`} style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', background: 'var(--surface-color)', padding: '0.8rem 1rem', borderRadius: 'var(--radius-sm)', border: isSelected ? '1px solid var(--active-select)' : '1px solid var(--border-color)', maxWidth: '300px', flex: '1 1 auto' }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', cursor: 'pointer' }}
-                                                                    onClick={() => {
-                                                                        if (isSelected) setSelectedCtas(selectedCtas.filter(c => c !== cta));
+                                                            const isComplexCta = typeof cta === 'object' && cta.url;
+                                                            // For backwards compatibility with old history (strings) vs new extractions (objects)
+                                                            const isSelected = isComplexCta ? selectedCtas.some(c => c.url === cta.url && c.context === cta.context) : selectedCtas.includes(cta);
+                                                            const originalDisplay = isComplexCta ? cta.button_name : cta;
+                                                            const ctaKey = isComplexCta ? cta.url : cta;
+                                                            const displayValue = ctaEdits[ctaKey] !== undefined ? ctaEdits[ctaKey] : originalDisplay;
+                                                            
+                                                            if (isComplexCta) {
+                                                                return (
+                                                                <div key={`web_${idx}`} style={{ display: 'flex', alignItems: 'stretch', gap: '1.5rem', background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: 'var(--radius-sm)', border: isSelected ? `1px solid var(--active-select)` : '1px solid transparent', transition: 'all 0.2s ease', minHeight: '80px' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={() => {
+                                                                        if (isSelected) setSelectedCtas(selectedCtas.filter(c => !(c.url === cta.url && c.context === cta.context)));
                                                                         else setSelectedCtas([...selectedCtas, cta]);
                                                                     }}>
-                                                                    <input 
-                                                                        type="checkbox" 
-                                                                        checked={isSelected}
-                                                                        readOnly
-                                                                        style={{ width: '16px', height: '16px', accentColor: 'var(--active-select)', cursor: 'pointer' }}
-                                                                    />
-                                                                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                                                                        <span style={{ fontWeight: '500', color: isSelected ? 'var(--active-select)' : 'var(--text-secondary)', fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Original Name:</span>
-                                                                        <em style={{ fontWeight: '500', color: isSelected ? 'var(--active-select)' : 'var(--text-secondary)', fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', opacity: 0.8 }}>{cta}</em>
-                                                                    </div>
-                                                                    <svg onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(cta); }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{cursor: 'pointer', color: 'var(--text-secondary)'}} onMouseEnter={(e)=>e.currentTarget.style.color='var(--primary)'} onMouseLeave={(e)=>e.currentTarget.style.color='var(--text-secondary)'} title="Copy Original Text"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                                                                </div>
-                                                                {isSelected && (
-                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: '0.5rem', marginTop: '0.2rem' }}>
-                                                                        <label style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 'bold' }}>EDITABLE CTA NAME</label>
                                                                         <input 
-                                                                            type="text"
-                                                                            value={displayValue}
-                                                                            onClick={(e) => e.stopPropagation()}
-                                                                            onChange={(e) => setCtaEdits({ ...ctaEdits, [cta]: e.target.value })}
-                                                                            style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'white', padding: '0.5rem 0.6rem', borderRadius: 'var(--radius-sm)', fontSize: '0.9rem' }}
+                                                                            type="checkbox" 
+                                                                            checked={isSelected}
+                                                                            readOnly
+                                                                            style={{ width: '20px', height: '20px', accentColor: 'var(--active-select)', cursor: 'pointer' }}
                                                                         />
                                                                     </div>
-                                                                )}
-                                                            </div>
-                                                        )})}
+                                                                    <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1.5rem', alignItems: 'center' }}>
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', borderRight: '1px dashed rgba(255, 255, 255, 0.1)', paddingRight: '1.5rem' }}>
+                                                                            <label style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 'bold' }}>EDITABLE CTA NAME</label>
+                                                                            <input 
+                                                                                type="text"
+                                                                                value={displayValue}
+                                                                                onChange={(e) => setCtaEdits({ ...ctaEdits, [cta.url]: e.target.value })}
+                                                                                style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'white', padding: '0.6rem 0.8rem', borderRadius: 'var(--radius-sm)', fontSize: '0.95rem' }}
+                                                                            />
+                                                                        </div>
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', overflow: 'hidden' }}>
+                                                                            <a href={cta.url} target="_blank" rel="noreferrer" style={{ color: isSelected ? 'var(--active-select)' : 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', transition: 'color 0.2s ease' }}>{cta.url}</a>
+                                                                            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontStyle: 'italic', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>"{cta.context}"</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                );
+                                                            } else {
+                                                                return (
+                                                                <div key={`web_${idx}`} style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', background: 'var(--surface-color)', padding: '0.8rem 1rem', borderRadius: 'var(--radius-sm)', border: isSelected ? '1px solid var(--active-select)' : '1px solid var(--border-color)', maxWidth: '300px', flex: '1 1 auto', display: 'inline-flex' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', cursor: 'pointer' }}
+                                                                        onClick={() => {
+                                                                            if (isSelected) setSelectedCtas(selectedCtas.filter(c => c !== cta));
+                                                                            else setSelectedCtas([...selectedCtas, cta]);
+                                                                        }}>
+                                                                        <input 
+                                                                            type="checkbox" 
+                                                                            checked={isSelected}
+                                                                            readOnly
+                                                                            style={{ width: '16px', height: '16px', accentColor: 'var(--active-select)', cursor: 'pointer' }}
+                                                                        />
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                                                                            <span style={{ fontWeight: '500', color: isSelected ? 'var(--active-select)' : 'var(--text-secondary)', fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Original Name:</span>
+                                                                            <em style={{ fontWeight: '500', color: isSelected ? 'var(--active-select)' : 'var(--text-secondary)', fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', opacity: 0.8 }}>{cta}</em>
+                                                                        </div>
+                                                                        <svg onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(cta); }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{cursor: 'pointer', color: 'var(--text-secondary)'}} onMouseEnter={(e)=>e.currentTarget.style.color='var(--primary)'} onMouseLeave={(e)=>e.currentTarget.style.color='var(--text-secondary)'} title="Copy Original Text"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                                                    </div>
+                                                                    {isSelected && (
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: '0.5rem', marginTop: '0.2rem' }}>
+                                                                            <label style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 'bold' }}>EDITABLE CTA NAME</label>
+                                                                            <input 
+                                                                                type="text"
+                                                                                value={displayValue}
+                                                                                onClick={(e) => e.stopPropagation()}
+                                                                                onChange={(e) => setCtaEdits({ ...ctaEdits, [cta]: e.target.value })}
+                                                                                style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'white', padding: '0.5rem 0.6rem', borderRadius: 'var(--radius-sm)', fontSize: '0.9rem' }}
+                                                                            />
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                );
+                                                            }
+                                                        })}
                                                     </div>
                                                 </div>
                                             )}
@@ -858,20 +970,32 @@ function App() {
                                     <h3 className="panel-title" style={{ color: 'var(--primary)' }}>🛠️ Build Final Payload</h3>
                                     <p style={{ color: 'var(--text-secondary)' }}>Review your selections above (Descriptions, Logos, Hero Images, CTAs) and generate the final payload.</p>
                                     
-                                    <button 
-                                        onClick={() => {
-                                            setIsGeneratingJson(true);
-                                            setTimeout(() => {
-                                                setIsGeneratingJson(false);
-                                                setShowJsonPreview(true);
-                                            }, 1500);
-                                        }}
-                                        className="btn-extract" 
-                                        style={{ marginTop: '1rem', padding: '1rem 2rem', fontSize: '1.1rem', maxWidth: '300px', display: 'flex', justifyContent: 'center' }}
-                                        disabled={isGeneratingJson}
-                                    >
-                                        {isGeneratingJson ? <div className="loader" style={{width: '20px', height: '20px'}}></div> : 'Submit to Create JSON'}
-                                    </button>
+                                    <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                                        <button 
+                                            onClick={() => {
+                                                setIsGeneratingJson(true);
+                                                setTimeout(() => {
+                                                    setIsGeneratingJson(false);
+                                                    setShowJsonPreview(true);
+                                                }, 1500);
+                                            }}
+                                            className="btn-extract" 
+                                            style={{ padding: '1rem 2rem', fontSize: '1.1rem', flex: 1,  maxWidth: '300px', display: 'flex', justifyContent: 'center' }}
+                                            disabled={isGeneratingJson}
+                                        >
+                                            {isGeneratingJson ? <div className="loader" style={{width: '20px', height: '20px'}}></div> : 'Submit to Create JSON'}
+                                        </button>
+                                        <button 
+                                            onClick={exportToExcel}
+                                            className="btn-extract-custom" 
+                                            style={{ padding: '1rem 2rem', fontSize: '1.1rem', flex: 1, maxWidth: '280px', display: 'flex', gap: '0.6rem', alignItems: 'center', justifyContent: 'center', background: '#217346', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', transition: 'all 0.2s ease' }}
+                                            onMouseEnter={(e)=>{e.currentTarget.style.transform='scale(1.02)'; e.currentTarget.style.filter='brightness(1.1)';}}
+                                            onMouseLeave={(e)=>{e.currentTarget.style.transform='scale(1)'; e.currentTarget.style.filter='brightness(1)';}}
+                                        >
+                                           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+                                           Export to CSV / Excel
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {/* 6. Campaign Configuration (JSON) */}

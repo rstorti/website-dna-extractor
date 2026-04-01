@@ -1,11 +1,11 @@
 const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
+const env = require('./config/env');
 
-const supabaseUrl = process.env.SUPABASE_URL || "https://missing.supabase.co";
-const supabaseKey = process.env.SUPABASE_ANON_KEY || "missing_key";
+const supabaseUrl = env.SUPABASE_URL || "https://missing.supabase.co";
+const supabaseKey = env.SUPABASE_ANON_KEY || "missing_key";
 
-if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-    console.error('⚠️ WARNING: Missing Supabase credentials in .env file or Render Secrets!');
+if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
+    console.error('⚠️ WARNING: Missing Supabase credentials in Lovable Secrets!');
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey);
