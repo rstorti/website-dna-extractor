@@ -9,13 +9,13 @@ const { generateBrandHero } = require('./vertex_imagen');
 const { generateHeroPrompts, analyzeImageForTextPlacement } = require('./gemini_prompter');
 const { supabase } = require('./supabaseClient');
 const env = require('./config/env');
-
+ 
 async function uploadToSupabase(filename, buffer, mimeType = 'image/jpeg') {
   if (!env.SUPABASE_URL || env.SUPABASE_URL.includes("missing.supabase.co")) {
     console.log(`⚠️ Supabase credentials missing. Bypassing cloud upload for ${filename} to prevent network hangs.`);
     return `/outputs/${filename}`;
   }
-
+ 
   try {
     const { error } = await supabase.storage
       .from('outputs')
@@ -23,12 +23,12 @@ async function uploadToSupabase(filename, buffer, mimeType = 'image/jpeg') {
         contentType: mimeType,
         upsert: true
       });
-
+ 
     if (error) {
       console.error('Supabase upload error:', error);
       return `/outputs/${filename}`; // Fallback to local
     }
-
+ 
     const { data } = supabase.storage.from('outputs').getPublicUrl(filename);
     return data.publicUrl;
   } catch (e) {
@@ -36,7 +36,7 @@ async function uploadToSupabase(filename, buffer, mimeType = 'image/jpeg') {
     return `/outputs/${filename}`;
   }
 }
-
+ 
 async function autoScroll(page) {
   try {
     await page.evaluate(async () => {
@@ -50,7 +50,7 @@ async function autoScroll(page) {
           window.scrollBy(0, distance);
           totalHeight += distance;
           scrolls++;
-
+ 
           // Stop if we reach bottom OR if we scroll 15 times (max runtime ~3750ms)
           // This is crucial for infinite scroll sites like lbc.co.uk which trap the agent in loops.
           if (totalHeight >= scrollHeight - window.innerHeight || scrolls >= 15) {
@@ -64,18 +64,18 @@ async function autoScroll(page) {
     console.log("⚠️ autoScroll skipped around detached frame to prevent crash.");
   }
 }
-
+ 
 function rgbToHex(rgb) {
   if (!rgb || rgb === 'rgba(0, 0, 0, 0)' || rgb === 'transparent') return null;
   const match = rgb.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
   if (!match) return null;
   return "#" + (1 << 24 | match[1] << 16 | match[2] << 8 | match[3]).toString(16).slice(1).toUpperCase();
 }
-
+ 
 async function scrapeYoutubeFallback(url) {
   let browser = null;
   try {
-    console.log(`\n🕵️‍♂️ PUPPETEER FALLBACK: Scraping YouTube DOM for ${url}...`);
+    console.log(`\n🕵️♂️ PUPPETEER FALLBACK: Scraping YouTube DOM for ${url}...`);
     browser = await puppeteer.launch({
       headless: "new",
       executablePath: env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
@@ -112,7 +112,7 @@ async function scrapeYoutubeFallback(url) {
       });
       await new Promise(r => setTimeout(r, 1500));
     } catch (e) {}
-
+ 
     await page.waitForSelector('h1.ytd-watch-metadata', { timeout: 10000 }).catch(() => null);
     
     // 🏆 FALLBACK 3: Bulletproof JSON Extraction
@@ -129,7 +129,7 @@ async function scrapeYoutubeFallback(url) {
         } catch (e) {}
         return null;
     });
-
+ 
     if (jsonExtraction && jsonExtraction.description !== 'No description text found.') {
         console.log(`✅ Puppeteer JSON Extraction Succeeded. Title: ${jsonExtraction.title}`);
         return { 
@@ -139,9 +139,9 @@ async function scrapeYoutubeFallback(url) {
             publishedAt: 'Agent JSON Extracted' 
         };
     }
-
+ 
     console.log(`⚠️ JSON Extraction failed, attempting DOM visual extraction...`);
-
+ 
     // Look for "more" or "Show more" button on the description and click it
     await page.evaluate(() => {
        const expandBtns = document.querySelectorAll('#expand, tp-yt-paper-button#expand, ytd-text-inline-expander');
@@ -153,12 +153,12 @@ async function scrapeYoutubeFallback(url) {
     }).catch(() => null);
     
     await new Promise(r => setTimeout(r, 1500)); // wait for DOM update animation
-
+ 
     const title = await page.evaluate(() => {
        const el = document.querySelector('h1.ytd-watch-metadata');
        return el ? el.innerText.trim() : 'Unknown Title';
     }).catch(() => 'Unknown Title');
-
+ 
     const description = await page.evaluate(() => {
        const container = document.querySelector('#description-inline-expander');
        if (!container) return 'No description text found.';
@@ -167,12 +167,12 @@ async function scrapeYoutubeFallback(url) {
        text = text.replace(/Show less$/i, '').replace(/\.\.\.more$/i, '').trim();
        return text;
     }).catch(() => 'No description found.');
-
+ 
     const channel = await page.evaluate(() => {
        const el = document.querySelector('ytd-channel-name a');
        return el ? el.innerText.trim() : 'Unknown Channel';
     }).catch(() => 'Unknown Channel');
-
+ 
     console.log(`✅ Puppeteer YouTube Scrape Complete. Title: ${title}`);
     return { title, channel, description, publishedAt: 'Agent Extracted' };
   } catch (error) {
@@ -182,48 +182,78 @@ async function scrapeYoutubeFallback(url) {
     if (browser) await browser.close().catch(console.error);
   }
 }
-
+ 
 async function extractDNA(url) {
   console.log(`\n🚀 Launching Puppeteer DNA Extractor for: ${url} `);
-
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    executablePath: env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
-    ignoreHTTPSErrors: true,
-    protocolTimeout: 120000,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--single-process',
-      '--no-zygote',
-      '--disable-web-security',
-      '--disable-features=IsolateOrigins,site-per-process',
-      '--allow-running-insecure-content',
-      '--ignore-certificate-errors',
-      '--ignore-certificate-errors-spki-list',
-      '--disable-extensions',
-      '--disable-background-networking',
-      '--window-size=1280,800'
-    ]
-  });
+ 
+  let browser;
+  try {
+    browser = await Promise.race([
+      puppeteer.launch({
+        headless: 'new',
+        executablePath: env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
+        ignoreHTTPSErrors: true,
+        protocolTimeout: 120000,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--single-process',
+          '--no-zygote',
+          '--disable-web-security',
+          '--disable-features=IsolateOrigins,site-per-process',
+          '--allow-running-insecure-content',
+          '--ignore-certificate-errors',
+          '--ignore-certificate-errors-spki-list',
+          '--disable-extensions',
+          '--disable-background-networking',
+          '--window-size=1280,800'
+        ]
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Browser launch timed out after 30s. Server may be out of memory — try again in 1 minute.')), 30000))
+    ]);
+  } catch (launchErr) {
+    console.error(`❌ Browser Launch Failed: ${launchErr.message}`);
+    return { error: launchErr.message };
+  }
+ 
   let page = await browser.newPage();
-
+ 
+  // Block heavy resources (fonts, media, large images) to speed up navigation on constrained servers
+  await page.setRequestInterception(true);
+  page.on('request', (req) => {
+    const resourceType = req.resourceType();
+    if (['font', 'media'].includes(resourceType)) {
+      req.abort();
+    } else {
+      req.continue();
+    }
+  });
+ 
+  // Override default Puppeteer timeouts to prevent the 60000ms default from hitting first
+  page.setDefaultNavigationTimeout(90000);
+  page.setDefaultTimeout(90000);
+ 
   // Set a standard desktop viewport
   await page.setViewport({ width: 1280, height: 800 });
-
+ 
   try {
     let fallbackToWayback = false;
-
-    // --- Tier 1: Live Fetch ---
+ 
+    // --- Tier 1: Live Fetch (with progressive timeout strategy) ---
     try {
+      let navigationSucceeded = false;
+ 
+      // Attempt 1: Standard fetch with domcontentloaded (45s)
       try {
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+        navigationSucceeded = true;
       } catch (err) {
         const errMsg = err.message ? err.message.toLowerCase() : '';
         if (errMsg.includes('timeout') || errMsg.includes('detached') || errMsg.includes('aborted')) {
-          console.log(`⚠️ Navigation interrupted for ${url} (Timeout or Detached). Site might be heavy or redirecting. Proceeding with partially loaded DOM...`);
+          console.log(`⚠️ Navigation interrupted for ${url} (${err.message}). Proceeding with partially loaded DOM...`);
+          navigationSucceeded = true; // Partial DOM is still usable
         } else {
           // Automatic fallback for apex domains with broken SSL (e.g., minfo.com -> www.minfo.com)
           const parsedUrl = new URL(url);
@@ -233,10 +263,12 @@ async function extractDNA(url) {
             url = parsedUrl.toString();
             try {
               await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+              navigationSucceeded = true;
             } catch (fallbackErr) {
               const fbMsg = fallbackErr.message ? fallbackErr.message.toLowerCase() : '';
               if (fbMsg.includes('timeout') || fbMsg.includes('detached') || fbMsg.includes('aborted')) {
                 console.log(`⚠️ Fallback navigation interrupted for ${url}. Proceeding with partially loaded DOM...`);
+                navigationSucceeded = true;
               } else {
                 throw fallbackErr;
               }
@@ -246,12 +278,38 @@ async function extractDNA(url) {
           }
         }
       }
-      
-      // Explicit hardcoded lag. Reduced to 3s to save time.
+ 
+      // Attempt 2: If still no content, try a fresh page with minimal wait strategy
+      if (navigationSucceeded) {
+        let hasContent = false;
+        try { hasContent = await page.evaluate(() => !!(document.body && document.body.innerHTML.length > 200)); } catch(e) {}
+ 
+        if (!hasContent) {
+          console.log(`⚠️ Page body is empty or too short. Retrying with fresh page and 'commit' waitUntil (lighter strategy)...`);
+          try {
+            const freshPage = await browser.newPage();
+            await freshPage.setViewport({ width: 1280, height: 800 });
+            await freshPage.goto(url, { waitUntil: 'commit', timeout: 30000 });
+            await new Promise(r => setTimeout(r, 5000)); // Wait 5s after first byte for JS to mount
+            const freshContent = await freshPage.evaluate(() => document.body && document.body.innerHTML.length > 200).catch(() => false);
+            if (freshContent) {
+              console.log(`✅ Fresh page strategy succeeded!`);
+              await page.close().catch(() => {});
+              page = freshPage;
+            } else {
+              await freshPage.close().catch(() => {});
+            }
+          } catch(retryErr) {
+            console.warn(`⚠️ Fresh page retry also failed: ${retryErr.message}`);
+          }
+        }
+      }
+ 
+      // Reduced wait (3s) for JS frameworks to mount
       await new Promise(r => setTimeout(r, 3000));
       
       console.log(`✅ Page loaded and Javascript mounted. Executing Anti-Bot WAF Verification...`);
-
+ 
       // --- Anti-Bot & Enterprise WAF Firewall Check ---
       let pageTitle = "Unknown Domain";
       let pageContent = "";
@@ -272,7 +330,7 @@ async function extractDNA(url) {
       const isBlocked = blockedKeywords.some(keyword => 
         pageTitle.includes(keyword) || pageContent.includes(keyword)
       );
-
+ 
       if (isBlocked || !frameReadSuccess) {
         console.warn(`🔒 Firewall block or Unreadable Frame detected on Live URL! Falling back to Wayback Machine.`);
         fallbackToWayback = true;
@@ -281,7 +339,7 @@ async function extractDNA(url) {
       console.warn(`⚠️ Live fetch failed entirely (${liveErr.message}). Falling back to Wayback Machine.`);
       fallbackToWayback = true;
     }
-
+ 
     // --- Tier 2: Wayback Machine Fetch ---
     if (fallbackToWayback) {
        console.log(`\n======================================================`);
@@ -312,14 +370,36 @@ async function extractDNA(url) {
           }
        } catch (archiveErr) {
           console.error(`❌ Wayback Machine fallback failed: ${archiveErr.message}`);
-          throw new Error('Both Live extraction and Archive fetch were rejected or failed. Target cannot be scraped.');
+ 
+          // --- Tier 3: Lightweight HTTP Fetch (no browser, just raw HTML) ---
+          console.log(`\n======================================================`);
+          console.log(`🌐 TIER 3: LIGHTWEIGHT HTTP FALLBACK (no Puppeteer)`);
+          try {
+            const httpResponse = await axios.get(url, {
+              timeout: 15000,
+              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
+              maxRedirects: 5,
+              validateStatus: (status) => status < 500
+            });
+            const html = httpResponse.data;
+            if (typeof html === 'string' && html.length > 500) {
+              console.log(`✅ HTTP Fallback retrieved ${html.length} chars of HTML. Injecting into browser...`);
+              try { await page.goto('about:blank'); } catch(e) {}
+              await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 10000 });
+            } else {
+              throw new Error('HTTP response too short or not HTML');
+            }
+          } catch (httpErr) {
+            console.error(`❌ Tier 3 HTTP Fallback also failed: ${httpErr.message}`);
+            throw new Error('All extraction tiers failed (Live, Wayback Archive, HTTP Fallback). Target cannot be scraped.');
+          }
        }
     }
-
+ 
     console.log(`✅ Passed Security. Executing auto-scroll to trigger lazy rendering...`);
     await autoScroll(page);
     console.log(`✅ Auto - scrolling complete.`);
-
+ 
     // --- Begin Data Extraction ---
     console.log(`🧬 Extracting DOM data...`);
     let extractedData;
@@ -340,17 +420,17 @@ async function extractDNA(url) {
             } catch (e) { }
           });
           if (src) return src;
-
+ 
           const headerLogo = document.querySelector('header img:not([src*="onetrust"]):not([src*="pixel"]), nav img:not([src*="onetrust"]), .header img:not([src*="onetrust"])');
           if (headerLogo) return headerLogo.src;
-
+ 
           return document.querySelector('meta[property="og:image"]')?.content || "";
         })(),
         domain: window.location.hostname,
         images: [],
         colors: { background: [], text: [], buttons: [] }
       };
-
+ 
       // Select BEST images by prioritizing large elements (filter out small tracking icons/logos)
       const imgTags = Array.from(document.querySelectorAll('img'));
       const imagesWithMeta = imgTags.map(img => {
@@ -358,43 +438,43 @@ async function extractDNA(url) {
         const height = img.naturalHeight || img.height || img.getBoundingClientRect().height || 0;
         return { src: img.src, area: width * height };
       }).filter(item => item.src && item.area > 15000); // Only keep reasonably large images
-
+ 
       imagesWithMeta.sort((a, b) => b.area - a.area);
       data.images = imagesWithMeta.map(item => item.src);
-
+ 
       // Grab generic background and text colors from body
       const bodyStyle = window.getComputedStyle(document.body);
       data.colors.background.push(bodyStyle.backgroundColor);
       data.colors.text.push(bodyStyle.color);
-
+ 
       // Grab button colors to represent "brand" or "accent" colors
       const buttons = document.querySelectorAll('button, a.btn, a.button, a[class*="btn"], a[class*="button"], [role="button"], input[type="submit"], input[type="button"]');
       const buttonStyles = [];
-
+ 
       buttons.forEach(btn => {
         const style = window.getComputedStyle(btn);
-
+ 
         // Skip invisible or transparent structural buttons
         if (style.display === 'none' || style.visibility === 'hidden' || style.backgroundColor === 'rgba(0, 0, 0, 0)' || style.backgroundColor === 'transparent') {
           return;
         }
-
+ 
         const radiusStr = style.borderRadius || '0px';
         const radPixelMatch = radiusStr.match(/(\d+)px/);
         let radiusVal = radPixelMatch ? parseInt(radPixelMatch[1]) : 0;
         if (radiusStr.includes('%') && parseInt(radiusStr) >= 50) radiusVal = 50;
-
+ 
         let shape = "Square";
         if (radiusVal > 0 && radiusVal < 15) shape = "Curved";
         if (radiusVal >= 15) shape = "Pill";
-
+ 
         // Some browsers return empty string for shorthand padding if individual sides differ
         let paddingStr = style.padding;
         if (!paddingStr || paddingStr === '0px' || paddingStr === '') {
           paddingStr = `${style.paddingTop} ${style.paddingRight} ${style.paddingBottom} ${style.paddingLeft} `;
         }
         if (paddingStr.trim() === '0px 0px 0px 0px') paddingStr = '0px';
-
+ 
         const btnText = btn.innerText ? btn.innerText.trim() : "";
         let btnUrl = "";
         if (btn.tagName.toLowerCase() === 'a' && btn.href) {
@@ -403,7 +483,7 @@ async function extractDNA(url) {
             const parentA = btn.closest('a');
             if (parentA && parentA.href) btnUrl = parentA.href;
         }
-
+ 
         buttonStyles.push({
           backgroundColor: style.backgroundColor,
           color: style.color,
@@ -414,7 +494,7 @@ async function extractDNA(url) {
           text: btnText,
           url: btnUrl
         });
-
+ 
         if (style.backgroundColor && style.backgroundColor !== 'rgba(0, 0, 0, 0)') {
           data.colors.buttons.push(style.backgroundColor);
         }
@@ -424,7 +504,7 @@ async function extractDNA(url) {
       });
       // Try to find primary buttons (with text)
       const validButtons = buttonStyles.filter(b => b.text && b.text.length > 2);
-
+ 
       const uniqueButtonsMap = new Map();
       validButtons.forEach(b => {
         if (!uniqueButtonsMap.has(b.backgroundColor)) {
@@ -435,7 +515,7 @@ async function extractDNA(url) {
       if (data.buttonStyles.length === 0 && buttonStyles.length > 0) {
         data.buttonStyles = [buttonStyles[0]];
       }
-
+ 
       const uniqueCtasMap = new Map();
       validButtons.forEach(b => {
         if (!/facebook|twitter|instagram|tiktok|linkedin|youtube|\bx\b/i.test(b.text)) {
@@ -451,7 +531,7 @@ async function extractDNA(url) {
             }
         }
       });
-
+ 
       // Also grab regular contextual links that aren't styled as buttons but might be CTAs
       document.querySelectorAll('a').forEach(a => {
           const text = a.innerText ? a.innerText.trim() : "";
@@ -468,9 +548,9 @@ async function extractDNA(url) {
               }
           }
       });
-
+ 
       data.ctas = Array.from(uniqueCtasMap.values()).slice(0, 15);
-
+ 
       // Scrape explicitly applied background-images (like the NAB Hero Banners)
       document.querySelectorAll('div, section, header, figure').forEach(el => {
         const style = window.getComputedStyle(el);
@@ -481,7 +561,7 @@ async function extractDNA(url) {
           }
         }
       });
-
+ 
       const socials = [];
       const uniqueUrls = new Set();
       document.querySelectorAll('a[href*="facebook.com"], a[href*="twitter.com"], a[href*="x.com"], a[href*="instagram.com"], a[href*="linkedin.com"], a[href*="youtube.com"], a[href*="tiktok.com"]').forEach(a => {
@@ -489,14 +569,14 @@ async function extractDNA(url) {
           let urlObj = new URL(a.href.trim());
           urlObj.search = ''; // Strip query parameters like ?hl=en
           urlObj.hash = '';   // Strip anchor tags
-
+ 
           let normalizedUrl = urlObj.toString().toLowerCase();
           if (normalizedUrl.endsWith('/')) normalizedUrl = normalizedUrl.slice(0, -1);
           normalizedUrl = normalizedUrl.replace('://www.', '://');
-
+ 
           // Ignore generic sharing links
           if (normalizedUrl.includes('/share') || normalizedUrl.includes('/intent/')) return;
-
+ 
           if (!uniqueUrls.has(normalizedUrl)) {
             uniqueUrls.add(normalizedUrl);
             socials.push(normalizedUrl);
@@ -504,7 +584,7 @@ async function extractDNA(url) {
         } catch (e) { }
       });
       data.socials = socials;
-
+ 
       // Grab Header background for app bar color
       const header = document.querySelector('header, nav, .header, .nav, .app-bar');
       if (header) {
@@ -512,7 +592,7 @@ async function extractDNA(url) {
         data.colors.header = headerStyle.backgroundColor;
         data.colors.headerText = headerStyle.color;
       }
-
+ 
       return data;
     });
         break; // Break if successful
@@ -521,7 +601,7 @@ async function extractDNA(url) {
           visualFallbackTriggered = true;
           let domainStr = "";
           try { domainStr = new URL(url).hostname; } catch(x) {}
-
+ 
           extractedData = {
              title: "Auto-Extracted Title",
              description: "",
@@ -544,7 +624,7 @@ async function extractDNA(url) {
           }
       }
     }
-
+ 
     // --- Data Mapping & Aggregation ---
     // Find most common colors to represent the true brand colors
     const findMostFrequent = (arr) => {
@@ -552,13 +632,13 @@ async function extractDNA(url) {
       const counts = arr.reduce((a, c) => (a[c] = (a[c] || 0) + 1, a), {});
       return Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
     };
-
+ 
     const primaryColor = rgbToHex(findMostFrequent(extractedData.colors.buttons)) || "#F99D32";
     const backgroundColor = rgbToHex(extractedData.colors.background[0]) || "#FFFFFF";
     const foregroundColor = rgbToHex(extractedData.colors.text[0]) || "#000000";
     const headerBgColor = rgbToHex(extractedData.colors.header) || backgroundColor;
     const headerFgColor = rgbToHex(extractedData.colors.headerText) || foregroundColor;
-
+ 
     const mappedFields = {
       brand: 5620, // Default from layout
       name: extractedData.title || "Website Campaign",
@@ -641,16 +721,16 @@ async function extractDNA(url) {
       additional_creators: [],
       context_files: []
     };
-
+ 
     // --- Screenshot Capture ---
     console.log(`📸 Taking full-page screenshot...`);
     const outputDir = path.join(__dirname, 'outputs');
     await fs.mkdir(outputDir, { recursive: true });
-
+ 
     const timestamp = new Date().getTime();
     const screenshotFilename = `screenshot_${timestamp}.jpg`;
     const screenshotPath = path.join(outputDir, screenshotFilename);
-
+ 
     // Calculate the absolute deepest scrolling content on the page (bypassing 100vh limits)
     const contentHeight = await page.evaluate(() => {
         let maxBottom = document.body.scrollHeight || 0;
@@ -666,7 +746,7 @@ async function extractDNA(url) {
         // Force minimum 800, max 4000 so we don't crash Puppeteer memory on Render Free Tier
         return Math.min(Math.max(maxBottom, 800), 4000);
     }).catch(() => 1080); // Fallback to 1080 if evaluate fails
-
+ 
     console.log(`📐 Resizing viewport physically to ${Math.ceil(contentHeight)}px to un-truncate SPAs...`);
     
     let screenshotSuccess = false;
@@ -683,34 +763,60 @@ async function extractDNA(url) {
             await new Promise(r => setTimeout(r, 3000));
         }
     }
-
+ 
     if (!screenshotSuccess) {
         console.error(`❌ Screenshot sequence completely failed after retries. Generating dummy blank canvas to prevent downstream crash.`);
         await require('sharp')({
           create: { width: 1280, height: 800, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } }
         }).jpeg().toFile(screenshotPath);
     }
-
+ 
     // Upload screenshot to Supabase
     const screenshotBuffer = await fs.readFile(screenshotPath);
     const screenshotPublicUrl = await uploadToSupabase(screenshotFilename, screenshotBuffer, 'image/png');
-
+ 
     // --- Image Resizing using Sharp ---
     console.log(`🖼️ Resizing logo and images...`);
-
-    // 100% Reliable Logo QA Process: If the scraped logo is invalid/missing, fallback to Google's rigorous DB
+ 
+    // 100% Reliable Logo QA Process with cascading fallbacks
     let finalLogoUrl = mappedFields.image;
-    if (!finalLogoUrl || finalLogoUrl.includes('onetrust') || finalLogoUrl.includes('apple-touch-icon')) {
+    if (!finalLogoUrl || finalLogoUrl.includes('onetrust') || finalLogoUrl.includes('apple-touch-icon') || finalLogoUrl.includes('pixel')) {
       finalLogoUrl = `https://www.google.com/s2/favicons?domain=${extractedData.domain}&sz=256`;
       mappedFields.image = finalLogoUrl;
     }
-
+ 
     console.log(`🔍 Validated Primary Logo URL: ${finalLogoUrl}`);
     let logoLocalPath = null;
     let logoPublicUrl = null;
-    if (finalLogoUrl && finalLogoUrl.startsWith('http')) {
+ 
+    // Build prioritized list of logo sources to try
+    const logoSources = [finalLogoUrl];
+    if (finalLogoUrl !== `https://www.google.com/s2/favicons?domain=${extractedData.domain}&sz=256`) {
+      logoSources.push(`https://www.google.com/s2/favicons?domain=${extractedData.domain}&sz=256`);
+    }
+    logoSources.push(`https://logo.clearbit.com/${extractedData.domain}`);
+    // Also try with www if domain doesn't have it
+    if (!extractedData.domain.startsWith('www.')) {
+      logoSources.push(`https://www.google.com/s2/favicons?domain=www.${extractedData.domain}&sz=256`);
+    }
+ 
+    let logoFetched = false;
+    for (const logoUrl of logoSources) {
+      if (logoFetched) break;
+      if (!logoUrl || !logoUrl.startsWith('http')) continue;
+ 
       try {
-        const response = await axios.get(finalLogoUrl, { responseType: 'arraybuffer', timeout: 5000 });
+        console.log(`🔍 Trying logo source: ${logoUrl}`);
+        const response = await axios.get(logoUrl, { responseType: 'arraybuffer', timeout: 8000 });
+ 
+        // Validate it's actually an image and not a tiny placeholder
+        if (!response.data || response.data.length < 100) {
+          console.log(`⚠️ Logo response too small (${response.data?.length || 0} bytes), trying next source...`);
+          continue;
+        }
+ 
+        finalLogoUrl = logoUrl;
+        mappedFields.image = finalLogoUrl;
         const logoFilename = `logo_256_${timestamp}.png`;
         logoLocalPath = path.join(outputDir, logoFilename);
         
@@ -719,19 +825,19 @@ async function extractDNA(url) {
           .resize(256, 256, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 0 } })
           .png()
           .toBuffer();
-
+ 
         // 2. Perform Mathematical Pixel Luminance Analysis
         const { data: rawPixels, info } = await sharp(logoBuffer).raw().toBuffer({ resolveWithObject: true });
         
         let totalLuminance = 0;
         let visiblePixels = 0;
-
+ 
         for (let i = 0; i < rawPixels.length; i += info.channels) {
             const r = rawPixels[i];
             const g = rawPixels[i+1];
             const b = rawPixels[i+2];
             const a = info.channels === 4 ? rawPixels[i+3] : 255;
-
+ 
             // Only measure pixels that are visible (opacity > ~10%)
             if (a > 25) { 
                 const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
@@ -739,7 +845,7 @@ async function extractDNA(url) {
                 visiblePixels++;
             }
         }
-
+ 
         const avgLuminance = visiblePixels > 0 ? (totalLuminance / visiblePixels) : 255;
         
         // 3. Fallback to White Canvas if Average Luminance drops below contrast threshold
@@ -752,37 +858,44 @@ async function extractDNA(url) {
         } else {
             console.log(`☀️ Bright Logo Detected (Luminance: ${Math.round(avgLuminance)}). Preserving Transparency.`);
         }
-
+ 
         await fs.writeFile(logoLocalPath, logoBuffer);
         logoPublicUrl = await uploadToSupabase(logoFilename, logoBuffer, 'image/png');
         mappedFields.image = logoPublicUrl;
-      } catch (e) { console.error('Logo resize failed', e); }
+        logoFetched = true;
+      } catch (e) {
+        console.warn(`⚠️ Logo source failed (${logoUrl}): ${e.message}. Trying next...`);
+      }
     }
-
+    if (!logoFetched) {
+      console.warn(`⚠️ All logo sources exhausted. Using Google favicon as final fallback.`);
+      mappedFields.image = `https://www.google.com/s2/favicons?domain=${extractedData.domain}&sz=256`;
+    }
+ 
     const availableImages = extractedData.images.filter(src => src && src.startsWith('http') && src !== mappedFields.image);
     const downloadedImages = [];
-
+ 
     // --- Generate Prompts via Gemini ---
     console.log(`🤖 Requesting Gemini 1.5 Pro to write Image Prompts based on DNA...`);
     const prompts = await generateHeroPrompts(extractedData);
     if (!prompts) {
       console.warn(`⚠️ Warning: Gemini failed. Check API Key. Defaulting to generic aesthetic prompts.`);
     }
-
+ 
     const rawBrandName = mappedFields.name || 'this brand';
     // If the title is massive (e.g., "MAZDA MOTOR CORPORATION GLOBAL WEBSITE"), extract the first word/phrase
     const brandName = rawBrandName.length > 18 ? rawBrandName.split(/[\|\-\:]/)[0].trim().split(' ')[0] : rawBrandName;
     const genericPremiumInstruction = "bright, inviting, premium commercial photography, cinematic lighting, 8k resolution, lifestyle product shot, NOT sci-fi, NOT moody.";
-
+ 
     const defaultPrompts = {
       cleanPromptA: `A pristine, breathtaking ${genericPremiumInstruction} ad background for ${brandName}. Bright and sunny. Elegant scene, no text natively.`,
       taglineA: `Discover ${brandName}`,
       cleanPromptB: `A bright, creative, energetic ${genericPremiumInstruction} hero image capturing the modern essence of ${brandName}. Purely visual, modern lifestyle.`,
       taglineB: `Experience ${brandName}`
     };
-
+ 
     const finalPrompts = prompts || defaultPrompts;
-
+ 
     const performMathematicalVisionAnalysis = async (buffer) => {
       // Because Vertex AI Gemini Vision is throwing 404 restricted access errors in this GCP project,
       // we implement mathematical "AI Thinking" using Sharp to analyze image entropy (contrast/detail).
@@ -790,7 +903,7 @@ async function extractDNA(url) {
       try {
         const { data, info } = await sharp(buffer).raw().toBuffer({ resolveWithObject: true });
         const width = info.width;
-
+ 
         let topVariance = 0, midVariance = 0;
         // Analyze Top Zone (y: 50-180) using much larger strides for low-CPU environments
         for (let y = 50; y < 180; y += 10) {
@@ -806,7 +919,7 @@ async function extractDNA(url) {
             midVariance += Math.abs(data[idx] - data[idx + info.channels]);
           }
         }
-
+ 
         if (topVariance < midVariance * 0.8) return "TOP";
         if (midVariance < topVariance * 0.8) return "MIDDLE";
         return "TOP"; // Default to top if entropy is balanced
@@ -814,7 +927,7 @@ async function extractDNA(url) {
         return "TOP";
       }
     };
-
+ 
     const overlayTextOnBuffer = async (buffer, tagline, zone = "TOP") => {
       if (!buffer || !tagline) return buffer;
       const words = tagline.split(' ');
@@ -829,20 +942,20 @@ async function extractDNA(url) {
         }
       }
       lines.push(curLine);
-
+ 
       const fontSize = lines.length > 2 ? 46 : 58;
       const lineSpacing = fontSize * 1.25;
-
+ 
       let baseCenterY = 110; // 'TOP' shifted much higher to avoid product occlusion
       if (zone === "MIDDLE") baseCenterY = 280;
       if (zone === "LOWER_MIDDLE") baseCenterY = 400; // Leaves bottom 240px safe
-
+ 
       const startY = baseCenterY - ((lines.length - 1) * lineSpacing) / 2;
-
+ 
       const textNodes = lines.map((line, index) => {
         return `<text x="50%" y="${startY + (index * lineSpacing)}" text-anchor="middle" dominant-baseline="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="${fontSize}" fill="#ffffff" filter="url(#drop-shadow)">${line.toUpperCase().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</text>`;
       }).join('');
-
+ 
       const svgText = `
         <svg width="640" height="640">
         <defs>
@@ -853,7 +966,7 @@ async function extractDNA(url) {
         ${textNodes}
         </svg>
         `;
-
+ 
       try {
         return await sharp(buffer)
           .composite([{ input: Buffer.from(svgText), top: 0, left: 0 }])
@@ -864,7 +977,7 @@ async function extractDNA(url) {
         return buffer;
       }
     };
-
+ 
     const generateVariantPair = async (prompt, tagline, prefix) => {
       if (!prompt) return null;
       console.log(`🎨 Generating Base Image ${prefix}...`);
@@ -880,7 +993,7 @@ async function extractDNA(url) {
       ]);
       
       if (!rawBuffer) return null;
-
+ 
       // Save Clean
       const cleanBuffer = await sharp(rawBuffer).resize(640, 640, { fit: 'cover' }).jpeg({ quality: 85 }).toBuffer();
       const cleanFilename = `img_640_clean_${prefix}_${timestamp}.jpg`;
@@ -888,12 +1001,12 @@ async function extractDNA(url) {
       const cleanPublicUrl = await uploadToSupabase(cleanFilename, cleanBuffer, 'image/jpeg');
       downloadedImages.push(cleanPublicUrl);
       console.log(`✅ Saved clean_${prefix} to Supabase`);
-
+ 
       // Perform Vision Analysis to find safest text placement
       console.log(`👁️ Performing Mathematical 'AI' Vision Analysis to dodge products...`);
       const safeZone = await performMathematicalVisionAnalysis(cleanBuffer);
       console.log(`🎯 Vision recommended safest placement zone: ${safeZone}`);
-
+ 
       // Overlay Text and Save
       console.log(`✍️ Overlaying text '${tagline}'...`);
       const textBuffer = await overlayTextOnBuffer(cleanBuffer, tagline, safeZone);
@@ -904,32 +1017,41 @@ async function extractDNA(url) {
       console.log(`✅ Saved text_${prefix} to Supabase`);
       return true;
     };
-
+ 
     console.log(`🖼️ Generating Image Variations (Natively compositing text for pixel-perfect sets)...`);
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
+ 
     let genA = await generateVariantPair(finalPrompts.cleanPromptA, finalPrompts.taglineA, 'A');
     if (genA) await sleep(2500);
     let genB = await generateVariantPair(finalPrompts.cleanPromptB, finalPrompts.taglineB, 'B');
-
+ 
     const results = [genA, genB];
-
+ 
     // Fallback: If Vertex AI failed, we still guarantee 4 images by using scraped images
     const validResults = results.filter(r => r !== null);
     if (validResults.length === 0 && availableImages.length > 0) {
       console.log(`⚠️ Vertex AI Generation failed. Supplying 4 high-quality fallback images from website DNA...`);
       const createFallbackPair = async (imgUrl, tagline, prefix) => {
         try {
-          const response = await axios.get(imgUrl, { responseType: 'arraybuffer', timeout: 5000 });
+          const response = await axios.get(imgUrl, {
+            responseType: 'arraybuffer',
+            timeout: 10000,
+            maxContentLength: 10 * 1024 * 1024, // 10MB cap to prevent OOM
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+          });
+          if (!response.data || response.data.length < 500) {
+            console.warn(`⚠️ Image too small (${response.data?.length} bytes), skipping ${imgUrl}`);
+            return;
+          }
           const baseBuffer = Buffer.from(response.data);
-
+ 
           // Save Clean (using cover to prevent white borders!)
           const cleanBuffer = await sharp(baseBuffer).resize(640, 640, { fit: 'cover' }).jpeg({ quality: 85 }).toBuffer();
           const cleanFilename = `img_640_clean_${prefix}_${timestamp}.jpg`;
           await fs.writeFile(path.join(outputDir, cleanFilename), cleanBuffer);
           const cleanPublicUrl = await uploadToSupabase(cleanFilename, cleanBuffer, 'image/jpeg');
           downloadedImages.push(cleanPublicUrl);
-
+ 
           // Save Text (using vision to safely overlay text!)
           const safeZone = await performMathematicalVisionAnalysis(cleanBuffer);
           const textBuffer = await overlayTextOnBuffer(cleanBuffer, tagline, safeZone);
@@ -939,7 +1061,7 @@ async function extractDNA(url) {
           downloadedImages.push(textPublicUrl);
         } catch (e) { console.error('Fallback variation failed:', e.message); }
       };
-
+ 
       await createFallbackPair(availableImages[0], finalPrompts.taglineA, 'A');
       if (availableImages.length > 1) {
         await createFallbackPair(availableImages[1], finalPrompts.taglineB, 'B');
@@ -948,7 +1070,39 @@ async function extractDNA(url) {
       }
       console.log(`✅ Emulated 4 fallback images perfectly utilizing Pomelli layout`);
     }
-
+ 
+    // --- FINAL SAFETY NET: If we still have 0 images, generate branded gradient placeholders ---
+    if (downloadedImages.length === 0) {
+      console.log(`⚠️ ZERO images available after all fallbacks. Generating branded color placeholders...`);
+      const hexToRgb = (hex) => {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : { r: 249, g: 157, b: 50 };
+      };
+      const brandRgb = hexToRgb(primaryColor);
+ 
+      for (const [idx, tagline] of [finalPrompts.taglineA, finalPrompts.taglineB].entries()) {
+        try {
+          const prefix = idx === 0 ? 'A' : 'B';
+          // Create a solid-color branded image
+          const cleanBuffer = await sharp({
+            create: { width: 640, height: 640, channels: 3, background: brandRgb }
+          }).jpeg({ quality: 85 }).toBuffer();
+          const cleanFilename = `img_640_clean_${prefix}_${timestamp}.jpg`;
+          await fs.writeFile(path.join(outputDir, cleanFilename), cleanBuffer);
+          const cleanPublicUrl = await uploadToSupabase(cleanFilename, cleanBuffer, 'image/jpeg');
+          downloadedImages.push(cleanPublicUrl);
+ 
+          // Overlay text
+          const textBuffer = await overlayTextOnBuffer(cleanBuffer, tagline, 'MIDDLE');
+          const textFilename = `img_640_text_${prefix}_${timestamp}.jpg`;
+          await fs.writeFile(path.join(outputDir, textFilename), textBuffer);
+          const textPublicUrl = await uploadToSupabase(textFilename, textBuffer, 'image/jpeg');
+          downloadedImages.push(textPublicUrl);
+        } catch(e) { console.error(`Placeholder generation failed for set ${idx}:`, e.message); }
+      }
+      console.log(`✅ Generated ${downloadedImages.length} branded placeholder images.`);
+    }
+ 
     const finalOutput = {
       mappedData: mappedFields,
       buttonStyles: extractedData.buttonStyles ? extractedData.buttonStyles.map(b => ({
@@ -965,9 +1119,9 @@ async function extractDNA(url) {
       screenshotUrl: screenshotPublicUrl, // Pass URL up to be used directly
       logoUrl: logoPublicUrl
     };
-
+ 
     return finalOutput;
-
+ 
   } catch (error) {
     console.error(`❌ Puppeteer Error: ${error.message}`);
     return { error: error.message };
@@ -986,7 +1140,7 @@ async function extractDNA(url) {
     }
   }
 }
-
+ 
 // Check if running directly via CLI
 if (require.main === module) {
   const targetUrl = process.argv[2];
@@ -994,7 +1148,7 @@ if (require.main === module) {
     console.error("❌ Please provide a URL to extract. Example: node extractor.js https://minfo.com");
     process.exit(1);
   }
-
+ 
   extractDNA(targetUrl).then(data => {
     if (!data) {
       console.error("❌ Extraction failed.");
@@ -1004,5 +1158,5 @@ if (require.main === module) {
     console.log(JSON.stringify(data.mappedData, null, 2));
   });
 }
-
+ 
 module.exports = { extractDNA, scrapeYoutubeFallback };
