@@ -517,6 +517,12 @@ function App() {
                         {result && (
                             <div className="dashboard-grid" style={{ '--active-select': showJsonPreview ? '#4caf50' : 'var(--primary)' }}>
 
+                                {result.data?.isWaybackFallback && (
+                                    <div style={{ gridColumn: '1 / -1', background: 'rgba(255, 165, 0, 0.1)', border: '1px solid orange', color: 'orange', padding: '0.5rem 1rem', borderRadius: 'var(--radius-sm)', textAlign: 'center', fontWeight: '500' }}>
+                                        <strong>🏛️ Historical Archive Fallback:</strong> The live site actively blocked our agents, so this visual data and screenshot was safely extracted from the Wayback Machine. Date of capture may vary.
+                                    </div>
+                                )}
+
                                 {/* 1. Top Header with Logo and Descriptions */}
                                 <div className="glass-panel top-header" style={{ display: 'flex', gap: '2rem', alignItems: 'flex-start' }}>
                                     <div className="logo-preview-box" style={{ position: 'relative', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center' }}>

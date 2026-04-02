@@ -13,7 +13,7 @@ const env = require('./config/env');
 async function uploadToSupabase(filename, buffer, mimeType = 'image/jpeg') {
   if (!env.SUPABASE_URL || env.SUPABASE_URL.includes("missing.supabase.co")) {
     console.log(`⚠️ Supabase credentials missing. Bypassing cloud upload for ${filename} to prevent network hangs.`);
-    return `/outputs/${filename}`;
+    return `data:${mimeType};base64,${buffer.toString('base64')}`;
   }
  
   try {
@@ -26,14 +26,14 @@ async function uploadToSupabase(filename, buffer, mimeType = 'image/jpeg') {
  
     if (error) {
       console.error('Supabase upload error:', error);
-      return `/outputs/${filename}`; // Fallback to local
+      return `data:${mimeType};base64,${buffer.toString('base64')}`; // Fallback to base64
     }
  
     const { data } = supabase.storage.from('outputs').getPublicUrl(filename);
     return data.publicUrl;
   } catch (e) {
     console.error('Supabase generic error:', e);
-    return `/outputs/${filename}`;
+    return `data:${mimeType};base64,${buffer.toString('base64')}`;
   }
 }
  
@@ -525,6 +525,22 @@ async function extractDNA(url) {
  
         const btnText = btn.innerText ? btn.innerText.trim() : "";
         let btnUrl = "";
+        let textColor = style.color;
+        
+        // Buttons often wrap <a> or <span> tags which hold the true CSS color.
+        // Traverse down the DOM tree specifically tracing elements that contain the same innerText.
+        function getActualTextColor(element) {
+             const children = Array.from(element.children);
+             if (children.length === 0) return window.getComputedStyle(element).color;
+             for (let i = 0; i < children.length; i++) {
+                 if (children[i].innerText && children[i].innerText.trim() === element.innerText.trim()) {
+                     return getActualTextColor(children[i]);
+                 }
+             }
+             return window.getComputedStyle(element).color;
+        }
+        textColor = getActualTextColor(btn);
+
         if (btn.tagName.toLowerCase() === 'a' && btn.href) {
             btnUrl = btn.href;
         } else {
@@ -534,7 +550,7 @@ async function extractDNA(url) {
  
         buttonStyles.push({
           backgroundColor: style.backgroundColor,
-          color: style.color,
+          color: textColor,
           borderRadius: radiusStr,
           shape: shape,
           fontFamily: style.fontFamily,
@@ -1160,12 +1176,13 @@ async function extractDNA(url) {
       })) : [],
       ctas: extractedData.ctas || [],
       socialMediaLinks: extractedData.socials,
-      featuredImages: downloadedImages, // Now contains Supabase public URLs
+      featuredImages: downloadedImages,
       rawExtractedImages: extractedData.images.slice(0, 5),
       screenshotPath: screenshotPath,
       logoPath: logoLocalPath,
-      screenshotUrl: screenshotPublicUrl, // Pass URL up to be used directly
-      logoUrl: logoPublicUrl
+      screenshotUrl: screenshotPublicUrl,
+      logoUrl: logoPublicUrl,
+      isWaybackFallback: fallbackToWayback
     };
  
     return finalOutput;
