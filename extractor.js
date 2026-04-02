@@ -251,11 +251,15 @@ async function extractDNA(url) {
     // --- Anti-Bot & Enterprise WAF Firewall Check ---
     let pageTitle = "Unknown Domain";
     let pageContent = "";
-    try {
-        pageTitle = await page.title();
-        pageContent = await page.evaluate(() => document.body.innerText.substring(0, 1000));
-    } catch(e) {
-        console.warn('⚠️ WAF check bypassed due to detached frame. Proceeding visually.', e.message);
+    for (let attempts = 0; attempts < 3; attempts++) {
+        try {
+            pageTitle = await page.title();
+            pageContent = await page.evaluate(() => document.body.innerText.substring(0, 1000));
+            break;
+        } catch(e) {
+            console.warn(`⚠️ WAF check frame detached. Waiting 3s for redirect... (Attempt ${attempts+1}/3)`);
+            await new Promise(r => setTimeout(r, 3000));
+        }
     }
     const blockedKeywords = ['Access Denied', 'Attention Required!', 'Cloudflare Ray ID', 'Security Check', '403 Forbidden'];
     
@@ -276,13 +280,15 @@ async function extractDNA(url) {
     console.log(`🧬 Extracting DOM data...`);
     let extractedData;
     let visualFallbackTriggered = false;
-    try {
-      extractedData = await page.evaluate(() => {
-        const data = {
-        title: document.title,
-        description: document.querySelector('meta[name="description"]')?.content || "",
-        logo: (() => {
-          let src = "";
+    
+    for (let attempts = 0; attempts < 3; attempts++) {
+      try {
+        extractedData = await page.evaluate(() => {
+          const data = {
+          title: document.title,
+          description: document.querySelector('meta[name="description"]')?.content || "",
+          logo: (() => {
+            let src = "";
           document.querySelectorAll('script[type="application/ld+json"]').forEach(tag => {
             try {
               const d = JSON.parse(tag.innerText);
@@ -465,25 +471,34 @@ async function extractDNA(url) {
 
       return data;
     });
-    } catch(e) {
-        console.error(`❌ Complete DOM Extraction Failure! Fallback to 100% Visual Analysis Agent triggered. Cause: ${e.message}`);
-        visualFallbackTriggered = true;
-        let domainStr = "";
-        try { domainStr = new URL(url).hostname; } catch(x) {}
+        break; // Break if successful
+      } catch(e) {
+          console.error(`❌ Complete DOM Extraction Failure! Fallback to 100% Visual Analysis Agent triggered. Cause: ${e.message}`);
+          visualFallbackTriggered = true;
+          let domainStr = "";
+          try { domainStr = new URL(url).hostname; } catch(x) {}
 
-        extractedData = {
-           title: "Auto-Extracted Title",
-           description: "",
-           logo: "",
-           domain: domainStr,
-           images: [],
-           colors: { background: ['#ffffff'], text: ['#000000'], buttons: [] },
-           buttonStyles: [],
-           ctas: [],
-           socials: [],
-           header: null,
-           headerText: null
-        };
+          extractedData = {
+             title: "Auto-Extracted Title",
+             description: "",
+             logo: "",
+             domain: domainStr,
+             images: [],
+             colors: { background: ['#ffffff'], text: ['#000000'], buttons: [] },
+             buttonStyles: [],
+             ctas: [],
+             socials: [],
+             header: null,
+             headerText: null
+          };
+          
+          if (attempts === 2) {
+             console.log(`⚠️ All retries failed. Using blank DOM object.`);
+          } else {
+             console.log(`⚠️ Retrying extracting DOM...`);
+             await new Promise(r => setTimeout(r, 2000));
+          }
+      }
     }
 
     // --- Data Mapping & Aggregation ---
@@ -609,15 +624,24 @@ async function extractDNA(url) {
     }).catch(() => 1080); // Fallback to 1080 if evaluate fails
 
     console.log(`📐 Resizing viewport physically to ${Math.ceil(contentHeight)}px to un-truncate SPAs...`);
-    try {
-        await page.setViewport({ width: 1280, height: Math.ceil(contentHeight) });
-        // Wait for the browser rendering engine to layout the new massive viewport
-        await new Promise(r => setTimeout(r, 800));
-        // Fullpage screenshots cause silent Out-Of-Memory crashes on 512MB instances.
-        await page.screenshot({ path: screenshotPath, fullPage: false, type: 'jpeg', quality: 70 });
-        console.log(`🖼️ Screenshot saved locally to: ${screenshotPath}`);
-    } catch(err) {
-        console.warn(`⚠️ Screenshot sequence interrupted by aggressive redirection. Creating blank fallback canvas...`, err.message);
+    
+    let screenshotSuccess = false;
+    for (let attempts = 0; attempts < 3; attempts++) {
+        try {
+            await page.setViewport({ width: 1280, height: Math.ceil(contentHeight) });
+            await new Promise(r => setTimeout(r, 1000));
+            await page.screenshot({ path: screenshotPath, fullPage: false, type: 'jpeg', quality: 70 });
+            console.log(`🖼️ Screenshot saved locally to: ${screenshotPath}`);
+            screenshotSuccess = true;
+            break;
+        } catch(err) {
+            console.warn(`⚠️ Screenshot failed (${err.message}). Frame likely redirecting. Waiting 3s...`);
+            await new Promise(r => setTimeout(r, 3000));
+        }
+    }
+
+    if (!screenshotSuccess) {
+        console.error(`❌ Screenshot sequence completely failed after retries. Generating dummy blank canvas to prevent downstream crash.`);
         await require('sharp')({
           create: { width: 1280, height: 800, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } }
         }).jpeg().toFile(screenshotPath);
