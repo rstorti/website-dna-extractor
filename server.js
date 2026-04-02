@@ -14,25 +14,48 @@ const app = express();
 const PORT = env.PORT;
 const HISTORY_FILE = path.join(__dirname, 'outputs', 'history.json');
 
-app.use(cors());
+// Mutex to prevent race conditions during concurrent local history file read/writes
+let localHistoryMutex = Promise.resolve();
+
+app.use(cors({
+    origin: function (origin, callback) {
+        if (!origin) return callback(null, true);
+        if (origin.startsWith('http://localhost') || origin.includes('netlify.app') || origin.includes('minfo.com')) {
+            return callback(null, true);
+        }
+        return callback(null, false); // Fail silently instead of throwing 500 error to avoid crashing
+    }
+}));
 app.use(express.json());
 
 // Explicitly serve local outputs folder natively to prevent 404 proxy loops
 app.use('/outputs', express.static(path.join(__dirname, 'outputs')));
+
+// Health Endpoint to keep Render awake
+app.get('/api/health', (req, res) => {
+    res.status(200).send('OK');
+});
 
 // Proxy Download Endpoint to fix CORS extension issues
 app.get('/api/download', async (req, res) => {
     try {
         const { url, filename } = req.query;
         if (!url) return res.status(400).send('URL missing');
-        
+
+        const safeFilename = path.basename(filename || 'download.png').replace(/[^a-zA-Z0-9_\-\.]/g, ''); // Fix Header Injection
+
         // Handle fallback paths if Supabase Cloud Upload failed
         if (url.startsWith('/outputs/')) {
             const localFileName = path.basename(url);
             const localFilePath = path.join(__dirname, 'outputs', localFileName);
-            return res.download(localFilePath, filename || localFileName, (err) => {
+            return res.download(localFilePath, safeFilename, (err) => {
                 if (err) res.status(500).send('Local File Download Failed: Could not locate fallback file on disk.');
             });
+        }
+
+        // Prevent SSRF attacks: Whitelist only our designated cloud storage domains
+        if (!url.includes('.supabase.co/storage/v1/object/public/') && !url.includes('google.com/s2/favicons')) {
+             return res.status(403).send('SSRF Blocked: Invalid target domain. Proxy only allows verified Supabase or Google domains.');
         }
 
         // Handle external HTTP Cloud URLs securely using buffered byte transfer
@@ -42,7 +65,7 @@ app.get('/api/download', async (req, res) => {
             method: 'GET',
             responseType: 'arraybuffer' // Buffer entirely before sending to prevent corrupt partials
         });
-        res.setHeader('Content-Disposition', `attachment; filename="${filename || 'download.png'}"`);
+        res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
         res.setHeader('Content-Type', response.headers['content-type'] || 'application/octet-stream');
         res.end(response.data);
     } catch (e) {
@@ -64,7 +87,7 @@ app.post('/api/extract', async (req, res) => {
     }
 
     try {
-        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ error: 'Process timed out after 150 seconds. The target website may be blocking access or slow.' }), 150000));
+        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ error: 'Process timed out after 300 seconds. The target website may be blocking access or slow.' }), 300000));
         
         const extractPromises = [];
         let pMainIndex = -1;
@@ -284,23 +307,28 @@ app.post('/api/extract', async (req, res) => {
                 payload: finalPayload
             };
 
-            let localHistory = [];
-            try {
-                const historyData = await fs.readFile(HISTORY_FILE, 'utf-8');
-                localHistory = JSON.parse(historyData);
-            } catch (e) {
-                // File doesn't exist or is invalid, start fresh
-            }
+            localHistoryMutex = localHistoryMutex.then(async () => {
+                let localHistory = [];
+                try {
+                    const historyData = await fs.readFile(HISTORY_FILE, 'utf-8');
+                    localHistory = JSON.parse(historyData);
+                } catch (e) {
+                    // File doesn't exist or is invalid, start fresh
+                }
 
-            localHistory.unshift(historyItem);
-            // Cap history to 100 items to prevent massive disk usage
-            if (localHistory.length > 100) localHistory = localHistory.slice(0, 100);
-            
-            await fs.mkdir(path.dirname(HISTORY_FILE), { recursive: true });
-            await fs.writeFile(HISTORY_FILE, JSON.stringify(localHistory, null, 2));
-            console.log('✅ Synchronized to local history.json database.');
+                localHistory.unshift(historyItem);
+                // Cap history to 100 items to prevent massive disk usage
+                if (localHistory.length > 100) localHistory = localHistory.slice(0, 100);
+                
+                await fs.mkdir(path.dirname(HISTORY_FILE), { recursive: true });
+                await fs.writeFile(HISTORY_FILE, JSON.stringify(localHistory, null, 2));
+                console.log('✅ Synchronized to local history.json database.');
+            }).catch(e => {
+                console.error('Exception during local history insert:', e);
+            });
+            await localHistoryMutex;
         } catch (e) {
-            console.error('Exception during local history insert:', e);
+            console.error('Outer exception catching history insert:', e);
         }
 
         // Return the final data and screenshot path
@@ -327,6 +355,9 @@ app.get('/api/history', async (req, res) => {
         const formattedHistory = localHistory.map(row => ({
             id: row.id,
             url: row.target_url,
+            website_url: row.website_url,
+            youtube_url: row.youtube_url,
+            profile_url: row.profile_url,
             timestamp: row.timestamp,
             success: row.success,
             payload: row.payload
@@ -343,25 +374,35 @@ app.delete('/api/history', async (req, res) => {
     try {
         const { domain, timestamp } = req.body;
         
-        let localHistory = [];
-        try {
-            const historyData = await fs.readFile(HISTORY_FILE, 'utf-8');
-            localHistory = JSON.parse(historyData);
-        } catch (e) {
-            return res.json({ success: true, message: 'History already empty' });
-        }
+        localHistoryMutex = localHistoryMutex.then(async () => {
+            let localHistory = [];
+            try {
+                const historyData = await fs.readFile(HISTORY_FILE, 'utf-8');
+                localHistory = JSON.parse(historyData);
+            } catch (e) {
+                return false; // Return signal that nothing was done
+            }
 
-        if (domain) {
-            localHistory = localHistory.filter(item => {
-                let itemDomain = item.target_url;
-                try { itemDomain = new URL(item.target_url).hostname; } catch (e) { }
-                return String(itemDomain) !== String(domain);
-            });
-        } else if (timestamp) {
-            localHistory = localHistory.filter(item => item.timestamp !== timestamp);
-        }
+            if (domain) {
+                localHistory = localHistory.filter(item => {
+                    let itemDomain = item.target_url;
+                    try { itemDomain = new URL(item.target_url).hostname; } catch (e) { }
+                    return String(itemDomain) !== String(domain);
+                });
+            } else if (timestamp) {
+                localHistory = localHistory.filter(item => item.timestamp !== timestamp);
+            }
 
-        await fs.writeFile(HISTORY_FILE, JSON.stringify(localHistory, null, 2));
+            await fs.writeFile(HISTORY_FILE, JSON.stringify(localHistory, null, 2));
+            return true;
+        }).catch(error => {
+            throw error;
+        });
+        
+        const didDelete = await localHistoryMutex;
+        if (didDelete === false) {
+             return res.json({ success: true, message: 'History already empty' });
+        }
         res.json({ success: true, message: 'History successfully deleted' });
     } catch (error) {
         console.error('Failed to delete targeted history item:', error);

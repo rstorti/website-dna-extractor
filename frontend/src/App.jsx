@@ -317,16 +317,21 @@ function App() {
                             <div className="search-bar" style={{ display: 'flex', gap: '1.5rem', maxWidth: '850px', margin: '0 auto', alignItems: 'stretch' }}>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1 }}>
                                     <div style={{ display: 'flex', gap: '1rem', height: '54px' }}>
-                                        <input
-                                            type="url"
-                                            className="url-input"
-                                            placeholder="Website URL (e.g. https://example.com)"
-                                            style={{ flex: 1, height: '100%', padding: '0 1.2rem', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}
-                                            value={url}
-                                            onChange={(e) => setUrl(e.target.value)}
-                                            onKeyDown={(e) => e.key === 'Enter' && handleExtract()}
-                                            disabled={loading}
-                                        />
+                                        <div style={{ position: 'relative', flex: 1, height: '100%' }}>
+                                            <div style={{ position: 'absolute', left: '1.2rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', display: 'flex', pointerEvents: 'none', zIndex: 1 }}>
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                                            </div>
+                                            <input
+                                                type="url"
+                                                className="url-input"
+                                                placeholder="Website URL (e.g. https://example.com)"
+                                                style={{ width: '100%', height: '100%', padding: '0 1.2rem 0 3.2rem', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}
+                                                value={url}
+                                                onChange={(e) => setUrl(e.target.value)}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleExtract()}
+                                                disabled={loading}
+                                            />
+                                        </div>
                                         {url && (
                                             <button 
                                                 onClick={(e) => { e.preventDefault(); navigator.clipboard.writeText(url); }}
@@ -351,16 +356,21 @@ function App() {
                                         </button>
                                     </div>
                                     <div style={{ display: 'flex', gap: '1rem', height: '54px' }}>
-                                        <input
-                                            type="url"
-                                            className="url-input"
-                                            placeholder="YouTube Video URL (Optional)"
-                                            style={{ flex: 1, height: '100%', padding: '0 1.2rem', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}
-                                            value={youtubeUrl}
-                                            onChange={(e) => setYoutubeUrl(e.target.value)}
-                                            onKeyDown={(e) => e.key === 'Enter' && handleExtract()}
-                                            disabled={loading}
-                                        />
+                                        <div style={{ position: 'relative', flex: 1, height: '100%' }}>
+                                            <div style={{ position: 'absolute', left: '1.2rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', display: 'flex', pointerEvents: 'none', zIndex: 1 }}>
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.541 12 3.541 12 3.541s-7.505 0-9.377.509A3.016 3.016 0 0 0 .501 6.186C0 8.07 0 12 0 12s0 3.93.501 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.377.505 9.377.505s7.505 0 9.377-.505a3.016 3.016 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" /></svg>
+                                            </div>
+                                            <input
+                                                type="url"
+                                                className="url-input"
+                                                placeholder="YouTube Video URL (Optional)"
+                                                style={{ width: '100%', height: '100%', padding: '0 1.2rem 0 3.2rem', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}
+                                                value={youtubeUrl}
+                                                onChange={(e) => setYoutubeUrl(e.target.value)}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleExtract()}
+                                                disabled={loading}
+                                            />
+                                        </div>
                                         {youtubeUrl && (
                                             <button 
                                                 onClick={(e) => { e.preventDefault(); navigator.clipboard.writeText(youtubeUrl); }}
@@ -385,16 +395,21 @@ function App() {
                                         </button>
                                     </div>
                                     <div style={{ display: 'flex', gap: '1rem', height: '54px' }}>
-                                        <input
-                                            type="url"
-                                            className="url-input"
-                                            placeholder="Link-in-Bio / Profile Page URL (Optional)"
-                                            style={{ flex: 1, height: '100%', padding: '0 1.2rem', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}
-                                            value={profileUrl}
-                                            onChange={(e) => setProfileUrl(e.target.value)}
-                                            onKeyDown={(e) => e.key === 'Enter' && handleExtract()}
-                                            disabled={loading}
-                                        />
+                                        <div style={{ position: 'relative', flex: 1, height: '100%' }}>
+                                            <div style={{ position: 'absolute', left: '1.2rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', display: 'flex', pointerEvents: 'none', zIndex: 1 }}>
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                                            </div>
+                                            <input
+                                                type="url"
+                                                className="url-input"
+                                                placeholder="Link-in-Bio / Profile Page URL (Optional)"
+                                                style={{ width: '100%', height: '100%', padding: '0 1.2rem 0 3.2rem', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}
+                                                value={profileUrl}
+                                                onChange={(e) => setProfileUrl(e.target.value)}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleExtract()}
+                                                disabled={loading}
+                                            />
+                                        </div>
                                         {profileUrl && (
                                             <button 
                                                 onClick={(e) => { e.preventDefault(); navigator.clipboard.writeText(profileUrl); }}
@@ -1004,41 +1019,47 @@ function App() {
                                         <h3 className="panel-title">⚙️ Final Campaign JSON</h3>
                                         <div className="json-panel">
                                             <pre dangerouslySetInnerHTML={{
-                                                __html: JSON.stringify({
-                                                    name: result.data?.name || result.name,
-                                                    description: summaryText[selectedSummaryType] || '',
-                                                    ...(summaryText['raw_youtube'] ? { "YouTube Video Description used": summaryText['raw_youtube'] } : {}),
-                                                    // Visuals
-                                                    images: selectedImages,
-                                                    brand_colors: {
-                                                        background: customPalettes['Background Color'] || result.data?.background_color,
-                                                        foreground: customPalettes['Foreground Color'] || result.data?.foreground_color,
-                                                        accent: customPalettes['Button Accent'] || result.data?.icon_background_color_left
-                                                    },
-                                                    // Actionables
-                                                    selected_ctas: selectedCtas.map(cta => {
-                                                        if (typeof cta === 'object' && cta.url) {
-                                                            return {
-                                                                ...cta,
-                                                                button_name: ctaEdits[cta.url] !== undefined ? ctaEdits[cta.url] : cta.button_name
-                                                            };
-                                                        }
-                                                        return ctaEdits[cta] !== undefined ? ctaEdits[cta] : cta;
-                                                    }),
-                                                    social_links: result.socialMediaLinks || [],
-                                                    // Extra fields
-                                                    campaign_type: result.data?.campaign_type,
-                                                    campaign_time_zone: result.data?.campaign_time_zone,
-                                                    currency: result.data?.currency,
-                                                    is_selling_item: result.data?.is_selling_item,
-                                                    selling_item_details: result.data?.selling_item_details,
-                                                    button_style: selectedButtonStyle,
-                                                    selected_brand_colors: selectedColors
-                                                }, null, 2)
-                                                    .replace(/"(.*?)":/g, '<span class="json-key">"$1"</span>:')
-                                                    .replace(/: "(.*?)"/g, ': <span class="json-string">"$1"</span>')
-                                                    .replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
-                                                    .replace(/: ([0-9]+)/g, ': <span class="json-number">$1</span>')
+                                                __html: (() => {
+                                                    let str = JSON.stringify({
+                                                        name: result.data?.name || result.name,
+                                                        description: summaryText[selectedSummaryType] || '',
+                                                        ...(summaryText['raw_youtube'] ? { "YouTube Video Description used": summaryText['raw_youtube'] } : {}),
+                                                        // Visuals
+                                                        images: selectedImages,
+                                                        brand_colors: {
+                                                            background: customPalettes['Background Color'] || result.data?.background_color,
+                                                            foreground: customPalettes['Foreground Color'] || result.data?.foreground_color,
+                                                            accent: customPalettes['Button Accent'] || result.data?.icon_background_color_left
+                                                        },
+                                                        // Actionables
+                                                        selected_ctas: selectedCtas.map(cta => {
+                                                            if (typeof cta === 'object' && cta.url) {
+                                                                return {
+                                                                    ...cta,
+                                                                    button_name: ctaEdits[cta.url] !== undefined ? ctaEdits[cta.url] : cta.button_name
+                                                                };
+                                                            }
+                                                            return ctaEdits[cta] !== undefined ? ctaEdits[cta] : cta;
+                                                        }),
+                                                        social_links: result.socialMediaLinks || [],
+                                                        // Extra fields
+                                                        campaign_type: result.data?.campaign_type,
+                                                        campaign_time_zone: result.data?.campaign_time_zone,
+                                                        currency: result.data?.currency,
+                                                        is_selling_item: result.data?.is_selling_item,
+                                                        selling_item_details: result.data?.selling_item_details,
+                                                        button_style: selectedButtonStyle,
+                                                        selected_brand_colors: selectedColors
+                                                    }, null, 2);
+                                                    
+                                                    // Ensure strict XSS protection before rendering HTML markup!
+                                                    str = str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                                                    
+                                                    return str.replace(/"(.*?)":/g, '<span class="json-key">"$1"</span>:')
+                                                        .replace(/: "(.*?)"/g, ': <span class="json-string">"$1"</span>')
+                                                        .replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
+                                                        .replace(/: ([0-9]+)/g, ': <span class="json-number">$1</span>');
+                                                })()
                                             }}></pre>
                                         </div>
 
@@ -1048,23 +1069,29 @@ function App() {
                                                 <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>This separate configuration file maps identically to minfo properties strictly extrapolated from the Profile Page.</p>
                                                 <div className="json-panel">
                                                     <pre dangerouslySetInnerHTML={{
-                                                        __html: JSON.stringify({
-                                                            name: result.profilePayload.data?.name || "Profile Config",
-                                                            description: result.profilePayload.data?.campaign_description || "",
-                                                            images: result.profilePayload.featuredImages || [],
-                                                            brand_colors: {
-                                                                background: result.profilePayload.data?.background_color,
-                                                                foreground: result.profilePayload.data?.foreground_color,
-                                                                accent: result.profilePayload.data?.icon_background_color_left
-                                                            },
-                                                            selected_ctas: result.profilePayload.ctas || [],
-                                                            social_links: result.profilePayload.socialMediaLinks || [],
-                                                            button_style: result.profilePayload.buttonStyles && result.profilePayload.buttonStyles.length > 0 ? result.profilePayload.buttonStyles[0] : null
-                                                        }, null, 2)
-                                                            .replace(/"(.*?)":/g, '<span class="json-key">"$1"</span>:')
-                                                            .replace(/: "(.*?)"/g, ': <span class="json-string">"$1"</span>')
-                                                            .replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
-                                                            .replace(/: ([0-9]+)/g, ': <span class="json-number">$1</span>')
+                                                        __html: (() => {
+                                                            let str = JSON.stringify({
+                                                                name: result.profilePayload.data?.name || "Profile Config",
+                                                                description: result.profilePayload.data?.campaign_description || "",
+                                                                images: result.profilePayload.featuredImages || [],
+                                                                brand_colors: {
+                                                                    background: result.profilePayload.data?.background_color,
+                                                                    foreground: result.profilePayload.data?.foreground_color,
+                                                                    accent: result.profilePayload.data?.icon_background_color_left
+                                                                },
+                                                                selected_ctas: result.profilePayload.ctas || [],
+                                                                social_links: result.profilePayload.socialMediaLinks || [],
+                                                                button_style: result.profilePayload.buttonStyles && result.profilePayload.buttonStyles.length > 0 ? result.profilePayload.buttonStyles[0] : null
+                                                            }, null, 2);
+
+                                                            // Ensure strict XSS protection before rendering HTML markup!
+                                                            str = str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                                                            
+                                                            return str.replace(/"(.*?)":/g, '<span class="json-key">"$1"</span>:')
+                                                                .replace(/: "(.*?)"/g, ': <span class="json-string">"$1"</span>')
+                                                                .replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
+                                                                .replace(/: ([0-9]+)/g, ': <span class="json-number">$1</span>');
+                                                        })()
                                                     }}></pre>
                                                 </div>
                                             </div>
@@ -1171,7 +1198,7 @@ function App() {
                                                                 ];
                                                                 setSelectedColors(histColorsToSelect.filter(c => c.hex).map(c => c.label));
 
-                                                                setUrl(entry.target_url || entry.url || '');
+                                                                setUrl(entry.website_url || entry.target_url || entry.url || '');
                                                                 setYoutubeUrl(entry.youtube_url || '');
                                                                 setProfileUrl(entry.profile_url || '');
                                                                 setResult(entry.payload);

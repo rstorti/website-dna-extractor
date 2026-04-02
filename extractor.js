@@ -75,7 +75,16 @@ async function scrapeYoutubeFallback(url) {
     browser = await puppeteer.launch({
       headless: "new",
       executablePath: env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      protocolTimeout: 120000,
+      args: [
+        '--no-sandbox', 
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--single-process',
+        '--no-zygote',
+        '--disable-extensions'
+      ]
     });
     const page = await browser.newPage();
     
@@ -176,14 +185,21 @@ async function extractDNA(url) {
     headless: 'new',
     executablePath: env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
     ignoreHTTPSErrors: true,
+    protocolTimeout: 120000,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--single-process',
+      '--no-zygote',
       '--disable-web-security',
       '--disable-features=IsolateOrigins,site-per-process',
       '--allow-running-insecure-content',
       '--ignore-certificate-errors',
       '--ignore-certificate-errors-spki-list',
+      '--disable-extensions',
+      '--disable-background-networking',
       '--window-size=1280,800'
     ]
   });
@@ -220,8 +236,8 @@ async function extractDNA(url) {
       }
     }
     
-    // Explicit hardcoded lag. Free tier CPUs bottleneck client-side JS rendering logic so SPAs (React) might still be blank exactly exactly at 'networkidle2'.
-    await new Promise(r => setTimeout(r, 6000));
+    // Explicit hardcoded lag. Reduced to 3s to save time.
+    await new Promise(r => setTimeout(r, 3000));
     
     console.log(`✅ Page loaded and Javascript mounted. Executing Anti-Bot WAF Verification...`);
 
