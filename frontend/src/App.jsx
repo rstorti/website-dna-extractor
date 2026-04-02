@@ -10,6 +10,11 @@ function App() {
     const [url, setUrl] = useState('');
     const [youtubeUrl, setYoutubeUrl] = useState('');
     const [profileUrl, setProfileUrl] = useState('');
+    
+    // Validation Overlays
+    const [urlError, setUrlError] = useState(false);
+    const [youtubeError, setYoutubeError] = useState(false);
+    const [profileError, setProfileError] = useState(false);
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState(null);
     const [error, setError] = useState(null);
@@ -92,8 +97,31 @@ function App() {
         }
     }, [result, customPalettes]);
 
+    const isValidDomain = (str) => {
+        if (!str) return true;
+        let testStr = str;
+        if (!testStr.startsWith('http')) testStr = 'https://' + testStr;
+        try {
+            const u = new URL(testStr);
+            if (!u.hostname.includes('.') || u.hostname.includes('www.www.')) return false;
+            return true;
+        } catch(e) { return false; }
+    };
+
     const handleExtract = async () => {
         if (!url && !profileUrl && !youtubeUrl) return;
+        
+        // Immediate validation sequence
+        let validationFailed = false;
+        if (!isValidDomain(url)) { setUrlError(true); validationFailed = true; } else setUrlError(false);
+        if (!isValidDomain(profileUrl)) { setProfileError(true); validationFailed = true; } else setProfileError(false);
+        if (youtubeUrl && !youtubeUrl.includes('youtu')) { setYoutubeError(true); validationFailed = true; } else setYoutubeError(false);
+        
+        if (validationFailed) {
+            setError('One or more URLs are invalid. Please check for spelling mistakes (e.g. www.www.domain.com).');
+            return;
+        }
+
         setLoading(true);
         setError(null);
         setResult(null);
@@ -325,7 +353,7 @@ function App() {
                                                 type="url"
                                                 className="url-input"
                                                 placeholder="Website URL (e.g. https://example.com)"
-                                                style={{ width: '100%', height: '100%', padding: '0 1.2rem 0 3.2rem', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}
+                                                style={{ width: '100%', height: '100%', padding: '0 1.2rem 0 3.2rem', background: 'rgba(0,0,0,0.4)', border: `1px solid ${urlError ? '#ff4444' : 'var(--border-color)'}`, borderRadius: 'var(--radius-sm)' }}
                                                 value={url}
                                                 onChange={(e) => setUrl(e.target.value)}
                                                 onKeyDown={(e) => e.key === 'Enter' && handleExtract()}
@@ -364,7 +392,7 @@ function App() {
                                                 type="url"
                                                 className="url-input"
                                                 placeholder="YouTube Video URL (Optional)"
-                                                style={{ width: '100%', height: '100%', padding: '0 1.2rem 0 3.2rem', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}
+                                                style={{ width: '100%', height: '100%', padding: '0 1.2rem 0 3.2rem', background: 'rgba(0,0,0,0.4)', border: `1px solid ${youtubeError ? '#ff4444' : 'var(--border-color)'}`, borderRadius: 'var(--radius-sm)' }}
                                                 value={youtubeUrl}
                                                 onChange={(e) => setYoutubeUrl(e.target.value)}
                                                 onKeyDown={(e) => e.key === 'Enter' && handleExtract()}
@@ -403,7 +431,7 @@ function App() {
                                                 type="url"
                                                 className="url-input"
                                                 placeholder="Link-in-Bio / Profile Page URL (Optional)"
-                                                style={{ width: '100%', height: '100%', padding: '0 1.2rem 0 3.2rem', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}
+                                                style={{ width: '100%', height: '100%', padding: '0 1.2rem 0 3.2rem', background: 'rgba(0,0,0,0.4)', border: `1px solid ${profileError ? '#ff4444' : 'var(--border-color)'}`, borderRadius: 'var(--radius-sm)' }}
                                                 value={profileUrl}
                                                 onChange={(e) => setProfileUrl(e.target.value)}
                                                 onKeyDown={(e) => e.key === 'Enter' && handleExtract()}
