@@ -20,7 +20,7 @@ let localHistoryMutex = Promise.resolve();
 app.use(cors({
     origin: function (origin, callback) {
         if (!origin) return callback(null, true);
-        if (origin.startsWith('http://localhost') || origin.includes('netlify.app') || origin.includes('minfo.com')) {
+        if (origin.startsWith('http://localhost') || origin.includes('netlify.app') || origin.includes('minfo.com') || origin.includes('lovable.app') || origin.includes('lovableproject.com') {
             return callback(null, true);
         }
         return callback(null, false); // Fail silently instead of throwing 500 error to avoid crashing
