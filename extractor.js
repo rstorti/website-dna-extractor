@@ -236,7 +236,52 @@ async function extractDNA(url) {
   page.setDefaultTimeout(90000);
  
   // Set a standard desktop viewport
-  await page.setViewport({ width: 1280, height: 800 });
+  await page.setViewport({ width: 1280, height: 800 });       
+
+  async function recreatePage() {
+    try {
+      if (page && !page.isClosed()) await page.close();
+      if (browser) await browser.close();
+    } catch(e) {}
+    
+    // Relaunch browser to guarantee clean state
+    browser = await puppeteer.launch({
+      headless: 'new',
+      executablePath: env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
+      ignoreHTTPSErrors: true,
+      protocolTimeout: 120000,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--single-process',
+        '--no-zygote',
+        '--disable-web-security',
+        '--disable-features=IsolateOrigins,site-per-process',
+        '--allow-running-insecure-content',
+        '--ignore-certificate-errors',
+        '--ignore-certificate-errors-spki-list',
+        '--disable-extensions',
+        '--disable-background-networking',
+        '--window-size=1280,800'
+      ]
+    });
+    
+    page = await browser.newPage();
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+      const resourceType = req.resourceType();
+      if (['font', 'media'].includes(resourceType)) {
+        req.abort();
+      } else {
+        req.continue();
+      }
+    });
+    page.setDefaultNavigationTimeout(90000);
+    page.setDefaultTimeout(90000);
+    await page.setViewport({ width: 1280, height: 800 });
+  }
  
   try {
     let fallbackToWayback = false;
@@ -344,8 +389,9 @@ async function extractDNA(url) {
     if (fallbackToWayback) {
        console.log(`\n======================================================`);
        console.log(`🌐 TIER 2: FETCHING FROM WAYBACK MACHINE ARCHIVE`);
-       // Cycle the page to clear detached frame errors
-       try { await page.goto('about:blank'); } catch(e) {}
+       
+       // Completely recreate page to guarantee we drop any detached frame corruption
+       await recreatePage();
        
        const archiveUrl = `https://web.archive.org/web/2/${url}`;
        try {
@@ -384,8 +430,10 @@ async function extractDNA(url) {
             const html = httpResponse.data;
             if (typeof html === 'string' && html.length > 500) {
               console.log(`✅ HTTP Fallback retrieved ${html.length} chars of HTML. Injecting into browser...`);
-              try { await page.goto('about:blank'); } catch(e) {}
-              await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 10000 });
+              
+              await recreatePage();
+              
+              await page.setContent(html, { timeout: 30000 }); // Do not wait for domcontentloaded, just load the parsed HTML
             } else {
               throw new Error('HTTP response too short or not HTML');
             }
