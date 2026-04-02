@@ -89,10 +89,11 @@ async function scrapeYoutubeFallback(url) {
     const page = await browser.newPage();
     
     try {
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
     } catch (err) {
-      if (err.message && err.message.toLowerCase().includes('timeout')) {
-        console.log(`⚠️ YouTube navigation timeout for ${url}. Attempting to salvage loaded DOM...`);
+      const errMsg = err.message ? err.message.toLowerCase() : '';
+      if (errMsg.includes('timeout') || errMsg.includes('detached') || errMsg.includes('aborted')) {
+        console.log(`⚠️ YouTube navigation interrupted for ${url} (Timeout or Detached). Attempting to salvage loaded DOM...`);
       } else {
         throw err;
       }
@@ -212,8 +213,9 @@ async function extractDNA(url) {
     try {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
     } catch (err) {
-      if (err.message && err.message.toLowerCase().includes('timeout')) {
-        console.log(`⚠️ Navigation timeout for ${url}. Site might be heavy with ad-trackers. Proceeding with partially loaded DOM...`);
+      const errMsg = err.message ? err.message.toLowerCase() : '';
+      if (errMsg.includes('timeout') || errMsg.includes('detached') || errMsg.includes('aborted')) {
+        console.log(`⚠️ Navigation interrupted for ${url} (Timeout or Detached). Site might be heavy or redirecting. Proceeding with partially loaded DOM...`);
       } else {
         // Automatic fallback for apex domains with broken SSL (e.g., minfo.com -> www.minfo.com)
         const parsedUrl = new URL(url);
@@ -224,8 +226,9 @@ async function extractDNA(url) {
           try {
             await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
           } catch (fallbackErr) {
-            if (fallbackErr.message && fallbackErr.message.toLowerCase().includes('timeout')) {
-              console.log(`⚠️ Fallback navigation timeout for ${url}. Proceeding with partially loaded DOM...`);
+            const fbMsg = fallbackErr.message ? fallbackErr.message.toLowerCase() : '';
+            if (fbMsg.includes('timeout') || fbMsg.includes('detached') || fbMsg.includes('aborted')) {
+              console.log(`⚠️ Fallback navigation interrupted for ${url}. Proceeding with partially loaded DOM...`);
             } else {
               throw fallbackErr;
             }
