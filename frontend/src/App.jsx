@@ -860,7 +860,7 @@ function App() {
                                                                 );
                                                             } else {
                                                                 return (
-                                                                <div key={`web_${idx}`} style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', background: 'var(--surface-color)', padding: '0.8rem 1rem', borderRadius: 'var(--radius-sm)', border: isSelected ? '1px solid var(--active-select)' : '1px solid var(--border-color)', maxWidth: '300px', flex: '1 1 auto', display: 'inline-flex' }}>
+                                                                <div key={`web_${idx}`} style={{ flexDirection: 'column', gap: '0.8rem', background: 'var(--surface-color)', padding: '0.8rem 1rem', borderRadius: 'var(--radius-sm)', border: isSelected ? '1px solid var(--active-select)' : '1px solid var(--border-color)', maxWidth: '300px', flex: '1 1 auto', display: 'inline-flex' }}>
                                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', cursor: 'pointer' }}
                                                                         onClick={() => {
                                                                             if (isSelected) setSelectedCtas(selectedCtas.filter(c => c !== cta));
