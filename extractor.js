@@ -38,27 +38,31 @@ async function uploadToSupabase(filename, buffer, mimeType = 'image/jpeg') {
 }
 
 async function autoScroll(page) {
-  await page.evaluate(async () => {
-    await new Promise((resolve) => {
-      let totalHeight = 0;
-      const distance = 600;
-      let scrolls = 0;
-      
-      const timer = setInterval(() => {
-        const scrollHeight = document.body.scrollHeight;
-        window.scrollBy(0, distance);
-        totalHeight += distance;
-        scrolls++;
+  try {
+    await page.evaluate(async () => {
+      await new Promise((resolve) => {
+        let totalHeight = 0;
+        const distance = 600;
+        let scrolls = 0;
+        
+        const timer = setInterval(() => {
+          const scrollHeight = document.body.scrollHeight;
+          window.scrollBy(0, distance);
+          totalHeight += distance;
+          scrolls++;
 
-        // Stop if we reach bottom OR if we scroll 15 times (max runtime ~3750ms)
-        // This is crucial for infinite scroll sites like lbc.co.uk which trap the agent in loops.
-        if (totalHeight >= scrollHeight - window.innerHeight || scrolls >= 15) {
-          clearInterval(timer);
-          resolve();
-        }
-      }, 250);
+          // Stop if we reach bottom OR if we scroll 15 times (max runtime ~3750ms)
+          // This is crucial for infinite scroll sites like lbc.co.uk which trap the agent in loops.
+          if (totalHeight >= scrollHeight - window.innerHeight || scrolls >= 15) {
+            clearInterval(timer);
+            resolve();
+          }
+        }, 250);
+      });
     });
-  });
+  } catch(e) {
+    console.log("⚠️ autoScroll skipped around detached frame to prevent crash.");
+  }
 }
 
 function rgbToHex(rgb) {
@@ -245,8 +249,14 @@ async function extractDNA(url) {
     console.log(`✅ Page loaded and Javascript mounted. Executing Anti-Bot WAF Verification...`);
 
     // --- Anti-Bot & Enterprise WAF Firewall Check ---
-    const pageTitle = await page.title();
-    const pageContent = await page.evaluate(() => document.body.innerText.substring(0, 1000));
+    let pageTitle = "Unknown Domain";
+    let pageContent = "";
+    try {
+        pageTitle = await page.title();
+        pageContent = await page.evaluate(() => document.body.innerText.substring(0, 1000));
+    } catch(e) {
+        console.warn('⚠️ WAF check bypassed due to detached frame. Proceeding visually.', e.message);
+    }
     const blockedKeywords = ['Access Denied', 'Attention Required!', 'Cloudflare Ray ID', 'Security Check', '403 Forbidden'];
     
     const isBlocked = blockedKeywords.some(keyword => 
@@ -264,8 +274,11 @@ async function extractDNA(url) {
 
     // --- Begin Data Extraction ---
     console.log(`🧬 Extracting DOM data...`);
-    const extractedData = await page.evaluate(() => {
-      const data = {
+    let extractedData;
+    let visualFallbackTriggered = false;
+    try {
+      extractedData = await page.evaluate(() => {
+        const data = {
         title: document.title,
         description: document.querySelector('meta[name="description"]')?.content || "",
         logo: (() => {
@@ -452,6 +465,26 @@ async function extractDNA(url) {
 
       return data;
     });
+    } catch(e) {
+        console.error(`❌ Complete DOM Extraction Failure! Fallback to 100% Visual Analysis Agent triggered. Cause: ${e.message}`);
+        visualFallbackTriggered = true;
+        let domainStr = "";
+        try { domainStr = new URL(url).hostname; } catch(x) {}
+
+        extractedData = {
+           title: "Auto-Extracted Title",
+           description: "",
+           logo: "",
+           domain: domainStr,
+           images: [],
+           colors: { background: ['#ffffff'], text: ['#000000'], buttons: [] },
+           buttonStyles: [],
+           ctas: [],
+           socials: [],
+           header: null,
+           headerText: null
+        };
+    }
 
     // --- Data Mapping & Aggregation ---
     // Find most common colors to represent the true brand colors
@@ -576,14 +609,19 @@ async function extractDNA(url) {
     }).catch(() => 1080); // Fallback to 1080 if evaluate fails
 
     console.log(`📐 Resizing viewport physically to ${Math.ceil(contentHeight)}px to un-truncate SPAs...`);
-    await page.setViewport({ width: 1280, height: Math.ceil(contentHeight) });
-    
-    // Wait for the browser rendering engine to layout the new massive viewport
-    await new Promise(r => setTimeout(r, 800));
-
-    // Fullpage screenshots cause silent Out-Of-Memory crashes on 512MB instances.
-    await page.screenshot({ path: screenshotPath, fullPage: false, type: 'jpeg', quality: 70 });
-    console.log(`🖼️ Screenshot saved locally to: ${screenshotPath}`);
+    try {
+        await page.setViewport({ width: 1280, height: Math.ceil(contentHeight) });
+        // Wait for the browser rendering engine to layout the new massive viewport
+        await new Promise(r => setTimeout(r, 800));
+        // Fullpage screenshots cause silent Out-Of-Memory crashes on 512MB instances.
+        await page.screenshot({ path: screenshotPath, fullPage: false, type: 'jpeg', quality: 70 });
+        console.log(`🖼️ Screenshot saved locally to: ${screenshotPath}`);
+    } catch(err) {
+        console.warn(`⚠️ Screenshot sequence interrupted by aggressive redirection. Creating blank fallback canvas...`, err.message);
+        await require('sharp')({
+          create: { width: 1280, height: 800, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } }
+        }).jpeg().toFile(screenshotPath);
+    }
 
     // Upload screenshot to Supabase
     const screenshotBuffer = await fs.readFile(screenshotPath);
