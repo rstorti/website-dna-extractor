@@ -208,68 +208,112 @@ async function extractDNA(url) {
       '--window-size=1280,800'
     ]
   });
-  const page = await browser.newPage();
+  let page = await browser.newPage();
 
   // Set a standard desktop viewport
   await page.setViewport({ width: 1280, height: 800 });
 
   try {
+    let fallbackToWayback = false;
+
+    // --- Tier 1: Live Fetch ---
     try {
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
-    } catch (err) {
-      const errMsg = err.message ? err.message.toLowerCase() : '';
-      if (errMsg.includes('timeout') || errMsg.includes('detached') || errMsg.includes('aborted')) {
-        console.log(`⚠️ Navigation interrupted for ${url} (Timeout or Detached). Site might be heavy or redirecting. Proceeding with partially loaded DOM...`);
-      } else {
-        // Automatic fallback for apex domains with broken SSL (e.g., minfo.com -> www.minfo.com)
-        const parsedUrl = new URL(url);
-        if (!parsedUrl.hostname.startsWith('www.')) {
-          console.log(`⚠️ Connection to ${url} failed (${err.message}). Attempting fallback to www subdomain...`);
-          parsedUrl.hostname = 'www.' + parsedUrl.hostname;
-          url = parsedUrl.toString();
-          try {
-            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
-          } catch (fallbackErr) {
-            const fbMsg = fallbackErr.message ? fallbackErr.message.toLowerCase() : '';
-            if (fbMsg.includes('timeout') || fbMsg.includes('detached') || fbMsg.includes('aborted')) {
-              console.log(`⚠️ Fallback navigation interrupted for ${url}. Proceeding with partially loaded DOM...`);
-            } else {
-              throw fallbackErr;
-            }
-          }
+      try {
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+      } catch (err) {
+        const errMsg = err.message ? err.message.toLowerCase() : '';
+        if (errMsg.includes('timeout') || errMsg.includes('detached') || errMsg.includes('aborted')) {
+          console.log(`⚠️ Navigation interrupted for ${url} (Timeout or Detached). Site might be heavy or redirecting. Proceeding with partially loaded DOM...`);
         } else {
-          throw err;
+          // Automatic fallback for apex domains with broken SSL (e.g., minfo.com -> www.minfo.com)
+          const parsedUrl = new URL(url);
+          if (!parsedUrl.hostname.startsWith('www.')) {
+            console.log(`⚠️ Connection to ${url} failed (${err.message}). Attempting fallback to www subdomain...`);
+            parsedUrl.hostname = 'www.' + parsedUrl.hostname;
+            url = parsedUrl.toString();
+            try {
+              await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+            } catch (fallbackErr) {
+              const fbMsg = fallbackErr.message ? fallbackErr.message.toLowerCase() : '';
+              if (fbMsg.includes('timeout') || fbMsg.includes('detached') || fbMsg.includes('aborted')) {
+                console.log(`⚠️ Fallback navigation interrupted for ${url}. Proceeding with partially loaded DOM...`);
+              } else {
+                throw fallbackErr;
+              }
+            }
+          } else {
+            throw err;
+          }
         }
       }
-    }
-    
-    // Explicit hardcoded lag. Reduced to 3s to save time.
-    await new Promise(r => setTimeout(r, 3000));
-    
-    console.log(`✅ Page loaded and Javascript mounted. Executing Anti-Bot WAF Verification...`);
+      
+      // Explicit hardcoded lag. Reduced to 3s to save time.
+      await new Promise(r => setTimeout(r, 3000));
+      
+      console.log(`✅ Page loaded and Javascript mounted. Executing Anti-Bot WAF Verification...`);
 
-    // --- Anti-Bot & Enterprise WAF Firewall Check ---
-    let pageTitle = "Unknown Domain";
-    let pageContent = "";
-    for (let attempts = 0; attempts < 3; attempts++) {
-        try {
-            pageTitle = await page.title();
-            pageContent = await page.evaluate(() => document.body.innerText.substring(0, 1000));
-            break;
-        } catch(e) {
-            console.warn(`⚠️ WAF check frame detached. Waiting 3s for redirect... (Attempt ${attempts+1}/3)`);
-            await new Promise(r => setTimeout(r, 3000));
-        }
-    }
-    const blockedKeywords = ['Access Denied', 'Attention Required!', 'Cloudflare Ray ID', 'Security Check', '403 Forbidden'];
-    
-    const isBlocked = blockedKeywords.some(keyword => 
-      pageTitle.includes(keyword) || pageContent.includes(keyword)
-    );
+      // --- Anti-Bot & Enterprise WAF Firewall Check ---
+      let pageTitle = "Unknown Domain";
+      let pageContent = "";
+      let frameReadSuccess = false;
+      for (let attempts = 0; attempts < 3; attempts++) {
+          try {
+              pageTitle = await page.title();
+              pageContent = await page.evaluate(() => document.body.innerText.substring(0, 1000));
+              frameReadSuccess = true;
+              break;
+          } catch(e) {
+              console.warn(`⚠️ WAF check frame detached. Waiting 3s for redirect... (Attempt ${attempts+1}/3)`);
+              await new Promise(r => setTimeout(r, 3000));
+          }
+      }
+      const blockedKeywords = ['Access Denied', 'Attention Required!', 'Cloudflare Ray ID', 'Security Check', '403 Forbidden'];
+      
+      const isBlocked = blockedKeywords.some(keyword => 
+        pageTitle.includes(keyword) || pageContent.includes(keyword)
+      );
 
-    if (isBlocked) {
-      console.error(`🔒 Enterprise WAF Firewall block detected on ${url}! Aborting extraction.`);
-      throw new Error(`Website actively blocked the extraction bot with an Enterprise WAF Firewall / Access Denied error. Target cannot be scraped.`);
+      if (isBlocked || !frameReadSuccess) {
+        console.warn(`🔒 Firewall block or Unreadable Frame detected on Live URL! Falling back to Wayback Machine.`);
+        fallbackToWayback = true;
+      }
+    } catch (liveErr) {
+      console.warn(`⚠️ Live fetch failed entirely (${liveErr.message}). Falling back to Wayback Machine.`);
+      fallbackToWayback = true;
+    }
+
+    // --- Tier 2: Wayback Machine Fetch ---
+    if (fallbackToWayback) {
+       console.log(`\n======================================================`);
+       console.log(`🌐 TIER 2: FETCHING FROM WAYBACK MACHINE ARCHIVE`);
+       // Cycle the page to clear detached frame errors
+       try { await page.goto('about:blank'); } catch(e) {}
+       
+       const archiveUrl = `https://web.archive.org/web/2/${url}`;
+       try {
+          await page.goto(archiveUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+          
+          console.log(`✅ Loaded Archive URL successfully. Cleaning up Archive UI elements...`);
+          // Hide the Wayback Machine's injected top banner so it doesn't mess up logo/color extraction
+          await page.evaluate(() => {
+             try {
+                const wmBanner = document.getElementById('wm-ipp-base');
+                if (wmBanner) wmBanner.style.display = 'none';
+                if (document.body && document.body.style) {
+                   document.body.style.paddingTop = '0px';
+                   document.body.style.marginTop = '0px';
+                }
+             } catch(e) {}
+          });
+          
+          let pageTitle = await page.title();
+          if (pageTitle.includes('Wayback Machine') && !pageTitle.includes(new URL(url).hostname)) {
+              throw new Error(`Website not found in the Internet Archive.`);
+          }
+       } catch (archiveErr) {
+          console.error(`❌ Wayback Machine fallback failed: ${archiveErr.message}`);
+          throw new Error('Both Live extraction and Archive fetch were rejected or failed. Target cannot be scraped.');
+       }
     }
 
     console.log(`✅ Passed Security. Executing auto-scroll to trigger lazy rendering...`);
