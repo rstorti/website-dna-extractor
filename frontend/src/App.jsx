@@ -145,9 +145,13 @@ function App() {
                 data = JSON.parse(rawText);
             } catch (err) {
                 if (response.status >= 500) {
-                     throw new Error(`Server Gateway Error (${response.status}): The Render backend might be sleeping or crashed. Please wait 1 minute and click Extract again. Raw: ${rawText.substring(0, 50)}`);
+                    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                    const contextMsg = isLocalhost
+                        ? `Local backend crashed (${response.status}). Check your terminal for the error. Raw: ${rawText.substring(0, 200)}`
+                        : `Server Error (${response.status}): The backend may be restarting — wait 1 minute and try again. Raw: ${rawText.substring(0, 50)}`;
+                    throw new Error(contextMsg);
                 }
-                throw new Error(`Invalid JSON Response (${response.status}): The backend returned non-JSON. This usually happens if the server hasn't been deployed yet or Netlify connection timed out.`);
+                throw new Error(`Invalid response (${response.status}): Backend returned non-JSON. ${rawText.substring(0, 100)}`);
             }
 
             if (!response.ok) throw new Error(data.error || 'Failed to extract DNA');
@@ -197,9 +201,10 @@ function App() {
         } catch (err) {
             clearTimeout(timeoutId);
             if (err.name === 'AbortError') {
-                setError('Extraction taking too long (Timeout). The website may be heavily protected or rendering slowly.');
+                setError('Extraction timed out (5 min). The site may be heavily protected. Try again or use a different URL.');
             } else {
-                setError(err.message);
+                // Show the full error message including any server-side detail
+                setError(err.message || 'An unexpected error occurred.');
             }
         } finally {
             setLoading(false);
