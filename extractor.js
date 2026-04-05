@@ -10,10 +10,16 @@ const { generateHeroPrompts, analyzeImageForTextPlacement } = require('./gemini_
 const { supabase } = require('./supabaseClient');
 const env = require('./config/env');
  
-async function uploadToSupabase(filename, buffer, mimeType = 'image/jpeg') {
+// FIX #3: Screenshots can be 5-8MB as base64 strings which crashes Render's 512MB RAM.
+// Only use base64 for small assets (logos, thumbnails). Fall back to local /outputs/ path for screenshots.
+async function uploadToSupabase(filename, buffer, mimeType = 'image/jpeg', allowBase64Fallback = true) {
   if (!env.SUPABASE_URL || env.SUPABASE_URL.includes("missing.supabase.co")) {
-    console.log(`⚠️ Supabase credentials missing. Bypassing cloud upload for ${filename} to prevent network hangs.`);
-    return `data:${mimeType};base64,${buffer.toString('base64')}`;
+    if (allowBase64Fallback) {
+      console.log(`⚠️ Supabase credentials missing. Using base64 inline for ${filename}.`);
+      return `data:${mimeType};base64,${buffer.toString('base64')}`;
+    }
+    console.log(`⚠️ Supabase credentials missing. Using local path for ${filename}.`);
+    return `/outputs/${filename}`;
   }
  
   try {
@@ -26,14 +32,18 @@ async function uploadToSupabase(filename, buffer, mimeType = 'image/jpeg') {
  
     if (error) {
       console.error('Supabase upload error:', error);
-      return `data:${mimeType};base64,${buffer.toString('base64')}`; // Fallback to base64
+      return allowBase64Fallback
+        ? `data:${mimeType};base64,${buffer.toString('base64')}`
+        : `/outputs/${filename}`;
     }
  
     const { data } = supabase.storage.from('outputs').getPublicUrl(filename);
     return data.publicUrl;
   } catch (e) {
     console.error('Supabase generic error:', e);
-    return `data:${mimeType};base64,${buffer.toString('base64')}`;
+    return allowBase64Fallback
+      ? `data:${mimeType};base64,${buffer.toString('base64')}`
+      : `/outputs/${filename}`;
   }
 }
  
@@ -281,6 +291,12 @@ async function extractDNA(url) {
     page.setDefaultNavigationTimeout(90000);
     page.setDefaultTimeout(90000);
     await page.setViewport({ width: 1280, height: 800 });
+    // FIX #1: Re-apply request interception on the new page after browser relaunch
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+      if (['font', 'media'].includes(req.resourceType())) req.abort();
+      else req.continue();
+    });
   }
  
   try {
@@ -393,9 +409,19 @@ async function extractDNA(url) {
        // Completely recreate page to guarantee we drop any detached frame corruption
        await recreatePage();
        
-       const archiveUrl = `https://web.archive.org/web/2/${url}`;
+       // FIX #6: Try latest snapshot first (/2/), then fallback to most-relevant (/0/) if that 404s
+       let archiveUrl = `https://web.archive.org/web/2/${url}`;
        try {
-          await page.goto(archiveUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+          let archiveLoaded = false;
+          try {
+            await page.goto(archiveUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+            archiveLoaded = true;
+          } catch (firstArchiveErr) {
+            console.warn(`⚠️ Latest Wayback snapshot failed (${firstArchiveErr.message}). Trying timestamp-neutral URL...`);
+            archiveUrl = `https://web.archive.org/web/0/${url}`;
+            await page.goto(archiveUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+            archiveLoaded = true;
+          }
           
           console.log(`✅ Loaded Archive URL successfully. Cleaning up Archive UI elements...`);
           // Hide the Wayback Machine's injected top banner so it doesn't mess up logo/color extraction
@@ -485,7 +511,8 @@ async function extractDNA(url) {
         const width = img.naturalWidth || img.width || img.getBoundingClientRect().width || 0;
         const height = img.naturalHeight || img.height || img.getBoundingClientRect().height || 0;
         return { src: img.src, area: width * height };
-      }).filter(item => item.src && item.area > 15000); // Only keep reasonably large images
+      // FIX #11: Raised threshold from 15000 to 20000 to reduce noise from tracking/share icons (e.g. 122x122=14884)
+      }).filter(item => item.src && item.src.startsWith('http') && item.area > 20000);
  
       imagesWithMeta.sort((a, b) => b.area - a.area);
       data.images = imagesWithMeta.map(item => item.src);
@@ -495,6 +522,18 @@ async function extractDNA(url) {
       data.colors.background.push(bodyStyle.backgroundColor);
       data.colors.text.push(bodyStyle.color);
  
+      // FIX #5: Hoist getActualTextColor above forEach to avoid re-declaration on every button iteration
+      function getActualTextColor(element) {
+        const children = Array.from(element.children);
+        if (children.length === 0) return window.getComputedStyle(element).color;
+        for (let i = 0; i < children.length; i++) {
+          if (children[i].innerText && children[i].innerText.trim() === element.innerText.trim()) {
+            return getActualTextColor(children[i]);
+          }
+        }
+        return window.getComputedStyle(element).color;
+      }
+
       // Grab button colors to represent "brand" or "accent" colors
       const buttons = document.querySelectorAll('button, a.btn, a.button, a[class*="btn"], a[class*="button"], [role="button"], input[type="submit"], input[type="button"]');
       const buttonStyles = [];
@@ -519,27 +558,15 @@ async function extractDNA(url) {
         // Some browsers return empty string for shorthand padding if individual sides differ
         let paddingStr = style.padding;
         if (!paddingStr || paddingStr === '0px' || paddingStr === '') {
-          paddingStr = `${style.paddingTop} ${style.paddingRight} ${style.paddingBottom} ${style.paddingLeft} `;
+          // FIX #12: Removed trailing space in template literal
+          paddingStr = `${style.paddingTop} ${style.paddingRight} ${style.paddingBottom} ${style.paddingLeft}`.trim();
         }
-        if (paddingStr.trim() === '0px 0px 0px 0px') paddingStr = '0px';
+        if (paddingStr === '0px 0px 0px 0px') paddingStr = '0px';
  
         const btnText = btn.innerText ? btn.innerText.trim() : "";
         let btnUrl = "";
-        let textColor = style.color;
-        
-        // Buttons often wrap <a> or <span> tags which hold the true CSS color.
-        // Traverse down the DOM tree specifically tracing elements that contain the same innerText.
-        function getActualTextColor(element) {
-             const children = Array.from(element.children);
-             if (children.length === 0) return window.getComputedStyle(element).color;
-             for (let i = 0; i < children.length; i++) {
-                 if (children[i].innerText && children[i].innerText.trim() === element.innerText.trim()) {
-                     return getActualTextColor(children[i]);
-                 }
-             }
-             return window.getComputedStyle(element).color;
-        }
-        textColor = getActualTextColor(btn);
+        // FIX #5: getActualTextColor hoisted above forEach loop (was redefined on every iteration)
+        const textColor = getActualTextColor(btn);
 
         if (btn.tagName.toLowerCase() === 'a' && btn.href) {
             btnUrl = btn.href;
@@ -835,9 +862,10 @@ async function extractDNA(url) {
         }).jpeg().toFile(screenshotPath);
     }
  
-    // Upload screenshot to Supabase
+    // FIX #4: Corrected MIME type from 'image/png' to 'image/jpeg' (file is saved as .jpg)
+    // FIX #3: Pass allowBase64Fallback=false to prevent 5-8MB base64 string crashing Render RAM
     const screenshotBuffer = await fs.readFile(screenshotPath);
-    const screenshotPublicUrl = await uploadToSupabase(screenshotFilename, screenshotBuffer, 'image/png');
+    const screenshotPublicUrl = await uploadToSupabase(screenshotFilename, screenshotBuffer, 'image/jpeg', false);
  
     // --- Image Resizing using Sharp ---
     console.log(`🖼️ Resizing logo and images...`);
@@ -936,7 +964,13 @@ async function extractDNA(url) {
       mappedFields.image = `https://www.google.com/s2/favicons?domain=${extractedData.domain}&sz=256`;
     }
  
-    const availableImages = extractedData.images.filter(src => src && src.startsWith('http') && src !== mappedFields.image);
+    // FIX #8: Also filter out Wayback Machine archive proxy URLs from the image pool
+    const availableImages = extractedData.images.filter(src =>
+      src &&
+      src.startsWith('http') &&
+      src !== mappedFields.image &&
+      !src.includes('web.archive.org')
+    );
     const downloadedImages = [];
  
     // --- Generate Prompts via Gemini ---
@@ -947,8 +981,9 @@ async function extractDNA(url) {
     }
  
     const rawBrandName = mappedFields.name || 'this brand';
-    // If the title is massive (e.g., "MAZDA MOTOR CORPORATION GLOBAL WEBSITE"), extract the first word/phrase
-    const brandName = rawBrandName.length > 18 ? rawBrandName.split(/[\|\-\:]/)[0].trim().split(' ')[0] : rawBrandName;
+    // FIX #9: Minimum 3-char guard prevents single-letter brand names (e.g. title = "A BRAND WEBSITE" -> "A")
+    const rawFirstWord = rawBrandName.length > 18 ? rawBrandName.split(/[\|\-\:]/)[0].trim().split(' ')[0] : rawBrandName;
+    const brandName = rawFirstWord.length >= 3 ? rawFirstWord : rawBrandName.split(/[\|\-\:]/)[0].trim().split(' ').slice(0, 2).join(' ');
     const genericPremiumInstruction = "bright, inviting, premium commercial photography, cinematic lighting, 8k resolution, lifestyle product shot, NOT sci-fi, NOT moody.";
  
     const defaultPrompts = {

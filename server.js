@@ -103,6 +103,15 @@ app.get('/api/download', async (req, res) => {
       }
     }
 
+    // FIX #10: Re-add SSRF whitelist (removed during lazy-load refactor)
+    if (!url.startsWith('/outputs/')) {
+      const allowedDomains = ['.supabase.co/storage/v1/object/public/', 'google.com/s2/favicons'];
+      const isAllowed = allowedDomains.some(d => url.includes(d));
+      if (!isAllowed) {
+        return res.status(403).send('SSRF Blocked: Proxy only permits Supabase storage or Google favicon domains.');
+      }
+    }
+
     const response = await fetch(url);
     if (!response.ok) return res.status(response.status).send('Upstream fetch failed');
 
@@ -266,12 +275,14 @@ app.post('/api/extract', async (req, res) => {
       console.log(`[EXTRACT] Stage: ${stage}`);
       const { extractDNA: extractProfileDNA } = getExtractor();
       const profileDna = await extractProfileDNA(profileUrl);
+      // FIX #7: profileDna returns the full extractDNA shape, not wrapping .verifiedData
       profileResult = {
         success: true,
-        data: profileDna?.verifiedData || {},
+        data: profileDna?.mappedData || {},
         ctas: profileDna?.ctas || [],
         socialMediaLinks: profileDna?.socialMediaLinks || [],
         featuredImages: profileDna?.featuredImages || [],
+        screenshotUrl: profileDna?.screenshotUrl || null,
       };
       console.log(`[EXTRACT] Profile extraction complete (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
     }
@@ -299,10 +310,14 @@ app.post('/api/extract', async (req, res) => {
     const payload = {
       success: true,
       isVerified: true,
+      // FIX #2: Forward isWaybackFallback so UI can show the archive badge
+      isWaybackFallback: dnaResult?.isWaybackFallback || false,
       data: {
         ...verifiedData,
         buttonStyles: dnaResult?.buttonStyles || [],
         featuredImages: dnaResult?.featuredImages || [],
+        // FIX #2: Also embed in data for App.jsx to pick up via result.data.isWaybackFallback
+        isWaybackFallback: dnaResult?.isWaybackFallback || false,
       },
       youtubeData: youtubeResult || null,
       screenshotUrl: dnaResult?.screenshotUrl || null,
