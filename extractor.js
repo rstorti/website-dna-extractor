@@ -380,14 +380,25 @@ async function extractDNA(url) {
               await new Promise(r => setTimeout(r, 3000));
           }
       }
-      const blockedKeywords = ['Access Denied', 'Attention Required!', 'Cloudflare Ray ID', 'Security Check', '403 Forbidden'];
+      // Extended blocked keyword list — catches 403, Cloudflare, WAF challenges, Incapsula, etc.
+      const blockedKeywords = [
+        'Access Denied', 'Attention Required!', 'Cloudflare Ray ID', 'Security Check',
+        '403 Forbidden', 'Error 403', '403 Error', 'Forbidden',
+        'Just a moment', 'Enable JavaScript', 'DDoS protection',
+        'Checking your browser', 'Please Wait', 'Verifying you are human',
+        'Incapsula incident', 'Request blocked', 'This site is protected'
+      ];
       
-      const isBlocked = blockedKeywords.some(keyword => 
-        pageTitle.includes(keyword) || pageContent.includes(keyword)
+      const isBlocked = blockedKeywords.some(keyword =>
+        pageTitle.toLowerCase().includes(keyword.toLowerCase()) || 
+        pageContent.toLowerCase().includes(keyword.toLowerCase())
       );
- 
-      if (isBlocked || !frameReadSuccess) {
-        console.warn(`🔒 Firewall block or Unreadable Frame detected on Live URL! Falling back to Wayback Machine.`);
+
+      // Also check if the response is extremely short (likely a block page, not real content)
+      const tooShort = pageContent.length < 150;
+
+      if (isBlocked || tooShort || !frameReadSuccess) {
+        console.warn(`🔒 Block detected (isBlocked:${isBlocked}, tooShort:${tooShort}). Falling back to Wayback Machine.`);
         fallbackToWayback = true;
       }
     } catch (liveErr) {
@@ -431,37 +442,75 @@ async function extractDNA(url) {
           });
           
           let pageTitle = await page.title();
+
+          // Check if Wayback didn't archive this site at all
           if (pageTitle.includes('Wayback Machine') && !pageTitle.includes(new URL(url).hostname)) {
-              throw new Error(`Website not found in the Internet Archive.`);
+            throw new Error(`Website not found in the Internet Archive.`);
           }
-       } catch (archiveErr) {
+
+          // Also check if the Wayback snapshot itself returned a 403/block page
+          const waybackContent = await page.evaluate(() => document.body?.innerText?.substring(0, 500) || '').catch(() => '');
+          const waybackBlocked = ['403 Forbidden', 'Access Denied', 'Request blocked'].some(k => waybackContent.toLowerCase().includes(k.toLowerCase()));
+          if (waybackBlocked) {
+            throw new Error(`Wayback Machine snapshot also returned a blocked/403 page.`);
+          }
+
+        } catch (archiveErr) {
           console.error(`❌ Wayback Machine fallback failed: ${archiveErr.message}`);
- 
-          // --- Tier 3: Lightweight HTTP Fetch (no browser, just raw HTML) ---
+
+          // --- Tier 3: Rotating User-Agent HTTP Fetch ---
           console.log(`\n======================================================`);
-          console.log(`🌐 TIER 3: LIGHTWEIGHT HTTP FALLBACK (no Puppeteer)`);
-          try {
-            const httpResponse = await axios.get(url, {
-              timeout: 15000,
-              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
-              maxRedirects: 5,
-              validateStatus: (status) => status < 500
-            });
-            const html = httpResponse.data;
-            if (typeof html === 'string' && html.length > 500) {
-              console.log(`✅ HTTP Fallback retrieved ${html.length} chars of HTML. Injecting into browser...`);
-              
-              await recreatePage();
-              
-              await page.setContent(html, { timeout: 30000 }); // Do not wait for domcontentloaded, just load the parsed HTML
-            } else {
-              throw new Error('HTTP response too short or not HTML');
+          console.log(`🌐 TIER 3: ROTATING USER-AGENT HTTP FALLBACK`);
+          
+          const userAgents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_3_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3.1 Safari/605.1.15',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0',
+            'Mozilla/5.0 (iPhone; CPU iPhone OS 17_3_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3.1 Mobile/15E148 Safari/604.1'
+          ];
+
+          let htmlFetched = false;
+          for (const ua of userAgents) {
+            if (htmlFetched) break;
+            try {
+              console.log(`🔄 Trying HTTP fetch with: ${ua.substring(0, 40)}...`);
+              const httpResponse = await axios.get(url, {
+                timeout: 15000,
+                headers: {
+                  'User-Agent': ua,
+                  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                  'Accept-Language': 'en-US,en;q=0.9',
+                  'Accept-Encoding': 'gzip, deflate, br',
+                  'Cache-Control': 'no-cache',
+                  'Pragma': 'no-cache',
+                  'Upgrade-Insecure-Requests': '1',
+                  'Sec-Fetch-Dest': 'document',
+                  'Sec-Fetch-Mode': 'navigate',
+                  'Sec-Fetch-Site': 'none',
+                  'Sec-Fetch-User': '?1'
+                },
+                maxRedirects: 5,
+                validateStatus: (status) => status < 500
+              });
+              const html = httpResponse.data;
+              if (typeof html === 'string' && html.length > 500 && !html.toLowerCase().includes('403 forbidden') && !html.toLowerCase().includes('access denied')) {
+                console.log(`✅ HTTP Fallback succeeded (${ua.substring(0, 30)}). Retrieved ${html.length} chars.`);
+                await recreatePage();
+                await page.setContent(html, { timeout: 30000 });
+                htmlFetched = true;
+              } else {
+                console.warn(`⚠️ HTTP blocked or too short (${html?.length || 0} chars), trying next UA...`);
+              }
+            } catch (httpErr) {
+              console.warn(`⚠️ HTTP attempt failed (${httpErr.message}), trying next UA...`);
             }
-          } catch (httpErr) {
-            console.error(`❌ Tier 3 HTTP Fallback also failed: ${httpErr.message}`);
-            throw new Error('All extraction tiers failed (Live, Wayback Archive, HTTP Fallback). Target cannot be scraped.');
           }
-       }
+          
+          if (!htmlFetched) {
+            console.error(`❌ All Tier 3 user-agents failed.`);
+            throw new Error('All tiers failed (Live blocked, Wayback blocked, HTTP all user-agents rejected).');
+          }
+        }
     }
  
     console.log(`✅ Passed Security. Executing auto-scroll to trigger lazy rendering...`);
@@ -724,9 +773,16 @@ async function extractDNA(url) {
     const headerBgColor = rgbToHex(extractedData.colors.header) || backgroundColor;
     const headerFgColor = rgbToHex(extractedData.colors.headerText) || foregroundColor;
  
+    // Guard against block/error pages polluting the campaign name
+    const ERROR_TITLE_PATTERNS = /^(403|404|error|forbidden|access denied|blocked|just a moment|cloudflare|ddos|security check|verifying)/i;
+    const rawExtractedTitle = extractedData.title || '';
+    const sanitizedTitle = ERROR_TITLE_PATTERNS.test(rawExtractedTitle.trim())
+      ? (new URL(url).hostname.replace('www.', '').split('.')[0].charAt(0).toUpperCase() + new URL(url).hostname.replace('www.', '').split('.')[0].slice(1))
+      : rawExtractedTitle;
+
     const mappedFields = {
-      brand: 5620, // Default from layout
-      name: extractedData.title || "Website Campaign",
+      brand: 5620,
+      name: sanitizedTitle || "Website Campaign",
       department: "Marketing",
       campaign_type: 1,
       is_selling_item: false,
@@ -975,9 +1031,13 @@ async function extractDNA(url) {
     }
  
     const rawBrandName = mappedFields.name || 'this brand';
-    // FIX #9: Minimum 3-char guard prevents single-letter brand names (e.g. title = "A BRAND WEBSITE" -> "A")
-    const rawFirstWord = rawBrandName.length > 18 ? rawBrandName.split(/[\|\-\:]/)[0].trim().split(' ')[0] : rawBrandName;
-    const brandName = rawFirstWord.length >= 3 ? rawFirstWord : rawBrandName.split(/[\|\-\:]/)[0].trim().split(' ').slice(0, 2).join(' ');
+    // Double-guard: if name still looks like an error, fall back to domain name
+    const cleanBrandName = ERROR_TITLE_PATTERNS.test(rawBrandName)
+      ? (new URL(url).hostname.replace('www.', '').split('.')[0])
+      : rawBrandName;
+    const rawFirstWord = cleanBrandName.length > 18 ? cleanBrandName.split(/[\|\-\:]/)[0].trim().split(' ')[0] : cleanBrandName;
+    const brandName = rawFirstWord.length >= 3 ? rawFirstWord : cleanBrandName.split(/[\|\-\:]/)[0].trim().split(' ').slice(0, 2).join(' ');
+    console.log(`🏷️ Brand name resolved to: '${brandName}'`);
     const genericPremiumInstruction = "bright, inviting, premium commercial photography, cinematic lighting, 8k resolution, lifestyle product shot, NOT sci-fi, NOT moody.";
  
     const defaultPrompts = {
