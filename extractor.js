@@ -291,12 +291,6 @@ async function extractDNA(url) {
     page.setDefaultNavigationTimeout(90000);
     page.setDefaultTimeout(90000);
     await page.setViewport({ width: 1280, height: 800 });
-    // FIX #1: Re-apply request interception on the new page after browser relaunch
-    await page.setRequestInterception(true);
-    page.on('request', (req) => {
-      if (['font', 'media'].includes(req.resourceType())) req.abort();
-      else req.continue();
-    });
   }
  
   try {
