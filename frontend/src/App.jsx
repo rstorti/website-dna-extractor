@@ -20,6 +20,7 @@ function App() {
     const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState('Dashboard');
     const [historyData, setHistoryData] = useState([]);
+    const [isHistoryLoading, setIsHistoryLoading] = useState(false);
     const [loadingText, setLoadingText] = useState('Extracting Brand DNA & Outpainting Assets...');
     
     // Interactive Selection States
@@ -61,11 +62,13 @@ function App() {
     }, [loading]);
 
     const fetchHistory = async () => {
+        setIsHistoryLoading(true);
         try {
             const res = await fetch(`${API_BASE_URL}/api/history`);
             const data = await res.json();
             setHistoryData(data || []);
         } catch (e) { console.error('Failed to fetch history', e); }
+        finally { setIsHistoryLoading(false); }
     };
 
     useEffect(() => {
@@ -192,6 +195,9 @@ function App() {
             setHistoryData(prev => [{ 
                 id: new Date().getTime().toString(),
                 url: url || profileUrl || youtubeUrl, 
+                target_url: url,
+                youtube_url: youtubeUrl,
+                profile_url: profileUrl,
                 timestamp: new Date().toISOString(), 
                 success: true, 
                 payload: data 
@@ -250,75 +256,342 @@ function App() {
         window.location.href = `${API_BASE_URL}/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(title)}`;
     };
 
+    const getFinalPayloadStr = () => {
+        if (!result) return "";
+
+        // Strip Wayback Machine archive wrapper from scraped URLs
+        const cleanUrl = (urlStr = '') => {
+            const wayback = urlStr.match(/^https?:\/\/web\.archive\.org\/web\/\d+\*?\/(https?.+)$/i);
+            return wayback ? wayback[1] : urlStr;
+        };
+
+        // Shorten a full page title to just the brand name (strip " | tagline", " - subtitle" etc.)
+        const shortBrandName = (title = '') => {
+            // Split on common separators and return the first meaningful segment
+            const parts = title.split(/\s*[\|—–\-]\s*/);
+            return (parts[0] || title).trim();
+        };
+
+        const rawName = result.data?.name || result.name || "Target Campaign";
+        const baseName = shortBrandName(rawName);
+        const descText = summaryText[selectedSummaryType] || '';
+        const htmlDesc = descText ? `<p>${descText.replace(/\n/g, '<br>')}</p>` : '';
+        
+        const bgColor    = customPalettes['Background Color']   || result.data?.background_color         || '#FFFFFF';
+        const fgColor    = customPalettes['Foreground Color']   || result.data?.foreground_color          || '#000000';
+        const appBarBg   = customPalettes['App Bar Background'] || result.data?.background_app_bar_color  || '#000000';
+        const appBarFg   = customPalettes['App Bar Text']       || result.data?.foreground_app_bar_color  || '#FFFFFF';
+        const accentColor= customPalettes['Button Accent']      || result.data?.icon_background_color_left|| '#f99d32';
+
+        const btnBg    = selectedButtonStyle?.backgroundColorHex || selectedButtonStyle?.backgroundColor || accentColor;
+        const btnFg    = selectedButtonStyle?.colorHex           || selectedButtonStyle?.color           || '#FFFFFF';
+        const btnShape = selectedButtonStyle?.shape              || 'Rounded';
+
+        const inferButtonType = (urlStr) => {
+            if (!urlStr) return 1;
+            const str = urlStr.toLowerCase();
+            if (str.startsWith('tel:')) return 2;
+            if (str.startsWith('sms:'))  return 3;
+            if (str.includes('share'))   return 5;
+            return 1;
+        };
+
+        const campaignItemButtons = selectedCtas.map((cta, idx) => {
+            let ctaUrl = "";
+            let ctaName = "";
+            if (typeof cta === 'object' && cta.url) {
+                ctaUrl  = cleanUrl(cta.url);
+                ctaName = ctaEdits[cta.url] !== undefined ? ctaEdits[cta.url] : cta.button_name;
+            } else {
+                ctaUrl  = cleanUrl(cta);
+                ctaName = ctaEdits[cta] !== undefined ? ctaEdits[cta] : cta;
+            }
+            const btnType = inferButtonType(ctaUrl);
+
+            // Per Minfo schema: shape/buttonAlign/textAlign are integers (1=default/center)
+            return {
+                name: ctaName,
+                buttonType: btnType,
+                modelorder: idx + 1,
+                backgroundColor: btnBg,
+                foregroundColor: btnFg,
+                properties: [{
+                    propertyDefinitionId: btnType,
+                    propertyValue: ctaUrl,
+                    propertyName: btnType === 2 ? "Phone" : (btnType === 3 ? "SMS" : "URL")
+                }],
+                shape: 1,       // integer enum: 1 = default rounded
+                buttonAlign: 1, // integer enum: 1 = center
+                textAlign: 1,   // integer enum: 1 = center
+                enabled: true
+            };
+        });
+
+        // Infer the Minfo buttonCategoryId from social platform name
+        const inferSocialCategoryId = (hostname = '') => {
+            const h = hostname.toLowerCase();
+            if (h.includes('facebook'))  return 1;
+            if (h.includes('twitter') || h.includes('x.com')) return 2;
+            if (h.includes('instagram')) return 3;
+            if (h.includes('youtube'))   return 4;
+            if (h.includes('linkedin'))  return 5;
+            if (h.includes('tiktok'))    return 6;
+            if (h.includes('pinterest')) return 7;
+            return 8; // generic/other
+        };
+
+        // Derive a real favicon URL using Google's favicon service
+        const faviconUrl = (link) => {
+            try {
+                const origin = new URL(link).origin;
+                return `https://www.google.com/s2/favicons?domain=${origin}&sz=64`;
+            } catch { return ""; }
+        };
+
+        const medialinks = (result.socialMediaLinks || []).map((link, idx) => {
+            const realLink = cleanUrl(link);
+            let name = "Social";
+            let hostname = "";
+            try {
+                hostname = new URL(realLink).hostname;
+                const base = hostname.replace(/^www\./, '').split('.')[0];
+                name = base.charAt(0).toUpperCase() + base.slice(1);
+            } catch(e) {}
+            return {
+                name: name,
+                icon: faviconUrl(realLink),
+                link_url: realLink,
+                buttonCategoryId: inferSocialCategoryId(hostname),
+                modelorder: idx + 1
+            };
+        });
+
+        const processImage = (imgSrc) => imgSrc || "";
+
+        const bgImg      = selectedImages.length > 0 ? processImage(selectedImages[0]) : "";
+        const campaignImg= selectedImages.length > 1 ? processImage(selectedImages[1]) : bgImg;
+        const logoImg    = processImage(result.data?.image || result.mappedData?.image || "");
+
+        return JSON.stringify({
+            campaign: {
+                name: baseName,
+                campaignDescription: htmlDesc,
+                backgroundColor: bgColor,
+                foregroundColor: fgColor,
+                appbarBackgroundColor: appBarBg,
+                appbarForegroundColor: appBarFg,
+                backgroundImage: bgImg,
+                image: campaignImg,
+                campaignType: result.data?.campaign_type || 0,
+                scanType: 0,
+                displayInSearch: true,
+                is_enable: true,
+                is_elevator: false,
+                startTimeUtc: new Date().toISOString(),
+                endTimeUtc: new Date(Date.now() + 31536000000).toISOString(),
+                brand: {
+                    name: baseName,
+                    logo: logoImg,
+                    website: cleanUrl(url || result.data?.website || "https://example.com")
+                }
+            },
+            productGroups: [
+                {
+                    name: baseName,
+                    modelorder: 1,
+                    products: [
+                        {
+                            item_name: baseName,
+                            description: descText,
+                            modelorder: 1,
+                            calories: 0,
+                            ingredients: "",
+                            item_type: "Product",
+                            deliverable: false,
+                            productImages: bgImg ? [{ image: bgImg, modelorder: 1 }] : [],
+                            campaignItemButtons: campaignItemButtons,
+                            medialinks: []
+                        }
+                    ]
+                }
+            ],
+            medialinks: medialinks,
+        }, null, 2);
+    };
+
+    const handleDownloadJson = () => {
+        const payloadStr = getFinalPayloadStr();
+        const payloadObj = JSON.parse(payloadStr);
+
+        let safeName = "Target";
+        const nameStr = payloadObj.campaign?.name || payloadObj.name || "";
+        if (nameStr) {
+            safeName = nameStr.replace(/[^a-zA-Z0-9_\-\ ]/g, '').trim().substring(0, 40).replace(/ /g, '_');
+        }
+
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(payloadStr);
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", `Final_Campaign_${safeName}.json`);
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    };
+
     const exportToExcel = () => {
         if (!result) return;
         const wb = XLSX.utils.book_new();
 
-        // 1. Descriptions & Meta
+        // ── helpers ──────────────────────────────────────────────────────────
+
+        const formatSheet = (ws, data, colOverrides = {}) => {
+            if (!ws['!ref']) return;
+            const range = XLSX.utils.decode_range(ws['!ref']);
+
+            // Auto-fit columns with per-column minimum overrides
+            const colWidths = [];
+            for (let C = range.s.c; C <= range.e.c; C++) {
+                let maxW = colOverrides[C] ?? 12;
+                for (let R = range.s.r; R <= range.e.r; R++) {
+                    const ref = XLSX.utils.encode_cell({ r: R, c: C });
+                    const cell = ws[ref];
+                    if (cell && cell.v !== undefined) maxW = Math.max(maxW, String(cell.v).length);
+                }
+                colWidths.push({ wch: Math.min(maxW + 2, 80) });
+            }
+            ws['!cols'] = colWidths;
+
+            // Freeze header row
+            ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
+
+            // Style cells: wrap + top-align; bold header row
+            for (let R = range.s.r; R <= range.e.r; R++) {
+                const isHeader = R === range.s.r;
+                for (let C = range.s.c; C <= range.e.c; C++) {
+                    const ref = XLSX.utils.encode_cell({ r: R, c: C });
+                    if (!ws[ref]) ws[ref] = { v: '', t: 's' };
+                    ws[ref].s = {
+                        alignment: { wrapText: true, vertical: 'top' },
+                        font: isHeader ? { bold: true, sz: 11 } : { sz: 11 },
+                    };
+                }
+            }
+        };
+
+        // Infer button type from URL scheme
+        const inferButtonType = (urlStr = '') => {
+            const s = urlStr.toLowerCase();
+            if (s.startsWith('tel:')) return 'Phone';
+            if (s.startsWith('sms:')) return 'SMS';
+            if (s.includes('share') || s.includes('refer')) return 'Share';
+            return 'URL';
+        };
+
+        // Extract platform display name from a social URL
+        const parsePlatform = (link = '') => {
+            try {
+                const hostname = new URL(link).hostname.replace(/^www\./, '');
+                const name = hostname.split('.')[0];
+                return name.charAt(0).toUpperCase() + name.slice(1);
+            } catch { return 'Social'; }
+        };
+
+        // Return only the first font in a CSS font-family stack
+        const shortFont = (fontStack = '') => {
+            const first = fontStack.split(',')[0].trim().replace(/['"]/g, '');
+            return first || fontStack;
+        };
+
+        // ── Safe filename ─────────────────────────────────────────────────────
+        let safeName = 'Target';
+        const brandName = result.data?.name || result.name || '';
+        if (brandName) {
+            safeName = brandName.replace(/[^a-zA-Z0-9_\-\ ]/g, '').trim().substring(0, 40).replace(/ /g, '_');
+        }
+
+        // ── Sheet 1: Descriptions ─────────────────────────────────────────────
+        const targetUrl = url || result.data?.website || '';
+        const ytUrl = youtubeUrl || result.youtubeData?.channelUrl || '';
+
         const metaData = [
-            ["Type", "Content"],
-            ["URL", result.data?.name || "Target URL"],
-            ["Website Summary", summaryText.website || ""],
-            ["YouTube Summary", summaryText.youtube || ""],
-            ["Combined Summary", summaryText.combined || ""],
-            ["Raw YouTube Description", summaryText.raw_youtube || ""]
+            ['Label',               'Content'],
+            ['Brand Name',          brandName],
+            ['Website URL',         targetUrl],
+            ['YouTube URL',         ytUrl],
+            ['Website Summary',     summaryText.website || ''],
+            ['YouTube Summary',     summaryText.youtube || ''],
+            ['Combined Summary',    summaryText.combined || ''],
+            ['YouTube Description', summaryText.raw_youtube || ''],
         ];
         const wsMeta = XLSX.utils.aoa_to_sheet(metaData);
-        XLSX.utils.book_append_sheet(wb, wsMeta, "Descriptions");
+        formatSheet(wsMeta, metaData, { 0: 22, 1: 60 });
+        XLSX.utils.book_append_sheet(wb, wsMeta, 'Descriptions');
 
-        // 2. CTAs
-        const ctahData = [["Source", "Name", "URL", "Context"]];
-        if (result.ctas) {
-            result.ctas.forEach(cta => {
-                if (typeof cta === 'object' && cta.url) {
-                    const displayValue = ctaEdits[cta.url] !== undefined ? ctaEdits[cta.url] : cta.button_name;
-                    ctahData.push(["Website", displayValue, cta.url, cta.context]);
-                } else {
-                    const displayValue = ctaEdits[cta] !== undefined ? ctaEdits[cta] : cta;
-                    ctahData.push(["Website", displayValue, "", ""]);
-                }
-            });
-        }
-        if (result.data?.youtube_ctas) {
-            result.data.youtube_ctas.forEach(cta => {
-                const displayValue = ctaEdits[cta.url] !== undefined ? ctaEdits[cta.url] : cta.button_name;
-                ctahData.push(["YouTube", displayValue, cta.url, cta.context]);
-            });
-        }
-        const wsCtas = XLSX.utils.aoa_to_sheet(ctahData);
-        XLSX.utils.book_append_sheet(wb, wsCtas, "CTAs");
+        // ── Sheet 2: CTAs ─────────────────────────────────────────────────────
+        const ctaData = [['Source', 'Button Name', 'Button Type', 'URL', 'Context']];
+        (result.ctas || []).forEach(cta => {
+            if (typeof cta === 'object' && cta.url) {
+                const label = ctaEdits[cta.url] !== undefined ? ctaEdits[cta.url] : cta.button_name;
+                ctaData.push(['Website', label, inferButtonType(cta.url), cta.url, cta.context || '']);
+            } else {
+                const label = ctaEdits[cta] !== undefined ? ctaEdits[cta] : cta;
+                ctaData.push(['Website', label, 'URL', cta || '', '']);
+            }
+        });
+        (result.data?.youtube_ctas || []).forEach(cta => {
+            const label = ctaEdits[cta.url] !== undefined ? ctaEdits[cta.url] : cta.button_name;
+            ctaData.push(['YouTube', label, inferButtonType(cta.url), cta.url || '', cta.context || '']);
+        });
+        const wsCtas = XLSX.utils.aoa_to_sheet(ctaData);
+        formatSheet(wsCtas, ctaData, { 1: 24, 3: 50, 4: 30 });
+        XLSX.utils.book_append_sheet(wb, wsCtas, 'CTAs');
 
-        // 3. Social Links
-        const socialData = [["URL"]];
-        if (result.socialMediaLinks) {
-            result.socialMediaLinks.forEach(link => socialData.push([link]));
-        }
+        // ── Sheet 3: Social Links ─────────────────────────────────────────────
+        const socialData = [['Platform', 'URL']];
+        (result.socialMediaLinks || []).forEach(link => {
+            socialData.push([parsePlatform(link), link]);
+        });
         const wsSocial = XLSX.utils.aoa_to_sheet(socialData);
-        XLSX.utils.book_append_sheet(wb, wsSocial, "Social Links");
+        formatSheet(wsSocial, socialData, { 0: 16, 1: 50 });
+        XLSX.utils.book_append_sheet(wb, wsSocial, 'Social Links');
 
-        // 4. Colors & Palette
+        // ── Sheet 4: Palette ──────────────────────────────────────────────────
+        const bg   = customPalettes['Background Color']   || result.data?.background_color          || '';
+        const fg   = customPalettes['Foreground Color']   || result.data?.foreground_color           || '';
+        const abBg = customPalettes['App Bar Background'] || result.data?.background_app_bar_color   || '';
+        const abFg = customPalettes['App Bar Text']       || result.data?.foreground_app_bar_color   || '';
+        const acc  = customPalettes['Button Accent']      || result.data?.icon_background_color_left || '';
+
         const paletteData = [
-            ["Label", "Hex Value"],
-            ["Background Color", customPalettes['Background Color'] || result.data?.background_color || ""],
-            ["Foreground Color", customPalettes['Foreground Color'] || result.data?.foreground_color || ""],
-            ["App Bar Background", customPalettes['App Bar Background'] || result.data?.background_app_bar_color || ""],
-            ["App Bar Text", customPalettes['App Bar Text'] || result.data?.foreground_app_bar_color || ""],
-            ["Button Accent", customPalettes['Button Accent'] || result.data?.icon_background_color_left || ""]
+            ['Label',              'Hex Value', 'Role / Purpose'],
+            ['Background Color',   bg,   'Main page / screen background'],
+            ['Foreground Color',   fg,   'Primary text and icon color'],
+            ['App Bar Background', abBg, 'Top navigation bar fill'],
+            ['App Bar Text',       abFg, 'Icons and text on the app bar'],
+            ['Button Accent',      acc,  'Primary CTA button fill color'],
         ];
         const wsColors = XLSX.utils.aoa_to_sheet(paletteData);
-        XLSX.utils.book_append_sheet(wb, wsColors, "Palette");
-        
-        // 5. Button Styles
-        const btnData = [["Shape", "Border Radius", "Background Hex", "Text Hex", "Font Family", "Padding"]];
-        if (result.buttonStyles) {
-            result.buttonStyles.forEach(btn => {
-                btnData.push([btn.shape || "", btn.borderRadius || "", btn.backgroundColorHex || btn.backgroundColor || "", btn.colorHex || btn.color || "", btn.fontFamily || "", btn.padding || ""]);
-            });
-        }
-        const wsBtn = XLSX.utils.aoa_to_sheet(btnData);
-        XLSX.utils.book_append_sheet(wb, wsBtn, "Button Styles");
+        formatSheet(wsColors, paletteData, { 0: 22, 1: 14, 2: 38 });
+        XLSX.utils.book_append_sheet(wb, wsColors, 'Palette');
 
-        XLSX.writeFile(wb, "WebsiteDNA_Extraction.xlsx");
+        // ── Sheet 5: Button Styles ────────────────────────────────────────────
+        const btnData = [['Shape', 'Border Radius', 'Background Color', 'Text Color', 'Border Color', 'Font (Primary)', 'Padding']];
+        (result.buttonStyles || result.data?.buttonStyles || []).forEach(btn => {
+            btnData.push([
+                btn.shape        || '',
+                btn.borderRadius || '',
+                btn.backgroundColorHex || btn.backgroundColor || '',
+                btn.colorHex     || btn.color || '',
+                btn.borderColor  || btn.borderColorHex || 'transparent',
+                shortFont(btn.fontFamily || ''),
+                btn.padding      || '',
+            ]);
+        });
+        const wsBtn = XLSX.utils.aoa_to_sheet(btnData);
+        formatSheet(wsBtn, btnData, { 0: 12, 5: 24 });
+        XLSX.utils.book_append_sheet(wb, wsBtn, 'Button Styles');
+
+        XLSX.writeFile(wb, `WebsiteDNA_${safeName}.xlsx`);
     };
 
     return (
@@ -1055,41 +1328,47 @@ function App() {
                                 {/* 6. Campaign Configuration (JSON) */}
                                 {showJsonPreview && (
                                     <div className="glass-panel" style={{ gridColumn: '1 / -1', animation: 'fadeIn 0.5s ease forwards' }}>
-                                        <h3 className="panel-title">⚙️ Final Campaign JSON</h3>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                            <h3 className="panel-title" style={{ margin: 0 }}>⚙️ Final Campaign JSON</h3>
+                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                <button 
+                                                    onClick={(e) => { 
+                                                        navigator.clipboard.writeText(getFinalPayloadStr()); 
+                                                        e.currentTarget.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied!'; 
+                                                        e.currentTarget.style.background = '#4caf50'; 
+                                                        e.currentTarget.style.color = 'white'; 
+                                                        e.currentTarget.style.borderColor = '#4caf50';
+                                                        setTimeout(() => { 
+                                                            if (e.currentTarget) { 
+                                                                e.currentTarget.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Copy JSON'; 
+                                                                e.currentTarget.style.background = 'transparent'; 
+                                                                e.currentTarget.style.color = 'var(--primary)'; 
+                                                                e.currentTarget.style.borderColor = 'var(--primary)'; 
+                                                            } 
+                                                        }, 2000); 
+                                                    }}
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'transparent', color: 'var(--primary)', border: '1px solid var(--primary)', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.8rem', cursor: 'pointer', fontSize: '0.9rem', transition: 'all 0.2s' }}
+                                                    onMouseEnter={(e)=>{if(e.currentTarget.style.background === 'transparent') e.currentTarget.style.background='rgba(249, 157, 50, 0.1)'}}
+                                                    onMouseLeave={(e)=>{if(e.currentTarget.style.background !== 'rgb(76, 175, 80)' && e.currentTarget.style.background !== '#4caf50') e.currentTarget.style.background='transparent'}}
+                                                >
+                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                                    Copy JSON
+                                                </button>
+                                                <button 
+                                                    onClick={handleDownloadJson}
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'var(--primary)', color: 'black', border: 'none', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.8rem', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 'bold', transition: 'all 0.2s' }}
+                                                    onMouseEnter={(e)=>{e.currentTarget.style.transform='scale(1.05)'}}
+                                                    onMouseLeave={(e)=>{e.currentTarget.style.transform='scale(1)'}}
+                                                >
+                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                                    Download JSON
+                                                </button>
+                                            </div>
+                                        </div>
                                         <div className="json-panel">
                                             <pre dangerouslySetInnerHTML={{
                                                 __html: (() => {
-                                                    let str = JSON.stringify({
-                                                        name: result.data?.name || result.name,
-                                                        description: summaryText[selectedSummaryType] || '',
-                                                        ...(summaryText['raw_youtube'] ? { "YouTube Video Description used": summaryText['raw_youtube'] } : {}),
-                                                        // Visuals
-                                                        images: selectedImages,
-                                                        brand_colors: {
-                                                            background: customPalettes['Background Color'] || result.data?.background_color,
-                                                            foreground: customPalettes['Foreground Color'] || result.data?.foreground_color,
-                                                            accent: customPalettes['Button Accent'] || result.data?.icon_background_color_left
-                                                        },
-                                                        // Actionables
-                                                        selected_ctas: selectedCtas.map(cta => {
-                                                            if (typeof cta === 'object' && cta.url) {
-                                                                return {
-                                                                    ...cta,
-                                                                    button_name: ctaEdits[cta.url] !== undefined ? ctaEdits[cta.url] : cta.button_name
-                                                                };
-                                                            }
-                                                            return ctaEdits[cta] !== undefined ? ctaEdits[cta] : cta;
-                                                        }),
-                                                        social_links: result.socialMediaLinks || [],
-                                                        // Extra fields
-                                                        campaign_type: result.data?.campaign_type,
-                                                        campaign_time_zone: result.data?.campaign_time_zone,
-                                                        currency: result.data?.currency,
-                                                        is_selling_item: result.data?.is_selling_item,
-                                                        selling_item_details: result.data?.selling_item_details,
-                                                        button_style: selectedButtonStyle,
-                                                        selected_brand_colors: selectedColors
-                                                    }, null, 2);
+                                                    let str = getFinalPayloadStr();
                                                     
                                                     // Ensure strict XSS protection before rendering HTML markup!
                                                     str = str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -1145,12 +1424,19 @@ function App() {
                     <div className="input-card" style={{ marginBottom: 0 }}>
                         <h1 className="brand-font">Extraction History</h1>
                         <p>Previously extracted DNA profiles grouped by domain.</p>
-                        <div className="history-grid" style={{
-                            display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem', marginTop: '2rem'
-                        }}>
-                            {(() => {
-                                if (!historyData || historyData.length === 0) return <p>No history available. Run an extraction first!</p>;
-                                const grouped = historyData.reduce((acc, curr) => {
+                        
+                        {isHistoryLoading ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '4rem 0', gap: '1rem' }}>
+                                <div className="loader" style={{ width: '40px', height: '40px', borderWidth: '4px' }}></div>
+                                <p style={{ color: 'var(--text-secondary)' }}>Loading past extractions...</p>
+                            </div>
+                        ) : (
+                            <div className="history-grid" style={{
+                                display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem', marginTop: '2rem'
+                            }}>
+                                {(() => {
+                                    if (!historyData || historyData.length === 0) return <p>No history available. Run an extraction first!</p>;
+                                    const grouped = historyData.reduce((acc, curr) => {
                                     let domain = curr.target_url || curr.url;
                                     try { domain = new URL(curr.target_url || curr.url).hostname; } catch (e) { }
                                     if (!acc[domain]) acc[domain] = [];
@@ -1223,8 +1509,14 @@ function App() {
                                                                 });
                                                                 setSelectedSummaryType('website');
                                                                 setSelectedCtas([]);
-                                                                setSelectedImages(verified.image ? [verified.image] : []);
-                                                                
+                                                                const heroes = entry.payload.featuredImages || [];
+                                                                if (heroes.length > 0) {
+                                                                    setSelectedImages(heroes);
+                                                                } else if (verified.image || entry.payload.mappedData?.image) {
+                                                                    setSelectedImages([verified.image || entry.payload.mappedData?.image].filter(Boolean));
+                                                                } else {
+                                                                    setSelectedImages([]);
+                                                                }
                                                                 const histBtnStyles = entry.payload.data?.buttonStyles || entry.payload.buttonStyles || [];
                                                                 setSelectedButtonStyle(histBtnStyles.length > 0 ? histBtnStyles[0] : null);
 
@@ -1267,6 +1559,7 @@ function App() {
                                 });
                             })()}
                         </div>
+                        )}
                     </div>
                 )}
 

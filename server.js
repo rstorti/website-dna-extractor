@@ -15,6 +15,10 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs/promises');
+const dns = require('dns');
+
+// Force IPv4 resolution to prevent Supabase connection timeouts on systems with broken IPv6
+dns.setDefaultResultOrder('ipv4first');
 
 // LAZY LOAD heavy modules -- defer until first extraction request
 let _extractor = null;
@@ -293,15 +297,19 @@ app.post('/api/extract', async (req, res) => {
     let verifiedData = {};
     try {
       const { verifyDNA } = getAiVerifier();
-      verifiedData = await verifyDNA({
-        dnaResult,
-        youtubeResult,
-        url,
-        youtubeUrl,
-      });
+      let aiResult = await verifyDNA(
+        dnaResult?.mappedData || {},
+        dnaResult?.screenshotPath,
+        dnaResult?.logoPath,
+        youtubeResult
+      );
+      verifiedData = {
+        ...(dnaResult?.mappedData || {}),
+        ...(aiResult?.verified_data || {})
+      };
     } catch (aiErr) {
       console.warn('[EXTRACT] AI verification failed, using raw data:', aiErr.message);
-      verifiedData = dnaResult?.verifiedData || {};
+      verifiedData = dnaResult?.mappedData || {};
     }
     console.log(`[EXTRACT] AI verification complete (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
 
@@ -319,6 +327,7 @@ app.post('/api/extract', async (req, res) => {
         // FIX #2: Also embed in data for App.jsx to pick up via result.data.isWaybackFallback
         isWaybackFallback: dnaResult?.isWaybackFallback || false,
       },
+      mappedData: dnaResult?.mappedData,
       youtubeData: youtubeResult || null,
       screenshotUrl: dnaResult?.screenshotUrl || null,
       buttonStyles: dnaResult?.buttonStyles || [],
@@ -334,6 +343,9 @@ app.post('/api/extract', async (req, res) => {
       await appendHistory({
         id: Date.now().toString(),
         url: url || profileUrl || youtubeUrl,
+        target_url: url,
+        youtube_url: youtubeUrl,
+        profile_url: profileUrl,
         timestamp: new Date().toISOString(),
         success: true,
         payload,
