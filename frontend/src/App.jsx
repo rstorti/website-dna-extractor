@@ -288,12 +288,28 @@ function App() {
         const btnShape = selectedButtonStyle?.shape              || 'Rounded';
 
         const inferButtonType = (urlStr) => {
-            if (!urlStr) return 1;
+            if (!urlStr) return 4;
             const str = urlStr.toLowerCase();
             if (str.startsWith('tel:')) return 2;
             if (str.startsWith('sms:'))  return 3;
             if (str.includes('share'))   return 5;
-            return 1;
+            return 4; // 4 = URL type per Minfo schema
+        };
+
+        // Map buttonType to propertyDefinitionId per Minfo schema
+        const inferPropertyDefId = (btnType) => {
+            if (btnType === 2) return 21; // Phone
+            if (btnType === 3) return 22; // SMS
+            if (btnType === 5) return 23; // Share
+            return 20; // 20 = URL (default)
+        };
+
+        // Map buttonType to propertyName per Minfo schema
+        const inferPropertyName = (btnType) => {
+            if (btnType === 2) return "Phone";
+            if (btnType === 3) return "SMS";
+            if (btnType === 5) return "Share";
+            return "URL";
         };
 
         const campaignItemButtons = selectedCtas.map((cta, idx) => {
@@ -316,9 +332,9 @@ function App() {
                 backgroundColor: btnBg,
                 foregroundColor: btnFg,
                 properties: [{
-                    propertyDefinitionId: btnType,
+                    propertyDefinitionId: inferPropertyDefId(btnType),
                     propertyValue: ctaUrl,
-                    propertyName: btnType === 2 ? "Phone" : (btnType === 3 ? "SMS" : "URL")
+                    propertyName: inferPropertyName(btnType)
                 }],
                 shape: 1,       // integer enum: 1 = default rounded
                 buttonAlign: 1, // integer enum: 1 = center
@@ -368,9 +384,8 @@ function App() {
 
         const processImage = (imgSrc) => imgSrc || "";
 
-        const bgImg      = selectedImages.length > 0 ? processImage(selectedImages[0]) : "";
-        const campaignImg= selectedImages.length > 1 ? processImage(selectedImages[1]) : bgImg;
-        const logoImg    = processImage(result.data?.image || result.mappedData?.image || "");
+        // Logo is always the extracted/uploaded brand logo (from result.data.image)
+        const logoImg = processImage(result.data?.image || result.mappedData?.image || "");
 
         return JSON.stringify({
             campaign: {
@@ -380,9 +395,9 @@ function App() {
                 foregroundColor: fgColor,
                 appbarBackgroundColor: appBarBg,
                 appbarForegroundColor: appBarFg,
-                backgroundImage: bgImg,
-                image: campaignImg,
-                campaignType: result.data?.campaign_type || 0,
+                backgroundImage: "",  // per Minfo schema: empty unless explicitly set
+                image: "",            // per Minfo schema: empty at campaign level
+                campaignType: 1,      // always 1 per Minfo import schema
                 scanType: 0,
                 displayInSearch: true,
                 is_enable: true,
@@ -402,13 +417,13 @@ function App() {
                     products: [
                         {
                             item_name: baseName,
-                            description: descText,
+                            description: descText,   // plain text, no HTML
                             modelorder: 1,
                             calories: 0,
                             ingredients: "",
                             item_type: "Product",
                             deliverable: false,
-                            productImages: bgImg ? [{ image: bgImg, modelorder: 1 }] : [],
+                            productImages: [],        // per Minfo schema: empty array
                             campaignItemButtons: campaignItemButtons,
                             medialinks: []
                         }

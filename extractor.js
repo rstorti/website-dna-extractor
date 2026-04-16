@@ -515,8 +515,13 @@ async function extractDNA(url) {
  
     console.log(`✅ Passed Security. Executing auto-scroll to trigger lazy rendering...`);
     await autoScroll(page);
-    console.log(`✅ Auto - scrolling complete.`);
- 
+    console.log(`✅ Auto - scrolling complete. Waiting for JS images to settle...`);
+    // Wait for lazy-loaded JS images to paint after scroll (UKRI, React sites etc. need this)
+    await new Promise(r => setTimeout(r, 3000));
+    // Also try to wait for network to go quiet (max 5s) so dynamic images fully load
+    await page.waitForNetworkIdle({ idleTime: 500, timeout: 5000 }).catch(() => {});
+    console.log(`🖼️ Image settle wait complete. Beginning DOM extraction...`);
+
     // --- Begin Data Extraction ---
     console.log(`🧬 Extracting DOM data...`);
     let extractedData;
@@ -529,36 +534,129 @@ async function extractDNA(url) {
           title: document.title,
           description: document.querySelector('meta[name="description"]')?.content || "",
           logo: (() => {
-            let src = "";
-          document.querySelectorAll('script[type="application/ld+json"]').forEach(tag => {
-            try {
-              const d = JSON.parse(tag.innerText);
-              if (d.logo) src = typeof d.logo === 'string' ? d.logo : d.logo.url;
-            } catch (e) { }
-          });
-          if (src) return src;
- 
-          const headerLogo = document.querySelector('header img:not([src*="onetrust"]):not([src*="pixel"]), nav img:not([src*="onetrust"]), .header img:not([src*="onetrust"])');
-          if (headerLogo) return headerLogo.src;
- 
-          return document.querySelector('meta[property="og:image"]')?.content || "";
-        })(),
+            const BAD_PATTERNS = ['onetrust', 'pixel', 'tracking', 'analytics', 'cookie', 'favicon', 'gov.uk'];
+            const isBad = (src) => !src || BAD_PATTERNS.some(p => src.toLowerCase().includes(p));
+
+            // 1. LD+JSON schema — but only accept if it is NOT the gov.uk generic logo
+            let ldSrc = "";
+            document.querySelectorAll('script[type="application/ld+json"]').forEach(tag => {
+              try {
+                const d = JSON.parse(tag.innerText);
+                let candidate = typeof d.logo === 'string' ? d.logo : (d.logo?.url || '');
+                if (!candidate && d['@graph']) {
+                  d['@graph'].forEach(item => {
+                    if (!candidate && item.logo) candidate = typeof item.logo === 'string' ? item.logo : (item.logo?.url || '');
+                  });
+                }
+                if (candidate && !isBad(candidate) && !candidate.includes('gov.uk')) ldSrc = candidate;
+              } catch (e) { }
+            });
+            if (ldSrc) return ldSrc;
+
+            // 2. Explicit logo class/id selectors — most reliable for branded sites
+            const logoSelectors = [
+              '[class*="logo"] img', '[id*="logo"] img',
+              '[class*="brand"] img', '[id*="brand"] img',
+              '[class*="site-logo"] img', '[aria-label*="logo" i] img',
+              'header img', 'nav img',
+              // Anchor wrappers: look inside for the real img
+              'a[class*="logo"] img', 'a[class*="brand"] img',
+              // SVG logos embedded directly
+              'header svg', 'nav svg',
+            ];
+            for (const sel of logoSelectors) {
+              const el = document.querySelector(sel);
+              if (!el) continue;
+              // Only use genuine image sources — never an anchor href
+              const src = el.currentSrc || el.src || el.getAttribute('data-src') || '';
+              if (src && src.startsWith('http') && !isBad(src)) return src;
+            }
+
+            // 3. Apple touch icon (high-res brand icon)
+            const appleIcon = document.querySelector('link[rel="apple-touch-icon"]')?.href;
+            if (appleIcon && !isBad(appleIcon)) return appleIcon;
+
+            // 4. OG image as last DOM resort
+            return document.querySelector('meta[property="og:image"]')?.content || "";
+          })(),
         domain: window.location.hostname,
         images: [],
         colors: { background: [], text: [], buttons: [] }
       };
  
-      // Select BEST images by prioritizing large elements (filter out small tracking icons/logos)
-      const imgTags = Array.from(document.querySelectorAll('img'));
-      const imagesWithMeta = imgTags.map(img => {
-        const width = img.naturalWidth || img.width || img.getBoundingClientRect().width || 0;
-        const height = img.naturalHeight || img.height || img.getBoundingClientRect().height || 0;
-        return { src: img.src, area: width * height };
-      // FIX #11: Raised threshold from 15000 to 20000 to reduce noise from tracking/share icons (e.g. 122x122=14884)
-      }).filter(item => item.src && item.src.startsWith('http') && item.area > 20000);
- 
+      // Collect images from: <img>, srcset, data-src, <picture><source>, CSS backgrounds
+      const seenUrls = new Set();
+      const imagesWithMeta = [];
+
+      const resolveUrl = (src) => {
+        if (!src || !src.trim()) return null;
+        src = src.trim().split(' ')[0]; // handle srcset "url 2x" format
+        if (src.startsWith('//')) src = 'https:' + src;
+        if (!src.startsWith('http')) return null;
+        return src;
+      };
+
+      const addImage = (src, area) => {
+        const url = resolveUrl(src);
+        if (!url || seenUrls.has(url)) return;
+        // Reject obvious non-content images
+        const bad = ['onetrust','pixel','tracking','analytics','cookie','favicon','1x1','blank','placeholder','avatar','icon-'];
+        if (bad.some(p => url.toLowerCase().includes(p))) return;
+        seenUrls.add(url);
+        imagesWithMeta.push({ src: url, area: area || 0 });
+      };
+
+      // 1. Standard <img> tags with all possible src sources
+      Array.from(document.querySelectorAll('img')).forEach(img => {
+        const w = img.naturalWidth || img.width || img.getBoundingClientRect().width || 0;
+        const h = img.naturalHeight || img.height || img.getBoundingClientRect().height || 0;
+        const area = w * h;
+
+        // currentSrc handles <picture><source> selections
+        if (img.currentSrc) addImage(img.currentSrc, area);
+        if (img.src) addImage(img.src, area);
+
+        // data-src / data-lazy-src for lazy loaders
+        const lazySrc = img.dataset.src || img.dataset.lazySrc || img.dataset.original || img.getAttribute('data-lazy');
+        if (lazySrc) addImage(lazySrc, area || 5000); // assume non-trivial if lazy
+
+        // srcset: pull the largest listed URL
+        const srcset = img.getAttribute('srcset') || img.getAttribute('data-srcset');
+        if (srcset) {
+          const parts = srcset.split(',').map(s => s.trim().split(' '));
+          // Sort by descriptor (width descriptor like 800w or resolution 2x)
+          const best = parts.sort((a, b) => parseFloat(b[1]||0) - parseFloat(a[1]||0))[0];
+          if (best && best[0]) addImage(best[0], area || 5000);
+        }
+      });
+
+      // 2. <picture><source> elements (may not be reflected in img.currentSrc)
+      Array.from(document.querySelectorAll('picture source')).forEach(src => {
+        const srcset = src.getAttribute('srcset') || src.getAttribute('data-srcset');
+        if (!srcset) return;
+        const first = srcset.split(',')[0].trim().split(' ')[0];
+        if (first) addImage(first, 10000);
+      });
+
+      // 3. CSS background-image on hero/banner/feature containers
+      const bgSelectors = ['[class*="hero"]','[class*="banner"]','[class*="feature"]','[class*="cover"]','[class*="carousel"]','[class*="slide"]','[class*="masthead"]','section','main > div'];
+      bgSelectors.forEach(sel => {
+        document.querySelectorAll(sel).forEach(el => {
+          const bg = window.getComputedStyle(el).backgroundImage;
+          if (bg && bg !== 'none') {
+            const match = bg.match(/url\(["']?([^"')]+)["']?\)/);
+            if (match && match[1]) addImage(match[1], 50000); // hero BGs get priority
+          }
+        });
+      });
+
+      // Sort: largest area (most important images) first, filter tiny icons
       imagesWithMeta.sort((a, b) => b.area - a.area);
-      data.images = imagesWithMeta.map(item => item.src);
+      // Keep images with any reasonable size — lazy-loaded ones have area=5000 placeholder
+      data.images = imagesWithMeta.filter(i => i.area >= 5000).map(i => i.src);
+      // Cap at 20 to avoid memory issues
+      if (data.images.length > 20) data.images = data.images.slice(0, 20);
+      console.log('[DNA] Images found:', data.images.length);
  
       // Grab generic background and text colors from body
       const bodyStyle = window.getComputedStyle(document.body);
@@ -625,6 +723,7 @@ async function extractDNA(url) {
           shape: shape,
           fontFamily: style.fontFamily,
           padding: paddingStr,
+          textAlign: style.textAlign,
           text: btnText,
           url: btnUrl
         });
@@ -759,6 +858,44 @@ async function extractDNA(url) {
       }
     }
  
+    // --- Server-side debug: log what DOM extraction actually found ---
+    console.log(`🧬 DOM result: logo='${extractedData.logo?.substring(0,80)}' images=${extractedData.images.length} socials=${extractedData.socials?.length}`);
+
+    // SUPPLEMENTAL: If DOM image extraction found nothing, scrape raw HTML for img URLs
+    if (extractedData.images.length === 0) {
+      console.log(`🔎 DOM found 0 images. Attempting raw HTML image scrape...`);
+      try {
+        const rawHtml = await page.content().catch(() => '');
+        if (rawHtml && rawHtml.length > 500) {
+          const srcMatches = [];
+          const srcRegexes = [
+            /src=["']([^"']*?\.(?:jpg|jpeg|png|webp|gif)[^"']*?)["']/gi,
+            /srcset=["']([^"']+)["']/gi,
+            /data-src=["']([^"']*?\.(?:jpg|jpeg|png|webp|gif)[^"']*?)["']/gi,
+          ];
+          srcRegexes.forEach(rx => {
+            let m;
+            while ((m = rx.exec(rawHtml)) !== null) {
+              const src = m[1].trim().split(' ')[0]; // handle srcset descriptor
+              if (src.startsWith('http') || src.startsWith('//')) {
+                const resolved = src.startsWith('//') ? 'https:' + src : src;
+                const bad = ['onetrust','pixel','tracking','1x1','favicon','blank','placeholder'];
+                if (!bad.some(p => resolved.toLowerCase().includes(p))) {
+                  srcMatches.push(resolved);
+                }
+              }
+            }
+          });
+          // Deduplicate and take the first 10
+          const unique = [...new Set(srcMatches)].slice(0, 10);
+          console.log(`🔎 Raw HTML scrape found ${unique.length} image URLs`);
+          extractedData.images = unique;
+        }
+      } catch(e) {
+        console.warn(`⚠️ Raw HTML image scrape failed: ${e.message}`);
+      }
+    }
+
     // --- Data Mapping & Aggregation ---
     // Find most common colors to represent the true brand colors
     const findMostFrequent = (arr) => {
@@ -893,9 +1030,13 @@ async function extractDNA(url) {
     let screenshotSuccess = false;
     for (let attempts = 0; attempts < 3; attempts++) {
         try {
-            await page.setViewport({ width: 1280, height: Math.ceil(contentHeight) });
-            await new Promise(r => setTimeout(r, 1000));
-            await page.screenshot({ path: screenshotPath, fullPage: false, type: 'jpeg', quality: 70 });
+            // Scroll back to TOP so the header/logo is captured in the screenshot
+            await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+            await new Promise(r => setTimeout(r, 600));
+            // Use a standard viewport height; fullPage:true captures everything top-to-bottom
+            await page.setViewport({ width: 1280, height: 900 });
+            await new Promise(r => setTimeout(r, 800));
+            await page.screenshot({ path: screenshotPath, fullPage: true, type: 'jpeg', quality: 70 });
             console.log(`🖼️ Screenshot saved locally to: ${screenshotPath}`);
             screenshotSuccess = true;
             break;
@@ -921,25 +1062,27 @@ async function extractDNA(url) {
     console.log(`🖼️ Resizing logo and images...`);
  
     // 100% Reliable Logo QA Process with cascading fallbacks
+    // Use the actual page domain from the URL, not extractedData.domain (which can be a CDN/parent domain)
+    const pageDomain = (() => { try { return new URL(url).hostname; } catch(e) { return extractedData.domain; } })();
+    const BAD_LOGO_PATTERNS = ['onetrust', 'apple-touch-icon', 'pixel', 'gov.uk', 'tracking', 'analytics'];
     let finalLogoUrl = mappedFields.image;
-    if (!finalLogoUrl || finalLogoUrl.includes('onetrust') || finalLogoUrl.includes('apple-touch-icon') || finalLogoUrl.includes('pixel')) {
-      finalLogoUrl = `https://www.google.com/s2/favicons?domain=${extractedData.domain}&sz=256`;
+    if (!finalLogoUrl || BAD_LOGO_PATTERNS.some(p => finalLogoUrl.includes(p))) {
+      finalLogoUrl = `https://www.google.com/s2/favicons?domain=${pageDomain}&sz=256`;
       mappedFields.image = finalLogoUrl;
     }
- 
-    console.log(`🔍 Validated Primary Logo URL: ${finalLogoUrl}`);
+
+    console.log(`🔍 Validated Primary Logo URL: ${finalLogoUrl} (pageDomain: ${pageDomain})`);
     let logoLocalPath = null;
     let logoPublicUrl = null;
- 
-    // Build prioritized list of logo sources to try
+
+    // Build prioritized list of logo sources to try (all using pageDomain not extractedData.domain)
     const logoSources = [finalLogoUrl];
-    if (finalLogoUrl !== `https://www.google.com/s2/favicons?domain=${extractedData.domain}&sz=256`) {
-      logoSources.push(`https://www.google.com/s2/favicons?domain=${extractedData.domain}&sz=256`);
+    if (!finalLogoUrl.includes('google.com/s2/favicons')) {
+      logoSources.push(`https://www.google.com/s2/favicons?domain=${pageDomain}&sz=256`);
     }
-    logoSources.push(`https://logo.clearbit.com/${extractedData.domain}`);
-    // Also try with www if domain doesn't have it
-    if (!extractedData.domain.startsWith('www.')) {
-      logoSources.push(`https://www.google.com/s2/favicons?domain=www.${extractedData.domain}&sz=256`);
+    logoSources.push(`https://logo.clearbit.com/${pageDomain}`);
+    if (!pageDomain.startsWith('www.')) {
+      logoSources.push(`https://www.google.com/s2/favicons?domain=www.${pageDomain}&sz=256`);
     }
  
     let logoFetched = false;
@@ -1136,9 +1279,9 @@ async function extractDNA(url) {
       console.log(`🎨 Generating Base Image ${prefix}...`);
       
       const heroTimeout = new Promise((resolve) => setTimeout(() => {
-        console.warn(`⏳ Vertex AI Image Generation timed out after 20 seconds. Force-aborting for ${prefix} to prevent UI hang.`);
+        console.warn(`⏳ Vertex AI Image Generation timed out after 50 seconds. Force-aborting for ${prefix} to prevent UI hang.`);
         resolve(null);
-      }, 20000));
+      }, 50000));
       
       const rawBuffer = await Promise.race([
           generateBrandHero(prompt),
@@ -1171,57 +1314,136 @@ async function extractDNA(url) {
       return true;
     };
  
-    console.log(`🖼️ Generating Image Variations (Natively compositing text for pixel-perfect sets)...`);
-    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
- 
-    let genA = await generateVariantPair(finalPrompts.cleanPromptA, finalPrompts.taglineA, 'A');
-    if (genA) await sleep(2500);
-    let genB = await generateVariantPair(finalPrompts.cleanPromptB, finalPrompts.taglineB, 'B');
- 
+    console.log(`🖼️ Generating Image Variations A & B in parallel (Natively compositing text for pixel-perfect sets)...`);
+
+    // Run A and B in parallel to halve total generation time
+    const [settledA, settledB] = await Promise.allSettled([
+      generateVariantPair(finalPrompts.cleanPromptA, finalPrompts.taglineA, 'A'),
+      generateVariantPair(finalPrompts.cleanPromptB, finalPrompts.taglineB, 'B'),
+    ]);
+
+    const genA = settledA.status === 'fulfilled' ? settledA.value : null;
+    const genB = settledB.status === 'fulfilled' ? settledB.value : null;
     const results = [genA, genB];
+    console.log(`🎨 Image generation complete: A=${genA ? '✅' : '❌'} B=${genB ? '✅' : '❌'} (${downloadedImages.length} images ready)`);
+
  
-    // Fallback: If Vertex AI failed, we still guarantee 4 images by using scraped images
-    const validResults = results.filter(r => r !== null);
-    if (validResults.length === 0 && availableImages.length > 0) {
-      console.log(`⚠️ Vertex AI Generation failed. Supplying 4 high-quality fallback images from website DNA...`);
-      const createFallbackPair = async (imgUrl, tagline, prefix) => {
-        try {
-          const response = await axios.get(imgUrl, {
-            responseType: 'arraybuffer',
-            timeout: 10000,
-            maxContentLength: 10 * 1024 * 1024, // 10MB cap to prevent OOM
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-          });
-          if (!response.data || response.data.length < 500) {
-            console.warn(`⚠️ Image too small (${response.data?.length} bytes), skipping ${imgUrl}`);
-            return;
-          }
-          const baseBuffer = Buffer.from(response.data);
- 
-          // Save Clean (using cover to prevent white borders!)
-          const cleanBuffer = await sharp(baseBuffer).resize(640, 640, { fit: 'cover' }).jpeg({ quality: 85 }).toBuffer();
-          const cleanFilename = `img_640_clean_${prefix}_${timestamp}.jpg`;
-          await fs.writeFile(path.join(outputDir, cleanFilename), cleanBuffer);
-          const cleanPublicUrl = await uploadToSupabase(cleanFilename, cleanBuffer, 'image/jpeg');
-          downloadedImages.push(cleanPublicUrl);
- 
-          // Save Text (using vision to safely overlay text!)
-          const safeZone = await performMathematicalVisionAnalysis(cleanBuffer);
-          const textBuffer = await overlayTextOnBuffer(cleanBuffer, tagline, safeZone);
-          const textFilename = `img_640_text_${prefix}_${timestamp}.jpg`;
-          await fs.writeFile(path.join(outputDir, textFilename), textBuffer);
-          const textPublicUrl = await uploadToSupabase(textFilename, textBuffer, 'image/jpeg');
-          downloadedImages.push(textPublicUrl);
-        } catch (e) { console.error('Fallback variation failed:', e.message); }
-      };
- 
-      await createFallbackPair(availableImages[0], finalPrompts.taglineA, 'A');
-      if (availableImages.length > 1) {
-        await createFallbackPair(availableImages[1], finalPrompts.taglineB, 'B');
-      } else {
-        await createFallbackPair(availableImages[0], finalPrompts.taglineB, 'B');
+    // PRIMARY IMAGE STRATEGY: Always prefer scraped website images (real, relevant, reliable)
+    // Vertex AI images are supplementary when no usable site images exist
+    const createScrapedPair = async (imgUrl, tagline, prefix) => {
+      try {
+        const response = await axios.get(imgUrl, {
+          responseType: 'arraybuffer',
+          timeout: 15000,
+          maxContentLength: 15 * 1024 * 1024,
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+        });
+        if (!response.data || response.data.length < 1000) {
+          console.warn(`⚠️ Scraped image too small (${response.data?.length} bytes), skipping ${imgUrl}`);
+          return false;
+        }
+        // Validate it's a real image (not HTML error page)
+        const magic = Buffer.from(response.data).slice(0, 4);
+        const isJpeg = magic[0] === 0xFF && magic[1] === 0xD8;
+        const isPng  = magic[0] === 0x89 && magic[1] === 0x50;
+        const isWebp = magic.toString('ascii', 0, 4) === 'RIFF';
+        const isGif  = magic.toString('ascii', 0, 3) === 'GIF';
+        if (!isJpeg && !isPng && !isWebp && !isGif) {
+          console.warn(`⚠️ Not a valid image format: ${imgUrl}`);
+          return false;
+        }
+        const baseBuffer = Buffer.from(response.data);
+
+        // Save Clean: crop to perfect 640×640 square (cover = no white bars)
+        const cleanBuffer = await sharp(baseBuffer).resize(640, 640, { fit: 'cover', position: 'top' }).jpeg({ quality: 88 }).toBuffer();
+        const cleanFilename = `img_640_clean_${prefix}_${timestamp}.jpg`;
+        await fs.writeFile(path.join(outputDir, cleanFilename), cleanBuffer);
+        const cleanPublicUrl = await uploadToSupabase(cleanFilename, cleanBuffer, 'image/jpeg');
+        downloadedImages.push(cleanPublicUrl);
+        console.log(`✅ Saved scraped clean_${prefix} (${Math.round(cleanBuffer.length / 1024)}KB)`);
+
+        // Save Text version with vision-safe overlay
+        const safeZone = await performMathematicalVisionAnalysis(cleanBuffer);
+        const textBuffer = await overlayTextOnBuffer(cleanBuffer, tagline, safeZone);
+        const textFilename = `img_640_text_${prefix}_${timestamp}.jpg`;
+        await fs.writeFile(path.join(outputDir, textFilename), textBuffer);
+        const textPublicUrl = await uploadToSupabase(textFilename, textBuffer, 'image/jpeg');
+        downloadedImages.push(textPublicUrl);
+        console.log(`✅ Saved scraped text_${prefix}`);
+        return true;
+      } catch (e) {
+        console.warn(`⚠️ Scraped image pair failed (${prefix}): ${e.message}`);
+        return false;
       }
-      console.log(`✅ Emulated 4 fallback images perfectly utilizing Pomelli layout`);
+    };
+
+    if (availableImages.length > 0) {
+      console.log(`🖼️ Building featured images from ${availableImages.length} scraped website images...`);
+      // Reset downloadedImages — discard any Vertex AI output in favour of real site images
+      downloadedImages.length = 0;
+
+      const imgA = availableImages[0];
+      const imgB = availableImages.length > 1 ? availableImages[1] : availableImages[0];
+
+      const [scrapedA, scrapedB] = await Promise.allSettled([
+        createScrapedPair(imgA, finalPrompts.taglineA, 'A'),
+        createScrapedPair(imgB, finalPrompts.taglineB, 'B'),
+      ]);
+
+      const gotA = scrapedA.status === 'fulfilled' && scrapedA.value;
+      const gotB = scrapedB.status === 'fulfilled' && scrapedB.value;
+      console.log(`🖼️ Scraped images: A=${gotA ? '✅' : '❌'} B=${gotB ? '✅' : '❌'} → ${downloadedImages.length} images`);
+    } else {
+      // SCREENSHOT SLICE FALLBACK: When the site uses JS/React rendering and we have no static image URLs,
+      // slice the full-page screenshot into regions — gives us real branded imagery every time.
+      console.log(`📸 No scraped image URLs found. Slicing full-page screenshot into branded image pairs...`);
+      try {
+        const screenshotBuf = await fs.readFile(screenshotPath);
+        const meta = await sharp(screenshotBuf).metadata();
+        const pageW = meta.width || 1280;
+        const pageH = meta.height || 900;
+
+        // Region A = hero (top of page): 1280×1280 from (0, 0) or whatever height we have
+        const regionAH = Math.min(pageW, pageH);
+        const cleanBufA = await sharp(screenshotBuf)
+          .extract({ left: 0, top: 0, width: pageW, height: regionAH })
+          .resize(640, 640, { fit: 'cover', position: 'top' })
+          .jpeg({ quality: 88 })
+          .toBuffer();
+        const cleanFilenameA = `img_640_clean_A_${timestamp}.jpg`;
+        await fs.writeFile(path.join(outputDir, cleanFilenameA), cleanBufA);
+        const cleanUrlA = await uploadToSupabase(cleanFilenameA, cleanBufA, 'image/jpeg');
+        downloadedImages.push(cleanUrlA);
+        const safeZoneA = await performMathematicalVisionAnalysis(cleanBufA);
+        const textBufA = await overlayTextOnBuffer(cleanBufA, finalPrompts.taglineA, safeZoneA);
+        const textFilenameA = `img_640_text_A_${timestamp}.jpg`;
+        await fs.writeFile(path.join(outputDir, textFilenameA), textBufA);
+        downloadedImages.push(await uploadToSupabase(textFilenameA, textBufA, 'image/jpeg'));
+        console.log(`✅ Screenshot slice A saved (hero region, ${Math.round(cleanBufA.length/1024)}KB)`);
+
+        // Region B = content section: a different slice further down the page
+        const topB = Math.min(Math.floor(pageH * 0.3), pageH - regionAH > 0 ? Math.floor(pageH * 0.3) : 0);
+        const heightB = Math.min(pageW, pageH - topB);
+        const cleanBufB = heightB > 100
+          ? await sharp(screenshotBuf)
+              .extract({ left: 0, top: topB, width: pageW, height: heightB })
+              .resize(640, 640, { fit: 'cover', position: 'top' })
+              .jpeg({ quality: 88 })
+              .toBuffer()
+          : cleanBufA; // if page too short, reuse region A
+        const cleanFilenameB = `img_640_clean_B_${timestamp}.jpg`;
+        await fs.writeFile(path.join(outputDir, cleanFilenameB), cleanBufB);
+        downloadedImages.push(await uploadToSupabase(cleanFilenameB, cleanBufB, 'image/jpeg'));
+        const safeZoneB = await performMathematicalVisionAnalysis(cleanBufB);
+        const textBufB = await overlayTextOnBuffer(cleanBufB, finalPrompts.taglineB, safeZoneB);
+        const textFilenameB = `img_640_text_B_${timestamp}.jpg`;
+        await fs.writeFile(path.join(outputDir, textFilenameB), textBufB);
+        downloadedImages.push(await uploadToSupabase(textFilenameB, textBufB, 'image/jpeg'));
+        console.log(`✅ Screenshot slice B saved (content region, ${Math.round(cleanBufB.length/1024)}KB)`);
+        console.log(`🖼️ Screenshot slices complete → ${downloadedImages.length} images ready`);
+      } catch (sliceErr) {
+        console.warn(`⚠️ Screenshot slice fallback failed: ${sliceErr.message}`);
+      }
     }
  
     // --- FINAL SAFETY NET: If we still have 0 images, generate branded gradient placeholders ---
