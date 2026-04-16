@@ -249,12 +249,49 @@ function App() {
         }
     };
 
-    // Helper function to handle downloads safely via proxy to preserve file extensions
-    const handleForceDownload = (e, url, title) => {
+    // Helper: download any image — base64 data URIs, /outputs/ paths, or remote URLs
+    const handleForceDownload = async (e, url, title) => {
         e.preventDefault();
-        // Route through our local backend to cleanly affix the filename without CORS issues
-        window.location.href = `${API_BASE_URL}/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(title)}`;
+        if (!url) return;
+
+        try {
+            // Case 1: Base64 data URI — decode in-browser, never touch the server
+            if (url.startsWith('data:')) {
+                const [header, b64] = url.split(',');
+                const mime = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                const ext  = mime.split('/')[1]?.replace('jpeg','jpg') || 'jpg';
+                const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+                const blob  = new Blob([bytes], { type: mime });
+                const link  = document.createElement('a');
+                link.href   = URL.createObjectURL(blob);
+                link.download = title.includes('.') ? title : `${title}.${ext}`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(link.href);
+                return;
+            }
+
+            // Case 2: Real remote URL or /outputs/ path — fetch as blob then save
+            const fetchUrl = url.startsWith('http')
+                ? `${API_BASE_URL}/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(title)}`
+                : url; // relative /outputs/... path served directly
+            const resp = await fetch(fetchUrl);
+            if (!resp.ok) throw new Error(`Server returned ${resp.status}`);
+            const blob = await resp.blob();
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = title;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(link.href);
+        } catch (err) {
+            console.error('Download failed:', err);
+            alert(`Download failed: ${err.message}`);
+        }
     };
+
 
     const getFinalPayloadStr = () => {
         if (!result) return "";
