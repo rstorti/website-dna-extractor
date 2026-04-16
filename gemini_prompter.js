@@ -1,14 +1,16 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const env = require('./config/env');
 
+// Module-level singleton — the SDK is designed to be created once and reused.
+const _genAI = env.GEMINI_API_KEY ? new GoogleGenerativeAI(env.GEMINI_API_KEY) : null;
+
 async function generateHeroPrompts(dnaData) {
-    if (!env.GEMINI_API_KEY) {
+    if (!_genAI) {
         console.warn("⚠️  [Gen AI] GEMINI_API_KEY is missing from env. Skipping prompt generation.");
         return null;
     }
 
-    const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({
+    const model = _genAI.getGenerativeModel({
         model: 'gemini-2.5-flash',
         generationConfig: {
             maxOutputTokens: 8192,
@@ -66,13 +68,12 @@ Return ONLY a JSON object exactly matching this format:
 }
 
 async function analyzeImageForTextPlacement(imageBuffer) {
-    if (!env.GEMINI_API_KEY) {
+    if (!_genAI) {
         return "TOP";
     }
 
     try {
-        const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({
+        const model = _genAI.getGenerativeModel({
             model: 'gemini-2.5-flash',
             generationConfig: {
                 maxOutputTokens: 10,

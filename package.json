@@ -2,7 +2,7 @@
   "name": "website-dna-extractor",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
     "postinstall": "npx puppeteer browsers install chrome",
     "start": "node server.js",
@@ -21,6 +21,7 @@
     "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.97.0",
     "axios": "^1.13.5",
+    "express-rate-limit": "^7.5.0",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
@@ -36,6 +37,7 @@
     "wrap-text": "^1.0.10"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "nodemon": "^3.1.7"
   }
 }

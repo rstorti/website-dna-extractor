@@ -14,8 +14,10 @@ function extractVideoId(url) {
 
 /**
  * Fetches the description and basic details of a YouTube video using the YouTube Data API.
+ * @param {string} url - The YouTube URL to extract from.
+ * @param {number} [_depth=0] - Internal recursion depth guard (do not set externally).
  */
-async function extractYoutubeDetails(url) {
+async function extractYoutubeDetails(url, _depth = 0) {
     try {
         const videoId = extractVideoId(url);
         if (videoId) {
@@ -84,9 +86,11 @@ async function extractYoutubeDetails(url) {
                 throw new Error('Channel has no uploaded videos.');
             }
 
-            // Extract the latest video ID and recurse to extract it just like a normal video URL
+            // Extract the latest video ID and recurse to extract it just like a normal video URL.
+            // Depth guard prevents infinite loops in edge cases.
+            if (_depth >= 1) throw new Error('YouTube extraction recursion depth limit reached.');
             const latestVideoId = playlistResponse.data.items[0].snippet.resourceId.videoId;
-            return extractYoutubeDetails(`https://www.youtube.com/watch?v=${latestVideoId}`);
+            return extractYoutubeDetails(`https://www.youtube.com/watch?v=${latestVideoId}`, _depth + 1);
         }
 
         // None matched

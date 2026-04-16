@@ -46,6 +46,57 @@ async function uploadToSupabase(filename, buffer, mimeType = 'image/jpeg') {
   }
 }
  
+// ─── Puppeteer launch configuration — single source of truth ──────────────────
+// Defining args once here prevents the two launch sites (initial + recreatePage)
+// from drifting out of sync when flags need updating.
+const PUPPETEER_ARGS = [
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-dev-shm-usage',
+  '--disable-gpu',
+  '--single-process',
+  '--no-zygote',
+  '--disable-web-security',
+  '--disable-features=IsolateOrigins,site-per-process',
+  '--allow-running-insecure-content',
+  '--ignore-certificate-errors',
+  '--ignore-certificate-errors-spki-list',
+  '--disable-extensions',
+  '--disable-background-networking',
+  '--window-size=1280,800'
+];
+
+async function launchBrowser() {
+  return puppeteer.launch({
+    headless: 'new',
+    executablePath: env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
+    ignoreHTTPSErrors: true,
+    protocolTimeout: 120_000,
+    args: PUPPETEER_ARGS
+  });
+}
+// ───────────────────────────────────────────────────────────────────────────────
+
+// Clean output files older than 24 h on process start to prevent disk accumulation
+// on persistent deployments (Render persistent disks, local dev, etc.).
+(async function cleanOldOutputs() {
+  try {
+    const outputDir = path.join(__dirname, 'outputs');
+    const files = await fs.readdir(outputDir).catch(() => []);
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    let removed = 0;
+    for (const f of files) {
+      try {
+        const stat = await fs.stat(path.join(outputDir, f));
+        if (stat.mtimeMs < cutoff) { await fs.unlink(path.join(outputDir, f)); removed++; }
+      } catch { /* individual file errors are safe to ignore */ }
+    }
+    if (removed > 0) console.log(`[CLEANUP] Removed ${removed} output file(s) older than 24h.`);
+  } catch (e) {
+    console.warn('[CLEANUP] Output cleanup skipped:', e.message);
+  }
+})();
+
 async function autoScroll(page) {
   try {
     await page.evaluate(async () => {
@@ -198,29 +249,8 @@ async function extractDNA(url) {
   let browser;
   try {
     browser = await Promise.race([
-      puppeteer.launch({
-        headless: 'new',
-        executablePath: env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
-        ignoreHTTPSErrors: true,
-        protocolTimeout: 120000,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
-          '--single-process',
-          '--no-zygote',
-          '--disable-web-security',
-          '--disable-features=IsolateOrigins,site-per-process',
-          '--allow-running-insecure-content',
-          '--ignore-certificate-errors',
-          '--ignore-certificate-errors-spki-list',
-          '--disable-extensions',
-          '--disable-background-networking',
-          '--window-size=1280,800'
-        ]
-      }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Browser launch timed out after 30s. Server may be out of memory — try again in 1 minute.')), 30000))
+      launchBrowser(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Browser launch timed out after 30s. Server may be out of memory — try again in 1 minute.')), 30_000))
     ]);
   } catch (launchErr) {
     console.error(`❌ Browser Launch Failed: ${launchErr.message}`);
@@ -241,8 +271,8 @@ async function extractDNA(url) {
   });
  
   // Override default Puppeteer timeouts to prevent the 60000ms default from hitting first
-  page.setDefaultNavigationTimeout(90000);
-  page.setDefaultTimeout(90000);
+  page.setDefaultNavigationTimeout(90_000); // synchronous setter — no await needed
+  page.setDefaultTimeout(90_000);           // synchronous setter — no await needed
  
   // Set a standard desktop viewport
   await page.setViewport({ width: 1280, height: 800 });       
@@ -253,29 +283,8 @@ async function extractDNA(url) {
       if (browser) await browser.close();
     } catch(e) {}
     
-    // Relaunch browser to guarantee clean state
-    browser = await puppeteer.launch({
-      headless: 'new',
-      executablePath: env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
-      ignoreHTTPSErrors: true,
-      protocolTimeout: 120000,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--single-process',
-        '--no-zygote',
-        '--disable-web-security',
-        '--disable-features=IsolateOrigins,site-per-process',
-        '--allow-running-insecure-content',
-        '--ignore-certificate-errors',
-        '--ignore-certificate-errors-spki-list',
-        '--disable-extensions',
-        '--disable-background-networking',
-        '--window-size=1280,800'
-      ]
-    });
+    // Relaunch browser to guarantee clean state using the shared launchBrowser() helper
+    browser = await launchBrowser();
     
     page = await browser.newPage();
     await page.setRequestInterception(true);
@@ -904,7 +913,7 @@ async function extractDNA(url) {
     };
  
     const primaryColor = rgbToHex(findMostFrequent(extractedData.colors.buttons)) || "#F99D32";
-    const backgroundColor = rgbToHex(extractedData.colors.background[0]) || "#FFFFFF";
+    const backgroundColor = rgbToHex(findMostFrequent(extractedData.colors.background)) || "#FFFFFF";
     const foregroundColor = rgbToHex(extractedData.colors.text[0]) || "#000000";
     const headerBgColor = rgbToHex(extractedData.colors.header) || backgroundColor;
     const headerFgColor = rgbToHex(extractedData.colors.headerText) || foregroundColor;

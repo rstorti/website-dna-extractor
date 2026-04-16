@@ -1,13 +1,15 @@
 const { createClient } = require('@supabase/supabase-js');
 const env = require('./config/env');
 
-const supabaseUrl = env.SUPABASE_URL || "https://missing.supabase.co";
-const supabaseKey = env.SUPABASE_ANON_KEY || "missing_key";
+// Return null when credentials are absent rather than creating a broken client
+// that throws cryptic network errors at runtime. All call-sites already guard
+// on `if (supabase)`, so this is a safe, consistent change.
+const supabase = (env.SUPABASE_URL && env.SUPABASE_ANON_KEY)
+  ? createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY)
+  : null;
 
 if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
-    console.error('⚠️ WARNING: Missing Supabase credentials in Lovable Secrets!');
+  console.warn('⚠️ WARNING: Supabase credentials missing — extraction will use local file fallbacks only.');
 }
-
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 module.exports = { supabase };

@@ -1,11 +1,15 @@
 // Catch startup crashes immediately
+const _processStartTime = Date.now();
 process.on('uncaughtException', (err) => {
   console.error('UNCAUGHT EXCEPTION:', err);
   process.exit(1);
 });
 process.on('unhandledRejection', (reason) => {
   console.error('UNHANDLED REJECTION:', reason);
-  process.exit(1);
+  // Only exit during the first 15 s (startup phase). After that, log only.
+  // Calling process.exit in production would kill the server for ALL users
+  // because of a single rejected promise from one request.
+  if (Date.now() - _processStartTime < 15_000) process.exit(1);
 });
 
 // Load and validate environment variables immediately
@@ -107,13 +111,13 @@ app.get('/api/download', async (req, res) => {
       }
     }
 
-    // FIX #10: Re-add SSRF whitelist (removed during lazy-load refactor)
-    if (!url.startsWith('/outputs/')) {
-      const allowedDomains = ['.supabase.co/storage/v1/object/public/', 'google.com/s2/favicons'];
-      const isAllowed = allowedDomains.some(d => url.includes(d));
-      if (!isAllowed) {
-        return res.status(403).send('SSRF Blocked: Proxy only permits Supabase storage or Google favicon domains.');
-      }
+    // SSRF whitelist: only permit Supabase storage or exact-pattern Google favicon URLs.
+    // The /outputs/ early-exit above already handles local paths, so every URL
+    // reaching here is an http(s) remote URL that must pass this check.
+    const isSupabase = url.includes('.supabase.co/storage/v1/object/public/');
+    const isGoogleFavicon = /^https:\/\/www\.google\.com\/s2\/favicons\?domain=[a-zA-Z0-9._-]+(&sz=\d+)?$/.test(url);
+    if (!isSupabase && !isGoogleFavicon) {
+      return res.status(403).send('SSRF Blocked: Proxy only permits Supabase storage or Google favicon domains.');
     }
 
     const response = await fetch(url);
@@ -233,7 +237,22 @@ app.delete('/api/history', async (req, res) => {
 
 // ============ MAIN EXTRACTION ============
 
-app.post('/api/extract', async (req, res) => {
+// Rate-limit extraction to 5 requests/minute per IP to prevent Puppeteer DoS on
+// constrained free-tier servers. Gracefully degrades if package is not yet installed.
+let extractRateLimit = (req, res, next) => next();
+try {
+  const rateLimit = require('express-rate-limit');
+  extractRateLimit = rateLimit({
+    windowMs: 60_000,
+    max: 5,
+    standardHeaders: true,
+    message: { error: 'Too many extraction requests. Please wait 1 minute before trying again.' }
+  });
+} catch (e) {
+  console.warn('[BOOT] express-rate-limit not installed — rate limiting disabled. Run: npm install');
+}
+
+app.post('/api/extract', extractRateLimit, async (req, res) => {
   const startTime = Date.now();
   let stage = 'init';
 
@@ -291,27 +310,29 @@ app.post('/api/extract', async (req, res) => {
       console.log(`[EXTRACT] Profile extraction complete (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
     }
 
-    // 4. AI verification
+    // 4. AI verification — only runs when there is real data to verify.
+    // Skipping for YouTube-only requests (no website data) saves an unnecessary Gemini API call.
     stage = 'ai-verification';
-    console.log(`[EXTRACT] Stage: ${stage}`);
-    let verifiedData = {};
-    try {
-      const { verifyDNA } = getAiVerifier();
-      let aiResult = await verifyDNA(
-        dnaResult?.mappedData || {},
-        dnaResult?.screenshotPath,
-        dnaResult?.logoPath,
-        youtubeResult
-      );
-      verifiedData = {
-        ...(dnaResult?.mappedData || {}),
-        ...(aiResult?.verified_data || {})
-      };
-    } catch (aiErr) {
-      console.warn('[EXTRACT] AI verification failed, using raw data:', aiErr.message);
-      verifiedData = dnaResult?.mappedData || {};
+    let verifiedData = dnaResult?.mappedData || {};
+    if (dnaResult || youtubeResult) {
+      console.log(`[EXTRACT] Stage: ${stage}`);
+      try {
+        const { verifyDNA } = getAiVerifier();
+        const aiResult = await verifyDNA(
+          dnaResult?.mappedData || {},
+          dnaResult?.screenshotPath,
+          dnaResult?.logoPath,
+          youtubeResult
+        );
+        verifiedData = {
+          ...(dnaResult?.mappedData || {}),
+          ...(aiResult?.verified_data || {})
+        };
+      } catch (aiErr) {
+        console.warn('[EXTRACT] AI verification failed, using raw data:', aiErr.message);
+      }
+      console.log(`[EXTRACT] AI verification complete (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
     }
-    console.log(`[EXTRACT] AI verification complete (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
 
     // 5. Build response
     stage = 'building-response';
@@ -340,6 +361,8 @@ app.post('/api/extract', async (req, res) => {
     // 6. Save to history
     stage = 'saving-history';
     try {
+      // Store only lightweight metadata — never the full payload (50–150 KB each)
+      // to prevent history.json from growing unboundedly on persistent deployments.
       await appendHistory({
         id: Date.now().toString(),
         url: url || profileUrl || youtubeUrl,
@@ -348,7 +371,8 @@ app.post('/api/extract', async (req, res) => {
         profile_url: profileUrl,
         timestamp: new Date().toISOString(),
         success: true,
-        payload,
+        name: payload.data?.name || null,
+        screenshotUrl: payload.screenshotUrl || null,
       });
     } catch (histErr) {
       console.warn('[EXTRACT] History save failed:', histErr.message);

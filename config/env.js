@@ -38,6 +38,9 @@ const env = {
 
     // Infrastructure
     PUPPETEER_EXECUTABLE_PATH: optional('PUPPETEER_EXECUTABLE_PATH'),
+
+    // Render.com deployment — used by extractor.js to build absolute public URLs
+    RENDER_EXTERNAL_URL: optional('RENDER_EXTERNAL_URL'),
 };
 
 module.exports = env;

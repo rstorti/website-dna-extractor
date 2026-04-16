@@ -31,7 +31,9 @@ function App() {
     const [showJsonPreview, setShowJsonPreview] = useState(false);
     const [selectedButtonStyle, setSelectedButtonStyle] = useState(null);
     const [selectedColors, setSelectedColors] = useState([]);
-    const [customPalettes, setCustomPalettes] = useState({});
+    const [customPalettes, setCustomPalettes] = useState(
+        () => { try { return JSON.parse(localStorage.getItem('dna_palettes') || '{}'); } catch { return {}; } }
+    );
     const [ctaEdits, setCtaEdits] = useState({});
     const [expandedDomains, setExpandedDomains] = useState({});
     const [isGeneratingJson, setIsGeneratingJson] = useState(false);
@@ -81,6 +83,11 @@ function App() {
             setShowJsonPreview(false);
         }
     }, [selectedSummaryType, summaryText, selectedCtas, selectedImages, selectedButtonStyle, selectedColors]);
+
+    useEffect(() => {
+        // Persist custom palette overrides so they survive page refresh
+        try { localStorage.setItem('dna_palettes', JSON.stringify(customPalettes)); } catch {}
+    }, [customPalettes]);
 
     useEffect(() => {
         // Dynamic Theming: Update CSS root variables based on user overrides only (automatic extraction disabled)
@@ -324,12 +331,22 @@ function App() {
         const btnFg    = selectedButtonStyle?.colorHex           || selectedButtonStyle?.color           || '#FFFFFF';
         const btnShape = selectedButtonStyle?.shape              || 'Rounded';
 
+        // Map CSS textAlign string → Minfo integer enum
+        // 1 = Center (default), 2 = Left, 3 = Right
+        const cssToAlignEnum = (cssVal = '') => {
+            const v = cssVal.toLowerCase().trim();
+            if (v === 'left' || v === 'start')  return 2;
+            if (v === 'right' || v === 'end')   return 3;
+            return 1; // center / anything else defaults to center
+        };
+        const btnTextAlignEnum = cssToAlignEnum(selectedButtonStyle?.textAlign);
+
         const inferButtonType = (urlStr) => {
             if (!urlStr) return 4;
             const str = urlStr.toLowerCase();
             if (str.startsWith('tel:')) return 2;
             if (str.startsWith('sms:'))  return 3;
-            if (str.includes('share'))   return 5;
+            if (/facebook\.com\/sharer|twitter\.com\/intent|linkedin\.com\/sharing|t\.co\/share/i.test(str)) return 5;
             return 4; // 4 = URL type per Minfo schema
         };
 
@@ -375,7 +392,7 @@ function App() {
                 }],
                 shape: 1,       // integer enum: 1 = default rounded
                 buttonAlign: 1, // integer enum: 1 = center
-                textAlign: 1,   // integer enum: 1 = center
+                textAlign: btnTextAlignEnum, // mapped from extracted CSS textAlign value
                 enabled: true
             };
         });
@@ -429,10 +446,15 @@ function App() {
         const hasLocalhost = allImages.some(u => u.includes('localhost'));
         if (hasLocalhost) console.warn('[DNA] ⚠️ Some image URLs use localhost — these will not be accessible by Minfo. Re-run extraction on the deployed Render server to get public Supabase URLs.');
 
-        // Map selectedImages to Minfo productImages format
+        // Map selectedImages to Minfo productImages format.
+        // Filter out base64 blobs AND localhost URLs — neither is publicly accessible by Minfo.
+        const isPublicUrl = (u) => u && !u.startsWith('data:') && !u.includes('localhost') && !u.includes('127.0.0.1');
         const productImages = selectedImages
-            .filter(u => u && !u.startsWith('data:'))  // skip any remaining base64
+            .filter(isPublicUrl)
             .map((url, idx) => ({ image_url: url, modelorder: idx + 1 }));
+
+        // Also guard the logo — if it's a localhost/base64 fallback, clear it to avoid a broken import
+        const safeLogoImg = isPublicUrl(logoImg) ? logoImg : "";
 
         return JSON.stringify({
             campaign: {
@@ -443,7 +465,7 @@ function App() {
                 appbarBackgroundColor: appBarBg,
                 appbarForegroundColor: appBarFg,
                 backgroundImage: "",  // per Minfo schema: empty unless explicitly set
-                image: logoImg,        // campaign-level logo for display
+                image: safeLogoImg,        // campaign-level logo for display
                 campaignType: 1,      // always 1 per Minfo import schema
                 scanType: 0,
                 displayInSearch: true,
@@ -453,7 +475,7 @@ function App() {
                 endTimeUtc: new Date(Date.now() + 31536000000).toISOString(),
                 brand: {
                     name: baseName,
-                    logo: logoImg,
+                    logo: safeLogoImg,
                     website: cleanUrl(url || result.data?.website || "https://example.com")
                 }
             },
@@ -540,12 +562,14 @@ function App() {
             }
         };
 
-        // Infer button type from URL scheme
-        const inferButtonType = (urlStr = '') => {
+        // Infer a human-readable button type label from the URL scheme (Excel display only).
+        // Renamed from inferButtonType to avoid confusion with the integer-returning version
+        // used in getFinalPayloadStr above. Also uses stricter share URL matching.
+        const getButtonTypeLabel = (urlStr = '') => {
             const s = urlStr.toLowerCase();
             if (s.startsWith('tel:')) return 'Phone';
             if (s.startsWith('sms:')) return 'SMS';
-            if (s.includes('share') || s.includes('refer')) return 'Share';
+            if (/facebook\.com\/sharer|twitter\.com\/intent|linkedin\.com\/sharing|t\.co\/share/i.test(s)) return 'Share';
             return 'URL';
         };
 
@@ -594,7 +618,7 @@ function App() {
         (result.ctas || []).forEach(cta => {
             if (typeof cta === 'object' && cta.url) {
                 const label = ctaEdits[cta.url] !== undefined ? ctaEdits[cta.url] : cta.button_name;
-                ctaData.push(['Website', label, inferButtonType(cta.url), cta.url, cta.context || '']);
+                ctaData.push(['Website', label, getButtonTypeLabel(cta.url), cta.url, cta.context || '']);
             } else {
                 const label = ctaEdits[cta] !== undefined ? ctaEdits[cta] : cta;
                 ctaData.push(['Website', label, 'URL', cta || '', '']);
@@ -602,7 +626,7 @@ function App() {
         });
         (result.data?.youtube_ctas || []).forEach(cta => {
             const label = ctaEdits[cta.url] !== undefined ? ctaEdits[cta.url] : cta.button_name;
-            ctaData.push(['YouTube', label, inferButtonType(cta.url), cta.url || '', cta.context || '']);
+            ctaData.push(['YouTube', label, getButtonTypeLabel(cta.url), cta.url || '', cta.context || '']);
         });
         const wsCtas = XLSX.utils.aoa_to_sheet(ctaData);
         formatSheet(wsCtas, ctaData, { 1: 24, 3: 50, 4: 30 });
@@ -1034,13 +1058,17 @@ function App() {
                                                         <div className="css-prop-label">Text Hex</div>
                                                         <div className="css-prop-value">{btn.colorHex || btn.color || 'N/A'}</div>
                                                     </div>
-                                                    <div className="css-prop" style={{ gridColumn: 'span 3' }}>
+                                                     <div className="css-prop" style={{ gridColumn: 'span 2' }}>
                                                         <div className="css-prop-label">Font Family</div>
                                                         <div className="css-prop-value">{btn.fontFamily || 'Inherit'}</div>
                                                     </div>
                                                     <div className="css-prop" style={{ gridColumn: 'span 1' }}>
                                                         <div className="css-prop-label">Padding</div>
                                                         <div className="css-prop-value">{btn.padding || '0px'}</div>
+                                                    </div>
+                                                    <div className="css-prop" style={{ gridColumn: 'span 1' }}>
+                                                        <div className="css-prop-label">Text Align</div>
+                                                        <div className="css-prop-value">{btn.textAlign || 'center'}</div>
                                                     </div>
                                                 </div>
                                             </div>
