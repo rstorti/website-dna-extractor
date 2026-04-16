@@ -424,6 +424,16 @@ function App() {
         // Logo is always the extracted/uploaded brand logo (from result.data.image)
         const logoImg = processImage(result.data?.image || result.mappedData?.image || "");
 
+        // Warn if any image is a localhost URL (won't import into Minfo from external)
+        const allImages = [logoImg, ...selectedImages].filter(Boolean);
+        const hasLocalhost = allImages.some(u => u.includes('localhost'));
+        if (hasLocalhost) console.warn('[DNA] ⚠️ Some image URLs use localhost — these will not be accessible by Minfo. Re-run extraction on the deployed Render server to get public Supabase URLs.');
+
+        // Map selectedImages to Minfo productImages format
+        const productImages = selectedImages
+            .filter(u => u && !u.startsWith('data:'))  // skip any remaining base64
+            .map((url, idx) => ({ image_url: url, modelorder: idx + 1 }));
+
         return JSON.stringify({
             campaign: {
                 name: baseName,
@@ -433,7 +443,7 @@ function App() {
                 appbarBackgroundColor: appBarBg,
                 appbarForegroundColor: appBarFg,
                 backgroundImage: "",  // per Minfo schema: empty unless explicitly set
-                image: "",            // per Minfo schema: empty at campaign level
+                image: logoImg,        // campaign-level logo for display
                 campaignType: 1,      // always 1 per Minfo import schema
                 scanType: 0,
                 displayInSearch: true,
@@ -460,7 +470,7 @@ function App() {
                             ingredients: "",
                             item_type: "Product",
                             deliverable: false,
-                            productImages: [],        // per Minfo schema: empty array
+                            productImages: productImages,  // user-selected featured images
                             campaignItemButtons: campaignItemButtons,
                             medialinks: []
                         }
