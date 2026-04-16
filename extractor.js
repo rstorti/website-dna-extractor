@@ -11,39 +11,38 @@ const { supabase } = require('./supabaseClient');
 const env = require('./config/env');
  
 // FIX #3: Screenshots can be 5-8MB as base64 strings which crashes Render's 512MB RAM.
-// Only use base64 for small assets (logos, thumbnails). Fall back to local /outputs/ path for screenshots.
-async function uploadToSupabase(filename, buffer, mimeType = 'image/jpeg', allowBase64Fallback = true) {
-  if (!env.SUPABASE_URL || env.SUPABASE_URL.includes("missing.supabase.co")) {
-    if (allowBase64Fallback) {
-      console.log(`⚠️ Supabase credentials missing. Using base64 inline for ${filename}.`);
-      return `data:${mimeType};base64,${buffer.toString('base64')}`;
-    }
-    console.log(`⚠️ Supabase credentials missing. Using local path for ${filename}.`);
-    return `/outputs/${filename}`;
+// Derive the server's public base URL for local /outputs/ file links
+// On Render this is the external URL; locally it's http://localhost:PORT
+const getServerBaseUrl = () => {
+  if (env.RENDER_EXTERNAL_URL) return env.RENDER_EXTERNAL_URL.replace(/\/$/, '');
+  return `http://localhost:${env.PORT || 3001}`;
+};
+
+// Upload a file to Supabase storage and return a public URL.
+// Falls back to a proper absolute http:// URL (never a bare relative path).
+async function uploadToSupabase(filename, buffer, mimeType = 'image/jpeg') {
+  const localUrl = `${getServerBaseUrl()}/outputs/${filename}`;
+
+  if (!env.SUPABASE_URL || env.SUPABASE_URL.includes('missing.supabase.co')) {
+    console.log(`⚠️ Supabase not configured. Using local URL for ${filename}.`);
+    return localUrl;
   }
- 
+
   try {
     const { error } = await supabase.storage
       .from('outputs')
-      .upload(filename, buffer, {
-        contentType: mimeType,
-        upsert: true
-      });
- 
+      .upload(filename, buffer, { contentType: mimeType, upsert: true });
+
     if (error) {
       console.error('Supabase upload error:', error);
-      return allowBase64Fallback
-        ? `data:${mimeType};base64,${buffer.toString('base64')}`
-        : `/outputs/${filename}`;
+      return localUrl;
     }
- 
+
     const { data } = supabase.storage.from('outputs').getPublicUrl(filename);
     return data.publicUrl;
   } catch (e) {
     console.error('Supabase generic error:', e);
-    return allowBase64Fallback
-      ? `data:${mimeType};base64,${buffer.toString('base64')}`
-      : `/outputs/${filename}`;
+    return localUrl;
   }
 }
  
@@ -1053,10 +1052,9 @@ async function extractDNA(url) {
         }).jpeg().toFile(screenshotPath);
     }
  
-    // FIX #4: Corrected MIME type from 'image/png' to 'image/jpeg' (file is saved as .jpg)
-    // FIX #3: Pass allowBase64Fallback=false to prevent 5-8MB base64 string crashing Render RAM
+    // Upload screenshot to Supabase (gets a public URL); falls back to absolute http:// URL
     const screenshotBuffer = await fs.readFile(screenshotPath);
-    const screenshotPublicUrl = await uploadToSupabase(screenshotFilename, screenshotBuffer, 'image/jpeg', false);
+    const screenshotPublicUrl = await uploadToSupabase(screenshotFilename, screenshotBuffer, 'image/jpeg');
  
     // --- Image Resizing using Sharp ---
     console.log(`🖼️ Resizing logo and images...`);
