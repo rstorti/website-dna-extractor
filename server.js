@@ -86,9 +86,19 @@ app.use(express.json());
 // Explicitly serve local outputs folder natively to prevent 404 proxy loops
 app.use('/outputs', express.static(path.join(__dirname, 'outputs')));
 
-// Health Endpoint to keep Render awake
+// Health Endpoint — shows uptime + env var status for quick diagnosis
 app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: 'ok', uptime: process.uptime() });
+  res.status(200).json({
+    status: 'ok',
+    uptime: process.uptime(),
+    env: {
+      GEMINI_API_KEY: env.GEMINI_API_KEY ? 'SET' : '❌ MISSING',
+      YOUTUBE_API_KEY: env.YOUTUBE_API_KEY ? 'SET' : 'not set (optional)',
+      SUPABASE_URL: env.SUPABASE_URL ? 'SET' : '⚠️ not set — images will use localhost fallback',
+      SUPABASE_ANON_KEY: env.SUPABASE_ANON_KEY ? 'SET' : '⚠️ not set',
+      RENDER_EXTERNAL_URL: env.RENDER_EXTERNAL_URL || '⚠️ not set — localhost fallback URLs will be used',
+    }
+  });
 });
 
 // Proxy Download Endpoint to fix CORS extension issues
@@ -385,10 +395,27 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
   } catch (error) {
     const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
     console.error(`[EXTRACT] ❌ Failed at stage "${stage}" after ${totalTime}s:`, error);
+
+    // Build a human-readable hint based on the stage that failed
+    const stageHints = {
+      'init':              'Failed during initialisation — check server logs.',
+      'scraping':          'Failed while scraping the website. The site may be blocking bots, offline, or returning a 403/WAF error.',
+      'screenshot':        'Failed while taking a screenshot. The page may use strict CSP or require login.',
+      'logo':              'Failed while extracting the logo. This is usually non-fatal — try again.',
+      'images':            'Failed while processing hero images. Check Supabase credentials and storage bucket.',
+      'youtube':           'Failed while fetching YouTube data. Check your YOUTUBE_API_KEY is valid and not over quota.',
+      'profile':           'Failed while scraping the profile/Linktree URL.',
+      'ai-verification':   'Failed during AI verification (Gemini). Check your GEMINI_API_KEY.',
+      'building-response': 'Failed while assembling the final response payload.',
+      'saving-history':    'Extraction succeeded but history save failed — data may not appear in History tab.',
+    };
+    const hint = stageHints[stage] || `Failed at stage "${stage}" — check server logs for details.`;
+
     res.status(500).json({
-      error: error.message || 'Extraction failed',
+      error: `[${stage}] ${error.message || 'Extraction failed'}`,
       stage,
       elapsed: totalTime,
+      hint,
     });
   }
 });

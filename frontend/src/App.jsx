@@ -164,7 +164,15 @@ function App() {
                 throw new Error(`Invalid response (${response.status}): Backend returned non-JSON. ${rawText.substring(0, 100)}`);
             }
 
-            if (!response.ok) throw new Error(data.error || 'Failed to extract DNA');
+            if (!response.ok) {
+                // Build a multi-line diagnostic from the structured server error
+                const parts = [];
+                parts.push(data.error || 'Extraction failed');
+                if (data.stage) parts.push(`📍 Stage: ${data.stage}  ⏱ Elapsed: ${data.elapsed}s`);
+                if (data.hint) parts.push(`💡 ${data.hint}`);
+                throw new Error(parts.join('\n'));
+            }
+
             
             setResult(data);
             
