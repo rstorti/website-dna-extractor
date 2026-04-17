@@ -32,7 +32,7 @@ async function verifyDNA(mappedData, screenshotPath, logoPath, youtubeData = nul
     try {
 
         const model = genAI.getGenerativeModel({ 
-            model: "gemini-2.5-flash",
+            model: "gemini-exp-1206",
             generationConfig: { responseMimeType: "application/json" }
         });
 

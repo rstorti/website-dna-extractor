@@ -11,7 +11,7 @@ async function generateHeroPrompts(dnaData) {
     }
 
     const model = _genAI.getGenerativeModel({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-exp-1206',
         generationConfig: {
             maxOutputTokens: 8192,
             temperature: 0.8,
@@ -74,7 +74,7 @@ async function analyzeImageForTextPlacement(imageBuffer) {
 
     try {
         const model = _genAI.getGenerativeModel({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-exp-1206',
             generationConfig: {
                 maxOutputTokens: 10,
                 temperature: 0.2,
