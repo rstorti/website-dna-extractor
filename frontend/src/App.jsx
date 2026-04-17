@@ -191,9 +191,11 @@ function App() {
             if (!response.ok) {
                 // Build a multi-line diagnostic from the structured server error
                 const parts = [];
-                parts.push(data.error || 'Extraction failed');
-                if (data.stage) parts.push(`📍 Stage: ${data.stage}  ⏱ Elapsed: ${data.elapsed}s`);
-                if (data.hint) parts.push(`💡 ${data.hint}`);
+                // Strip the generic "Extraction Failed: " prefix the server sometimes prepends
+                const rawMsg = (data.error || 'Extraction failed').replace(/^Extraction Failed:\s*/i, '');
+                parts.push(rawMsg);
+                if (data.stage) parts.push(`Stage: ${data.stage}   Elapsed: ${data.elapsed}s`);
+                if (data.hint) parts.push(`\n${data.hint}`);
                 throw new Error(parts.join('\n'));
             }
 
@@ -954,7 +956,7 @@ function App() {
                                     ? 'http://localhost:3001/api/health'
                                     : 'https://website-dna-extractor-4.onrender.com/api/health';
                                 const isNetworkError = error.includes('Cannot reach') || error.includes('Failed to fetch') || error.includes('NetworkError');
-                                const isTimeout = error.includes('timed out');
+                                const isTimeout = error.includes('timed out') || error.includes('Timed Out') || error.includes('timed out after') || error.includes('Process timed out');
                                 const errorTitle = isNetworkError ? 'Server Unreachable' : isTimeout ? 'Request Timed Out' : 'Extraction Failed';
                                 const errorIcon = isNetworkError ? '🔌' : isTimeout ? '⏱️' : '⚠️';
                                 return (
@@ -964,11 +966,11 @@ function App() {
                                         <span style={{ color: isNetworkError ? '#ffb347' : '#ff8080' }}>{errorTitle}</span>
                                         <span style={{ marginLeft: 'auto', fontSize: '0.72rem', opacity: 0.55, fontWeight: 'normal' }}>{new Date().toLocaleTimeString()}</span>
                                     </div>
-                                    <div style={{ fontSize: '0.88rem', whiteSpace: 'pre-wrap', lineHeight: '1.7', color: 'rgba(255,255,255,0.88)', fontFamily: 'monospace', background: 'rgba(0,0,0,0.25)', padding: '0.75rem 1rem', borderRadius: '6px' }}>
+                                    <div style={{ fontSize: '0.88rem', whiteSpace: 'pre-wrap', lineHeight: '1.8', color: 'rgba(255,255,255,0.9)', fontFamily: "'DM Sans', sans-serif", background: 'rgba(0,0,0,0.25)', padding: '0.75rem 1rem', borderRadius: '6px' }}>
                                         {error}
                                     </div>
                                     <div style={{ marginTop: '0.2rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                                        {isNetworkError && (
+                                        {(isNetworkError || isTimeout) && (
                                             <button
                                                 onClick={() => { setError(null); handleExtract(); }}
                                                 style={{ fontSize: '0.9rem', background: 'var(--primary)', color: '#000', border: 'none', borderRadius: '6px', padding: '0.4rem 1rem', cursor: 'pointer', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem', transition: 'all 0.2s' }}
