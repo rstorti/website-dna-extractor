@@ -1,0 +1,38 @@
+{
+  "https://www.strava.com/": {
+    "status": "partial",
+    "checks": {
+      "hasBrandName": true,
+      "hasColors": false,
+      "hasImageOrLogo": true,
+      "hasCTAs": false,
+      "hasSocials": false,
+      "hasBusinessDesc": false,
+      "hasAIAnalysis": false
+    },
+    "dataSummary": {
+      "name": "Strava | Running, Cycling & Hiking App - Train, Track & Share",
+      "colorsCount": 0,
+      "ctaCount": 0,
+      "socialCount": 0
+    }
+  },
+  "https://www.youtube.com/watch?v=sEgkGynunpY": {
+    "status": "partial",
+    "checks": {
+      "hasBrandName": true,
+      "hasColors": false,
+      "hasImageOrLogo": true,
+      "hasCTAs": false,
+      "hasSocials": false,
+      "hasBusinessDesc": false,
+      "hasAIAnalysis": false
+    },
+    "dataSummary": {
+      "name": "9 Strava Features I Wish I’d Known About - YouTube",
+      "colorsCount": 0,
+      "ctaCount": 0,
+      "socialCount": 0
+    }
+  }
+}

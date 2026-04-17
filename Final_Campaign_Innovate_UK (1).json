@@ -1,0 +1,200 @@
+{
+  "campaign": {
+    "name": "Innovate UK",
+    "campaignDescription": "<p>Innovate UK, the UK’s national innovation agency and part of UKRI, empowers business-led innovation across all sectors and regions, actively supporting ground-breaking ideas from accelerators to deep-space technologies. Their commitment to driving future-forward industries and economic growth is further highlighted by the launch of their new prospectus, a visionary roadmap for transforming breakthrough ideas into formidable industry giants within the UK. Featuring Executive Chair Tom Adeyoola, the prospectus outlines Innovate UK's unwavering commitment to empowering innovators at every stage – from inception to global scaling – ensuring they thrive right here in the UK, with funding opportunities for large-scale projects like quantum computing and zero-emission vessels.</p>",
+    "backgroundColor": "#FFFFFF",
+    "foregroundColor": "#262626",
+    "appbarBackgroundColor": "#5C2080",
+    "appbarForegroundColor": "#FFFFFF",
+    "backgroundImage": "",
+    "image": "",
+    "campaignType": 1,
+    "scanType": 0,
+    "displayInSearch": true,
+    "is_enable": true,
+    "is_elevator": false,
+    "startTimeUtc": "2026-04-15T10:12:44.813Z",
+    "endTimeUtc": "2027-04-15T10:12:44.813Z",
+    "brand": {
+      "name": "Innovate UK",
+      "logo": "https://storage.googleapis.com/minfo-6b04e.appspot.com/ProductImage/fSFhROlxuw.png",
+      "website": "https://www.ukri.org/councils/innovate-uk/"
+    }
+  },
+  "productGroups": [
+    {
+      "name": "Innovate UK",
+      "modelorder": 1,
+      "products": [
+        {
+          "item_name": "Innovate UK",
+          "description": "Innovate UK, the UK’s national innovation agency and part of UKRI, empowers business-led innovation across all sectors and regions, actively supporting ground-breaking ideas from accelerators to deep-space technologies. Their commitment to driving future-forward industries and economic growth is further highlighted by the launch of their new prospectus, a visionary roadmap for transforming breakthrough ideas into formidable industry giants within the UK. Featuring Executive Chair Tom Adeyoola, the prospectus outlines Innovate UK's unwavering commitment to empowering innovators at every stage – from inception to global scaling – ensuring they thrive right here in the UK, with funding opportunities for large-scale projects like quantum computing and zero-emission vessels.",
+          "modelorder": 1,
+          "calories": 0,
+          "ingredients": "",
+          "item_type": "Product",
+          "deliverable": false,
+          "productImages": [],
+          "campaignItemButtons": [
+            {
+              "name": "Explore Prospectus",
+              "buttonType": 4,
+              "modelorder": 1,
+              "backgroundColor": "#2E2D62",
+              "foregroundColor": "#FFFFFF",
+              "properties": [
+                {
+                  "propertyDefinitionId": 20,
+                  "propertyValue": "https://www.ukri.org/publications/turning-breakthrough-ideas-into-the-uks-next-industry-giants/",
+                  "propertyName": "URL"
+                }
+              ],
+              "shape": 1,
+              "buttonAlign": 1,
+              "textAlign": 1,
+              "enabled": true
+            },
+            {
+              "name": "Subscribe",
+              "buttonType": 4,
+              "modelorder": 2,
+              "backgroundColor": "#2E2D62",
+              "foregroundColor": "#FFFFFF",
+              "properties": [
+                {
+                  "propertyDefinitionId": 20,
+                  "propertyValue": "https://public.govdelivery.com/accounts/UKRI/subscriber/new",
+                  "propertyName": "URL"
+                }
+              ],
+              "shape": 1,
+              "buttonAlign": 1,
+              "textAlign": 1,
+              "enabled": true
+            },
+            {
+              "name": "Our councils",
+              "buttonType": 4,
+              "modelorder": 3,
+              "backgroundColor": "#2E2D62",
+              "foregroundColor": "#FFFFFF",
+              "properties": [
+                {
+                  "propertyDefinitionId": 20,
+                  "propertyValue": "https://www.ukri.org/councils/",
+                  "propertyName": "URL"
+                }
+              ],
+              "shape": 1,
+              "buttonAlign": 1,
+              "textAlign": 1,
+              "enabled": true
+            },
+            {
+              "name": "Our strategy",
+              "buttonType": 4,
+              "modelorder": 4,
+              "backgroundColor": "#2E2D62",
+              "foregroundColor": "#FFFFFF",
+              "properties": [
+                {
+                  "propertyDefinitionId": 20,
+                  "propertyValue": "https://www.ukri.org/who-we-are/our-vision-and-strategy/",
+                  "propertyName": "URL"
+                }
+              ],
+              "shape": 1,
+              "buttonAlign": 1,
+              "textAlign": 1,
+              "enabled": true
+            },
+            {
+              "name": "View all Innovate UK news",
+              "buttonType": 4,
+              "modelorder": 5,
+              "backgroundColor": "#2E2D62",
+              "foregroundColor": "#FFFFFF",
+              "properties": [
+                {
+                  "propertyDefinitionId": 20,
+                  "propertyValue": "https://www.ukri.org/councils/innovate-uk/news/",
+                  "propertyName": "URL"
+                }
+              ],
+              "shape": 1,
+              "buttonAlign": 1,
+              "textAlign": 1,
+              "enabled": true
+            }
+          ],
+          "medialinks": []
+        }
+      ]
+    }
+  ],
+  "medialinks": [
+    {
+      "name": "Linkedin",
+      "icon": "https://www.google.com/s2/favicons?domain=https://linkedin.com&sz=64",
+      "link_url": "https://linkedin.com/company/innovateuk",
+      "buttonCategoryId": 5,
+      "modelorder": 1
+    },
+    {
+      "name": "Youtube",
+      "icon": "https://www.google.com/s2/favicons?domain=https://youtube.com&sz=64",
+      "link_url": "https://youtube.com/user/innovateuk",
+      "buttonCategoryId": 4,
+      "modelorder": 2
+    },
+    {
+      "name": "Instagram",
+      "icon": "https://www.google.com/s2/favicons?domain=https://instagram.com&sz=64",
+      "link_url": "https://instagram.com/weareinnovateuk",
+      "buttonCategoryId": 3,
+      "modelorder": 3
+    },
+    {
+      "name": "Facebook",
+      "icon": "https://www.google.com/s2/favicons?domain=https://facebook.com&sz=64",
+      "link_url": "https://facebook.com/innovateuk",
+      "buttonCategoryId": 1,
+      "modelorder": 4
+    },
+    {
+      "name": "Linkedin",
+      "icon": "https://www.google.com/s2/favicons?domain=https://linkedin.com&sz=64",
+      "link_url": "https://linkedin.com/company/uk-research-and-innovation",
+      "buttonCategoryId": 5,
+      "modelorder": 5
+    },
+    {
+      "name": "Youtube",
+      "icon": "https://www.google.com/s2/favicons?domain=https://youtube.com&sz=64",
+      "link_url": "https://youtube.com/@ukriforresearchers",
+      "buttonCategoryId": 4,
+      "modelorder": 6
+    },
+    {
+      "name": "Youtube",
+      "icon": "https://www.google.com/s2/favicons?domain=https://youtube.com&sz=64",
+      "link_url": "https://youtube.com/channel/uckf0yxotdftrxdkcftv5tia",
+      "buttonCategoryId": 4,
+      "modelorder": 7
+    },
+    {
+      "name": "Instagram",
+      "icon": "https://www.google.com/s2/favicons?domain=https://instagram.com&sz=64",
+      "link_url": "https://instagram.com/weareukri",
+      "buttonCategoryId": 3,
+      "modelorder": 8
+    },
+    {
+      "name": "Facebook",
+      "icon": "https://www.google.com/s2/favicons?domain=https://facebook.com&sz=64",
+      "link_url": "https://facebook.com/weareukri",
+      "buttonCategoryId": 1,
+      "modelorder": 9
+    }
+  ]
+}

@@ -22,6 +22,9 @@ function App() {
     const [historyData, setHistoryData] = useState([]);
     const [isHistoryLoading, setIsHistoryLoading] = useState(false);
     const [loadingText, setLoadingText] = useState('Extracting Brand DNA & Outpainting Assets...');
+    const [toast, setToast] = useState(null); // { message, type: 'success'|'info'|'warning' }
+    const [jsonCopied, setJsonCopied] = useState(false);
+    const abortControllerRef = { current: null };
     
     // Interactive Selection States
     const [selectedSummaryType, setSelectedSummaryType] = useState('website'); // website, youtube, combined
@@ -37,6 +40,18 @@ function App() {
     const [ctaEdits, setCtaEdits] = useState({});
     const [expandedDomains, setExpandedDomains] = useState({});
     const [isGeneratingJson, setIsGeneratingJson] = useState(false);
+
+    const showToast = (message, type = 'success', duration = 4000) => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), duration);
+    };
+
+    const handleCancelExtract = () => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+    };
 
     const loadingMessages = [
         "Initializing environment...",
@@ -120,15 +135,15 @@ function App() {
 
     const handleExtract = async () => {
         if (!url && !profileUrl && !youtubeUrl) return;
-        
+
         // Immediate validation sequence
         let validationFailed = false;
         if (!isValidDomain(url)) { setUrlError(true); validationFailed = true; } else setUrlError(false);
         if (!isValidDomain(profileUrl)) { setProfileError(true); validationFailed = true; } else setProfileError(false);
         if (youtubeUrl && !youtubeUrl.includes('youtu')) { setYoutubeError(true); validationFailed = true; } else setYoutubeError(false);
-        
+
         if (validationFailed) {
-            setError('One or more URLs are invalid. Please check for spelling mistakes (e.g. www.www.domain.com).');
+            setError('⚠️ One or more URLs are invalid. Please check for typing mistakes (e.g. www.www.domain.com) and ensure the URL starts with http:// or https://.');
             return;
         }
 
@@ -136,9 +151,12 @@ function App() {
         setError(null);
         setResult(null);
 
-        // Implement a timeout to prevent hanging forever (allowing slow Render spin-ups)
+        // AbortController: stores ref so cancel button can abort early
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 300000); // 5-minute timeout
+        abortControllerRef.current = controller;
+        const timeoutId = setTimeout(() => controller.abort('timeout'), 300000); // 5-minute hard timeout
+
+        const targetLabel = url || youtubeUrl || profileUrl;
 
         try {
             const response = await fetch(`${API_BASE_URL}/api/extract`, {
@@ -148,7 +166,8 @@ function App() {
                 signal: controller.signal
             });
             clearTimeout(timeoutId);
-            
+            abortControllerRef.current = null;
+
             const rawText = await response.text();
             let data;
             try {
@@ -157,11 +176,16 @@ function App() {
                 if (response.status >= 500) {
                     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
                     const contextMsg = isLocalhost
-                        ? `Local backend crashed (${response.status}). Check your terminal for the error. Raw: ${rawText.substring(0, 200)}`
-                        : `Server Error (${response.status}): The backend may be restarting — wait 1 minute and try again. Raw: ${rawText.substring(0, 50)}`;
+                        ? `💥 Local backend crashed (HTTP ${response.status}). Check your terminal for the Node.js stack trace.\n\nRaw output: ${rawText.substring(0, 300)}`
+                        : `💥 Server Error (HTTP ${response.status}): The backend may be restarting on Render — wait about 30 seconds and try again.\n\nRaw: ${rawText.substring(0, 80)}`;
                     throw new Error(contextMsg);
                 }
-                throw new Error(`Invalid response (${response.status}): Backend returned non-JSON. ${rawText.substring(0, 100)}`);
+                throw new Error(`❌ Invalid response (HTTP ${response.status}): Backend returned non-JSON.\n\n${rawText.substring(0, 150)}`);
+            }
+
+            if (response.status === 429) {
+                // Rate limit — surface the server message verbatim as it is already friendly
+                throw new Error(`🚦 Rate Limited: ${data.error || 'Too many requests. Please wait 1 minute before trying again.'}`);
             }
 
             if (!response.ok) {
@@ -173,9 +197,8 @@ function App() {
                 throw new Error(parts.join('\n'));
             }
 
-            
             setResult(data);
-            
+
             // Initialize selection states
             const verified = data.data || {};
             setSummaryText({
@@ -191,7 +214,7 @@ function App() {
             ]);
             setCtaEdits({}); // Reset CTA edits on new extraction
             setSelectedImages(data.data?.image ? [data.data.image] : []);
-            
+
             const btnStyles = data.data?.buttonStyles || data.buttonStyles || [];
             setSelectedButtonStyle(btnStyles.length > 0 ? btnStyles[0] : null);
 
@@ -205,31 +228,55 @@ function App() {
             setSelectedColors(colorsToSelect.filter(c => c.hex).map(c => c.label));
 
             setShowJsonPreview(false);
-            
+
             // Instantly sync the current extraction to local history UI
-            setHistoryData(prev => [{ 
+            setHistoryData(prev => [{
                 id: new Date().getTime().toString(),
-                url: url || profileUrl || youtubeUrl, 
+                url: url || profileUrl || youtubeUrl,
                 target_url: url,
                 youtube_url: youtubeUrl,
                 profile_url: profileUrl,
-                timestamp: new Date().toISOString(), 
-                success: true, 
-                payload: data 
+                timestamp: new Date().toISOString(),
+                success: true,
+                payload: data
             }, ...prev]);
-            
+
+            showToast(`✅ Extraction complete for ${new URL(targetLabel.startsWith('http') ? targetLabel : 'https://' + targetLabel).hostname}`, 'success');
             setActiveTab('Dashboard');
+
         } catch (err) {
             clearTimeout(timeoutId);
-            if (err.name === 'AbortError') {
-                setError('⏱️ Extraction timed out after 5 minutes. The target website may be heavily protected or very slow. Try again, or try a different URL.');
-            } else if (err.message === 'Failed to fetch' || err.message?.includes('NetworkError') || err.message?.includes('net::')) {
+            abortControllerRef.current = null;
+
+            if (err.name === 'AbortError' || err.message === 'timeout') {
+                // Check if it was a user-initiated cancel vs auto-timeout
+                if (err.message === 'timeout') {
+                    setError('⏱️ Extraction timed out after 5 minutes. The target website may be heavily protected or very slow.\n\n💡 Try a simpler page URL, or check if the site is accessible in your browser.');
+                } else {
+                    // User hit Cancel button — clear error, just stop loading
+                    setError(null);
+                }
+            } else if (err.message === 'Failed to fetch' || err.message?.includes('NetworkError') || err.message?.includes('net::') || err.message?.includes('ERR_CONNECTION')) {
                 // Browser-level network failure — server never responded at all
                 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
                 if (isLocalhost) {
-                    setError('🔌 Network Error: Cannot reach the local backend. Is the server running? Try: npm run dev in your terminal, then check http://localhost:3001/api/health');
+                    setError(
+                        '🔌 Cannot reach local backend (http://localhost:3001)\n\n' +
+                        'The Node.js server is not running or crashed.\n\n' +
+                        '💡 Fix: Open a terminal in the project folder and run:\n' +
+                        '   npm run dev\n\n' +
+                        'Then visit http://localhost:3001/api/health to confirm it is up.'
+                    );
                 } else {
-                    setError('🔌 Network Error: Cannot reach the backend server (website-dna-extractor-4.onrender.com). The server may be waking from sleep — wait 30 seconds and try again. If the problem persists, check https://website-dna-extractor-4.onrender.com/api/health in a new tab.');
+                    setError(
+                        '🔌 Cannot reach the extraction server\n\n' +
+                        'The backend on Render.com is asleep and needs ~30 seconds to wake up.' +
+                        ' This is normal after periods of inactivity.\n\n' +
+                        '💡 What to do:\n' +
+                        '  1. Wait 30 seconds, then click Extract Info again\n' +
+                        '  2. If it still fails after 2 minutes, open the health link below to force a wake-up\n' +
+                        '  3. Once the health page loads, come back here and try again'
+                    );
                 }
             } else {
                 // Server responded with an error message — show full detail
@@ -238,7 +285,6 @@ function App() {
         } finally {
             setLoading(false);
         }
-
     };
 
     const handleDeleteDomain = async (domain) => {
@@ -312,7 +358,7 @@ function App() {
             URL.revokeObjectURL(link.href);
         } catch (err) {
             console.error('Download failed:', err);
-            alert(`Download failed: ${err.message}`);
+            showToast(`\u26a0\ufe0f Download failed: ${err.message}. Check console for details.`, 'warning', 6000);
         }
     };
 
@@ -699,6 +745,22 @@ function App() {
 
     return (
         <div className="layout-wrapper">
+            {/* Global toast notification */}
+            {toast && (
+                <div style={{
+                    position: 'fixed', top: '1.5rem', right: '1.5rem', zIndex: 9999,
+                    background: toast.type === 'success' ? 'rgba(76,175,80,0.95)' : toast.type === 'warning' ? 'rgba(255,152,0,0.95)' : 'rgba(33,150,243,0.95)',
+                    color: '#fff', padding: '0.85rem 1.4rem', borderRadius: '10px',
+                    fontWeight: '600', fontSize: '0.95rem', maxWidth: '380px',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                    backdropFilter: 'blur(12px)',
+                    animation: 'slideInRight 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                    display: 'flex', alignItems: 'center', gap: '0.6rem'
+                }}>
+                    <span>{toast.message}</span>
+                    <button onClick={() => setToast(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: '1.1rem', padding: 0, marginLeft: 'auto', lineHeight: 1 }}>✕</button>
+                </div>
+            )}
             <aside className="sidebar">
                 <div className="brand-logo">
                     <span>🧬</span> DNA Extractor
@@ -743,19 +805,17 @@ function App() {
                                         </div>
                                         {url && (
                                             <button 
-                                                onClick={(e) => { e.preventDefault(); navigator.clipboard.writeText(url); }}
+                                                onClick={(e) => { e.preventDefault(); navigator.clipboard.writeText(url).then(() => showToast('✓ URL copied!', 'info', 2000)); }}
                                                 style={{ width: '54px', height: '54px', background: 'transparent', color: 'var(--primary)', border: '1px solid var(--primary)', borderRadius: 'var(--radius-sm)', padding: 0, cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', transition: 'all 0.2s', flexShrink: 0 }}
                                                 onMouseEnter={(e)=>e.currentTarget.style.background='rgba(249, 157, 50, 0.1)'}
                                                 onMouseLeave={(e)=>e.currentTarget.style.background='transparent'}
-                                                onMouseDown={(e)=>{e.currentTarget.style.color='#4caf50'; e.currentTarget.style.borderColor='#4caf50';}}
-                                                onMouseUp={(e)=>{const cur = e.currentTarget; setTimeout(() => {cur.style.color='var(--primary)'; cur.style.borderColor='var(--primary)';}, 1000);}}
-                                                title="Copy to Clipboard"
+                                                title="Copy URL"
                                             >
                                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                                             </button>
                                         )}
                                         <button 
-                                            onClick={async () => { try { const text = await navigator.clipboard.readText(); setUrl(text); } catch (e) { alert('Enable clipboard permissions or use Win+V/Ctrl+V directly'); } }}
+                                            onClick={async () => { try { const text = await navigator.clipboard.readText(); setUrl(text); showToast('Pasted!', 'info', 1500); } catch (e) { showToast('⚠️ Clipboard access denied — use Ctrl+V directly in the input field.', 'warning', 4000); } }}
                                             style={{ width: '54px', height: '54px', background: 'transparent', color: 'var(--primary)', border: '1px solid var(--primary)', borderRadius: 'var(--radius-sm)', padding: 0, cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', transition: 'all 0.2s', flexShrink: 0 }}
                                             onMouseEnter={(e)=>e.currentTarget.style.background='rgba(249, 157, 50, 0.1)'}
                                             onMouseLeave={(e)=>e.currentTarget.style.background='transparent'}
@@ -794,7 +854,7 @@ function App() {
                                             </button>
                                         )}
                                         <button 
-                                            onClick={async () => { try { const text = await navigator.clipboard.readText(); setYoutubeUrl(text); } catch (e) { alert('Enable clipboard permissions or use Win+V/Ctrl+V directly'); } }}
+                                            onClick={async () => { try { const text = await navigator.clipboard.readText(); setYoutubeUrl(text); showToast('Pasted!', 'info', 1500); } catch (e) { showToast('⚠️ Clipboard access denied — use Ctrl+V directly in the input field.', 'warning', 4000); } }}
                                             style={{ width: '54px', height: '54px', background: 'transparent', color: 'var(--primary)', border: '1px solid var(--primary)', borderRadius: 'var(--radius-sm)', padding: 0, cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', transition: 'all 0.2s', flexShrink: 0 }}
                                             onMouseEnter={(e)=>e.currentTarget.style.background='rgba(249, 157, 50, 0.1)'}
                                             onMouseLeave={(e)=>e.currentTarget.style.background='transparent'}
@@ -833,7 +893,7 @@ function App() {
                                             </button>
                                         )}
                                         <button 
-                                            onClick={async () => { try { const text = await navigator.clipboard.readText(); setProfileUrl(text); } catch (e) { alert('Enable clipboard permissions or use Win+V/Ctrl+V directly'); } }}
+                                            onClick={async () => { try { const text = await navigator.clipboard.readText(); setProfileUrl(text); showToast('Pasted!', 'info', 1500); } catch (e) { showToast('⚠️ Clipboard access denied — use Ctrl+V directly in the input field.', 'warning', 4000); } }}
                                             style={{ width: '54px', height: '54px', background: 'transparent', color: 'var(--primary)', border: '1px solid var(--primary)', borderRadius: 'var(--radius-sm)', padding: 0, cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', transition: 'all 0.2s', flexShrink: 0 }}
                                             onMouseEnter={(e)=>e.currentTarget.style.background='rgba(249, 157, 50, 0.1)'}
                                             onMouseLeave={(e)=>e.currentTarget.style.background='transparent'}
@@ -874,29 +934,64 @@ function App() {
                                             <span style={{ fontWeight: '700', color: 'inherit' }}>Extract Info</span>
                                         )}
                                     </button>
+                                    {loading && (
+                                        <button
+                                            onClick={handleCancelExtract}
+                                            title="Cancel extraction"
+                                            style={{ width: '54px', height: '54px', background: 'transparent', color: '#ff6b6b', border: '1px solid #ff6b6b', borderRadius: '12px', padding: 0, cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0, transition: 'all 0.2s' }}
+                                            onMouseEnter={(e) => e.currentTarget.style.background='rgba(255,107,107,0.12)'}
+                                            onMouseLeave={(e) => e.currentTarget.style.background='transparent'}
+                                        >
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                             
-                            {error && (
-                                <div className="error-box" style={{ maxWidth: '850px', margin: '1rem auto 0 auto', textAlign: 'left', padding: '1rem 1.25rem', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold', fontSize: '1rem' }}>
-                                        <span>⚠️</span>
-                                        <span>Extraction Failed</span>
-                                        <span style={{ marginLeft: 'auto', fontSize: '0.75rem', opacity: 0.6 }}>{new Date().toLocaleTimeString()}</span>
+                            {error && (() => {
+                                const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                                const healthUrl = isLocalhost
+                                    ? 'http://localhost:3001/api/health'
+                                    : 'https://website-dna-extractor-4.onrender.com/api/health';
+                                const isNetworkError = error.includes('Cannot reach') || error.includes('Failed to fetch') || error.includes('NetworkError');
+                                const isTimeout = error.includes('timed out');
+                                const errorTitle = isNetworkError ? 'Server Unreachable' : isTimeout ? 'Request Timed Out' : 'Extraction Failed';
+                                const errorIcon = isNetworkError ? '🔌' : isTimeout ? '⏱️' : '⚠️';
+                                return (
+                                <div className="error-box" style={{ maxWidth: '850px', margin: '1rem auto 0 auto', textAlign: 'left', padding: '1.2rem 1.5rem', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', gap: '0.6rem', border: `1px solid ${isNetworkError ? 'rgba(255,152,0,0.5)' : 'rgba(255,107,107,0.4)'}`, background: isNetworkError ? 'rgba(255,152,0,0.07)' : 'rgba(255,60,60,0.08)', backdropFilter: 'blur(8px)' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontWeight: 'bold', fontSize: '1rem' }}>
+                                        <span style={{ fontSize: '1.2rem' }}>{errorIcon}</span>
+                                        <span style={{ color: isNetworkError ? '#ffb347' : '#ff8080' }}>{errorTitle}</span>
+                                        <span style={{ marginLeft: 'auto', fontSize: '0.72rem', opacity: 0.55, fontWeight: 'normal' }}>{new Date().toLocaleTimeString()}</span>
                                     </div>
-                                    <div style={{ fontSize: '0.9rem', whiteSpace: 'pre-wrap', lineHeight: '1.6', opacity: 0.9 }}>
+                                    <div style={{ fontSize: '0.88rem', whiteSpace: 'pre-wrap', lineHeight: '1.7', color: 'rgba(255,255,255,0.88)', fontFamily: 'monospace', background: 'rgba(0,0,0,0.25)', padding: '0.75rem 1rem', borderRadius: '6px' }}>
                                         {error}
                                     </div>
-                                    <div style={{ marginTop: '0.4rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                                        <a href="https://website-dna-extractor-4.onrender.com/api/health" target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.78rem', color: 'var(--primary)', textDecoration: 'underline' }}>
-                                            🔍 Check backend health
+                                    <div style={{ marginTop: '0.2rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                                        {isNetworkError && (
+                                            <button
+                                                onClick={() => { setError(null); handleExtract(); }}
+                                                style={{ fontSize: '0.9rem', background: 'var(--primary)', color: '#000', border: 'none', borderRadius: '6px', padding: '0.4rem 1rem', cursor: 'pointer', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem', transition: 'all 0.2s' }}
+                                                onMouseEnter={(e) => e.currentTarget.style.opacity='0.85'}
+                                                onMouseLeave={(e) => e.currentTarget.style.opacity='1'}
+                                            >
+                                                ↺ Try Again
+                                            </button>
+                                        )}
+                                        <a href={healthUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.8rem', color: isNetworkError ? '#ffb347' : 'var(--primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.3rem', fontWeight: '600' }}>
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                                            {isNetworkError ? 'Wake up server →' : 'Check backend health'}
                                         </a>
-                                        <button onClick={() => setError(null)} style={{ fontSize: '0.78rem', background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
-                                            Dismiss
+                                        <button onClick={() => setError(null)} style={{ fontSize: '0.8rem', background: 'none', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', color: '#aaa', cursor: 'pointer', padding: '0.25rem 0.6rem', transition: 'all 0.2s' }}
+                                            onMouseEnter={(e) => e.currentTarget.style.color='white'}
+                                            onMouseLeave={(e) => e.currentTarget.style.color='#aaa'}
+                                        >
+                                            ✕ Dismiss
                                         </button>
                                     </div>
                                 </div>
-                            )}
+                                );
+                            })()}
 
 
                             {loading && (
@@ -1702,7 +1797,7 @@ function App() {
                                                                 ];
                                                                 setSelectedColors(histColorsToSelect.filter(c => c.hex).map(c => c.label));
 
-                                                                setUrl(entry.website_url || entry.target_url || entry.url || '');
+                                                                setUrl(entry.target_url || entry.website_url || entry.url || '');
                                                                 setYoutubeUrl(entry.youtube_url || '');
                                                                 setProfileUrl(entry.profile_url || '');
                                                                 setResult(entry.payload);

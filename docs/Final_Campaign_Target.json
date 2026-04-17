@@ -1,0 +1,659 @@
+{
+  "campaign": {
+    "name": "Strava | Running, Cycling & Hiking App - Train, Track & Share",
+    "campaignDescription": "<p>Strava is a leading mobile app and website connecting millions of runners, cyclists, hikers, and walkers through their shared love for sports, offering tools to train, track, and share activities. Complementing this, the Global Cycling Network (GCN) highlights 9 essential, often overlooked Strava features, including AI-powered training and dark mode. Discover these hidden gems and lesser-known tricks to elevate your Strava experience, connecting with a global community and optimizing your athletic pursuits through both the platform itself and engaging GCN content.</p>",
+    "backgroundColor": "#FFFFFF",
+    "foregroundColor": "#000000",
+    "appbarBackgroundColor": "#FAFAFA",
+    "appbarForegroundColor": "#000000",
+    "backgroundImage": "https://placeholder.com/base64-replaced.png",
+    "image": "https://placeholder.com/base64-replaced.png",
+    "campaignType": 1,
+    "scanType": 0,
+    "displayInSearch": true,
+    "is_enable": true,
+    "is_elevator": false,
+    "startTimeUtc": "2026-04-15T08:55:58.653Z",
+    "endTimeUtc": "2027-04-15T08:55:58.653Z",
+    "brand": {
+      "name": "Strava | Running, Cycling & Hiking App - Train, Track & Share",
+      "logo": "https://placeholder.com/base64-replaced.png",
+      "website": "https://www.strava.com/"
+    }
+  },
+  "campaignItemButtons": [
+    {
+      "name": "Unlock Exclusive Perks",
+      "buttonType": 1,
+      "modelorder": 1,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://gcn.eu/JoinYTmemberships",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Access GCN Uploader",
+      "buttonType": 1,
+      "modelorder": 2,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://gcn.eu/gcnuploader",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Shop GCN Essentials",
+      "buttonType": 1,
+      "modelorder": 3,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://gcn.eu/gcnshop",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Explore Top Cyclists",
+      "buttonType": 1,
+      "modelorder": 4,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://youtu.be/wT85P5k16cQ",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Discover Editor's Picks",
+      "buttonType": 1,
+      "modelorder": 5,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://gcn.eu/editorschoice",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Dive Into Features",
+      "buttonType": 1,
+      "modelorder": 6,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://gcn.eu/gcnfeatures",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Experience Pinarello",
+      "buttonType": 1,
+      "modelorder": 7,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://gcn.eu/Pinarello",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Discover Topeak Innovation",
+      "buttonType": 1,
+      "modelorder": 8,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "http://gcn.eu/Topeak",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Explore Canyon Design",
+      "buttonType": 1,
+      "modelorder": 9,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "http://gcn.eu/-Canyon",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Hydrate with CamelBak",
+      "buttonType": 1,
+      "modelorder": 10,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://gcn.eu/Camelbak",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Perform with Pirelli",
+      "buttonType": 1,
+      "modelorder": 11,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://gcn.eu/Pirelli",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Ride Orbea Excellence",
+      "buttonType": 1,
+      "modelorder": 12,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "http://gcn.eu/Orbea",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Innovate with Vision",
+      "buttonType": 1,
+      "modelorder": 13,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "http://gcn.eu/Vision",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Train with Wahoo",
+      "buttonType": 1,
+      "modelorder": 14,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "http://gcn.eu/Wahoo-Fitness",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Master with Park Tool",
+      "buttonType": 1,
+      "modelorder": 15,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "http://gcn.eu/-parktool",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Embrace Selle Italia",
+      "buttonType": 1,
+      "modelorder": 16,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://gcn.eu/SelleItalia",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Connect with Zwift",
+      "buttonType": 1,
+      "modelorder": 17,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://gcn.eu/Zwift",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Refine with Silca",
+      "buttonType": 1,
+      "modelorder": 18,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://gcn.eu/Silca",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Protect with MET",
+      "buttonType": 1,
+      "modelorder": 19,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://gcn.eu/methelmets",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Join Strava Now",
+      "buttonType": 1,
+      "modelorder": 20,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://gcn.eu/strava",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Simplify with ShadowStand",
+      "buttonType": 1,
+      "modelorder": 21,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://gcn.eu/ShadowStand",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Optimize with Precision",
+      "buttonType": 1,
+      "modelorder": 22,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://gcn.eu/precisionhydration",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Innovate with AGU",
+      "buttonType": 1,
+      "modelorder": 23,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://gcn.eu/AGUxGCN",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Ride Elitewheels",
+      "buttonType": 1,
+      "modelorder": 24,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://gcn.eu/Elitewheels",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Sign Up",
+      "buttonType": 1,
+      "modelorder": 25,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://web.archive.org/web/20260413151342/http://www.strava.com/register/free",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Sign Up",
+      "buttonType": 1,
+      "modelorder": 26,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://web.archive.org/web/20260413151342/http://www.strava.com/register/free?cta=sign-up&element=mobile-nav&source=website_show",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Join Us Now",
+      "buttonType": 1,
+      "modelorder": 27,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://web.archive.org/web/20260413151342/https://www.strava.com/register/free",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Explore",
+      "buttonType": 1,
+      "modelorder": 28,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://web.archive.org/web/20260413151342/https://www.strava.com/features",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Explore",
+      "buttonType": 1,
+      "modelorder": 29,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://web.archive.org/web/20260413151342/https://www.strava.com/subscribe?origin=homepage_subscription",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Explore",
+      "buttonType": 1,
+      "modelorder": 30,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://web.archive.org/web/20260413151342/https://www.strava.com/subscribe?origin=homepage_summary",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Join us for free.",
+      "buttonType": 1,
+      "modelorder": 31,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://web.archive.org/web/20260413151342/https://www.strava.com/register/free?cta=sign-up&element=banner&source=website_show",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    },
+    {
+      "name": "Join us for free.",
+      "buttonType": 1,
+      "modelorder": 32,
+      "backgroundColor": "#FFFFFF",
+      "foregroundColor": "#21211F",
+      "properties": [
+        {
+          "propertyDefinitionId": 1,
+          "propertyValue": "https://web.archive.org/web/20260413151342/https://www.strava.com/register/free?cta=sign-up&source=long_button",
+          "propertyName": "URL"
+        }
+      ],
+      "shape": "Square",
+      "buttonAlign": "Center",
+      "textAlign": "Center",
+      "enabled": true
+    }
+  ],
+  "medialinks": [
+    {
+      "name": "Web",
+      "icon": "https://placeholder.com/icon.png",
+      "link_url": "https://web.archive.org/web/20260413151342/https://twitter.com/strava",
+      "buttonCategoryId": 1,
+      "modelorder": 1
+    },
+    {
+      "name": "Web",
+      "icon": "https://placeholder.com/icon.png",
+      "link_url": "https://web.archive.org/web/20260413151342/https://youtube.com/stravainc",
+      "buttonCategoryId": 1,
+      "modelorder": 2
+    },
+    {
+      "name": "Web",
+      "icon": "https://placeholder.com/icon.png",
+      "link_url": "https://web.archive.org/web/20260413151342/https://instagram.com/strava",
+      "buttonCategoryId": 1,
+      "modelorder": 3
+    },
+    {
+      "name": "Web",
+      "icon": "https://placeholder.com/icon.png",
+      "link_url": "https://web.archive.org/web/20260413151342/https://linkedin.com/company/strava-inc.",
+      "buttonCategoryId": 1,
+      "modelorder": 4
+    },
+    {
+      "name": "Web",
+      "icon": "https://placeholder.com/icon.png",
+      "link_url": "https://web.archive.org/web/20260413151342/https://facebook.com/strava",
+      "buttonCategoryId": 1,
+      "modelorder": 5
+    }
+  ],
+  "productGroups": [
+    {
+      "name": "Default Group",
+      "modelorder": 1,
+      "products": [
+        {
+          "item_name": "Example Product",
+          "description": "Autogenerated synthetic product",
+          "modelorder": 1,
+          "calories": 0,
+          "ingredients": "",
+          "item_type": 1,
+          "deliverable": false,
+          "productImages": [],
+          "campaignItemButtons": [],
+          "medialinks": []
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+﻿4b429c5 Implement lazy loading for heavy modules and enhance error handling
+35b42f5 Add 'lovable.app' and 'lovableproject.com' to CORS
+c7c9fd9 Patch: Fix deep extraction of nested button text colors, return Base64 image URIs if Supabase fails (fixing missing screenshots), and explicitly add UI badge for Wayback Machine fallbacks
+8b08462 Hardening patch: Force complete Chromium relaunch on Tier fallback to prevent cascaded detached frame crashes
+3407f32 Hardening: Implement 6-layer extraction pipeline (Browser launch timeout, resource blocking, progressive navigation, wayback fallback, HTTP fallback, safety nets). Addresses timeout issues in Render.
+600a7ba Implement 2-Tier Wayback Machine Fallback Strategy
+c8cce09 Fix syntax duplicate key in inline style
+b4fab3a Add frontend url validation
+21cb52c Fix syntax errors and improve retry logic over instant fallback. Wait for page redirects to settle before scraping.
+03b2e45 Convert Puppeteer to fully Visual Auto-Fallback Agent if DOM gets blocked/detached by aggressive anti-bot redirect walls
