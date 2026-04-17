@@ -5,13 +5,13 @@
 
 [[redirects]]
   from = "/api/*"
-  to = "https://website-dna-extractor.onrender.com/api/:splat"
+  to = "https://website-dna-extractor-4.onrender.com/api/:splat"
   status = 200
   force = true
 
 [[redirects]]
   from = "/outputs/*"
-  to = "https://website-dna-extractor.onrender.com/outputs/:splat"
+  to = "https://website-dna-extractor-4.onrender.com/outputs/:splat"
   status = 200
   force = true
 
