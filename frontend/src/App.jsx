@@ -214,14 +214,23 @@ function App() {
         } catch (err) {
             clearTimeout(timeoutId);
             if (err.name === 'AbortError') {
-                setError('Extraction timed out (5 min). The site may be heavily protected. Try again or use a different URL.');
+                setError('⏱️ Extraction timed out after 5 minutes. The target website may be heavily protected or very slow. Try again, or try a different URL.');
+            } else if (err.message === 'Failed to fetch' || err.message?.includes('NetworkError') || err.message?.includes('net::')) {
+                // Browser-level network failure — server never responded at all
+                const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                if (isLocalhost) {
+                    setError('🔌 Network Error: Cannot reach the local backend. Is the server running? Try: npm run dev in your terminal, then check http://localhost:3001/api/health');
+                } else {
+                    setError('🔌 Network Error: Cannot reach the backend server (website-dna-extractor-4.onrender.com). The server may be waking from sleep — wait 30 seconds and try again. If the problem persists, check https://website-dna-extractor-4.onrender.com/api/health in a new tab.');
+                }
             } else {
-                // Show the full error message including any server-side detail
+                // Server responded with an error message — show full detail
                 setError(err.message || 'An unexpected error occurred.');
             }
         } finally {
             setLoading(false);
         }
+
     };
 
     const handleDeleteDomain = async (domain) => {
@@ -861,10 +870,26 @@ function App() {
                             </div>
                             
                             {error && (
-                                <div className="error-box" style={{ maxWidth: '850px', margin: '1rem auto 0 auto', textAlign: 'center' }}>
-                                    <strong>⚠️ Extraction Failed:</strong> {error}
+                                <div className="error-box" style={{ maxWidth: '850px', margin: '1rem auto 0 auto', textAlign: 'left', padding: '1rem 1.25rem', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold', fontSize: '1rem' }}>
+                                        <span>⚠️</span>
+                                        <span>Extraction Failed</span>
+                                        <span style={{ marginLeft: 'auto', fontSize: '0.75rem', opacity: 0.6 }}>{new Date().toLocaleTimeString()}</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.9rem', whiteSpace: 'pre-wrap', lineHeight: '1.6', opacity: 0.9 }}>
+                                        {error}
+                                    </div>
+                                    <div style={{ marginTop: '0.4rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                        <a href="https://website-dna-extractor-4.onrender.com/api/health" target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.78rem', color: 'var(--primary)', textDecoration: 'underline' }}>
+                                            🔍 Check backend health
+                                        </a>
+                                        <button onClick={() => setError(null)} style={{ fontSize: '0.78rem', background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+                                            Dismiss
+                                        </button>
+                                    </div>
                                 </div>
                             )}
+
 
                             {loading && (
                                 <div className="loading-container" style={{ maxWidth: '850px', width: '100%', margin: '1rem auto 0 auto' }}>
