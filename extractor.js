@@ -151,6 +151,8 @@ async function scrapeYoutubeFallback(url) {
       ]
     });
     const page = await browser.newPage();
+    page.setDefaultNavigationTimeout(90000);
+    page.setDefaultTimeout(90000);
     
     try {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
@@ -258,6 +260,8 @@ async function extractDNA(url) {
   }
  
   let page = await browser.newPage();
+  page.setDefaultNavigationTimeout(90000);
+  page.setDefaultTimeout(90000);
  
   // Block heavy resources (fonts, media, large images) to speed up navigation on constrained servers
   await page.setRequestInterception(true);
@@ -287,6 +291,8 @@ async function extractDNA(url) {
     browser = await launchBrowser();
     
     page = await browser.newPage();
+    page.setDefaultNavigationTimeout(90000);
+    page.setDefaultTimeout(90000);
     await page.setRequestInterception(true);
     page.on('request', (req) => {
       const resourceType = req.resourceType();
