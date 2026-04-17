@@ -970,31 +970,37 @@ function App() {
                                 </div>
 
                                 {/* 3. Hero Images Grid */}
-                                {result.featuredImages?.length > 0 && (
+                                {result.featuredImages?.length > 0 && (() => {
+                                    // Deduplicate by URL on the frontend as a safety net
+                                    const uniqueFeatured = [...new Map(result.featuredImages.map(s => [s, s])).values()];
+                                    return (
                                     <div className="glass-panel">
-                                        <h3 className="panel-title">📸 Extracted Hero Images (640x640)</h3>
-                                        <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>Images strictly scaled/outpainted using Google Vertex AI for perfect 1:1 aspect ratio.</p>
+                                        <h3 className="panel-title">📸 Generated 640×640 Image Variants</h3>
+                                        <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>Each variant pair: <strong style={{color:'var(--primary)'}}>Clean</strong> (no text) + <strong style={{color:'var(--primary)'}}>Tagged</strong> (with AI tagline overlay). Tick to include in JSON export.</p>
                                         <div className="hero-images-grid">
-                                            {result.featuredImages.map((src, idx) => (
-                                                <div key={idx} className="hero-image-card" style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
+                                            {uniqueFeatured.map((src, idx) => (
+                                                <div key={src} className="hero-image-card" style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
                                                     <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10, background: 'rgba(0,0,0,0.7)', padding: '0.4rem 0.6rem', borderRadius: 'var(--radius-sm)', backdropFilter: 'blur(4px)' }}>
                                                         <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', margin: 0, fontWeight: 'bold', color: selectedImages.includes(src) ? 'var(--active-select)' : 'var(--text-secondary)' }}>
                                                             <input 
                                                                 type="checkbox" 
                                                                 checked={selectedImages.includes(src)}
                                                                 onChange={(e) => {
-                                                                    if (e.target.checked) setSelectedImages([...selectedImages, src]);
-                                                                    else setSelectedImages(selectedImages.filter(img => img !== src));
+                                                                    if (e.target.checked) setSelectedImages(prev => prev.includes(src) ? prev : [...prev, src]);
+                                                                    else setSelectedImages(prev => prev.filter(img => img !== src));
                                                                 }}
                                                                 style={{ width: '18px', height: '18px', accentColor: 'var(--active-select)', cursor: 'pointer' }}
                                                             />
                                                             Select
                                                         </label>
                                                     </div>
+                                                    <div style={{ position: 'absolute', top: '10px', right: '10px', zIndex: 10, background: 'rgba(0,0,0,0.6)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', color: '#aaa' }}>
+                                                        {idx % 2 === 0 ? '🖼 Clean' : '✍️ Tagged'}
+                                                    </div>
                                                     <img src={src} alt="Hero Feature" />
                                                     <a
                                                         href={src}
-                                                        onClick={(e) => handleForceDownload(e, src, `extracted_image_${idx}.jpg`)}
+                                                        onClick={(e) => handleForceDownload(e, src, `variant_${idx % 2 === 0 ? 'clean' : 'tagged'}_${Math.floor(idx/2)+1}.jpg`)}
                                                         style={{ display: 'flex', alignItems: 'center', position: 'absolute', bottom: '16px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.5)', border: '1px solid var(--primary)', color: 'var(--primary)', padding: '0.4rem 1.2rem', borderRadius: '30px', textDecoration: 'none', fontWeight: '500', fontSize: '0.8rem', backdropFilter: 'blur(4px)', transition: 'all 0.2s ease', opacity: '0.85', whiteSpace: 'nowrap', cursor: 'pointer' }}
                                                         onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'rgba(0,0,0,0.7)'; }}
                                                         onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.85'; e.currentTarget.style.background = 'rgba(0,0,0,0.5)'; }}
@@ -1006,7 +1012,51 @@ function App() {
                                             ))}
                                         </div>
                                     </div>
-                                )}
+                                    );
+                                })()}
+
+                                {/* 3b. Raw website images — real images scraped directly from the page */}
+                                {result.rawExtractedImages?.length > 0 && (() => {
+                                    const rawImgs = [...new Set(result.rawExtractedImages.filter(s => s && s.startsWith('http')))];
+                                    if (rawImgs.length === 0) return null;
+                                    return (
+                                    <div className="glass-panel">
+                                        <h3 className="panel-title">🌐 Website Images (Original)</h3>
+                                        <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>Real images scraped directly from the website. Tick any to include their original URL in the JSON export.</p>
+                                        <div className="hero-images-grid">
+                                            {rawImgs.map((src, idx) => (
+                                                <div key={src} className="hero-image-card" style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
+                                                    <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10, background: 'rgba(0,0,0,0.7)', padding: '0.4rem 0.6rem', borderRadius: 'var(--radius-sm)', backdropFilter: 'blur(4px)' }}>
+                                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', margin: 0, fontWeight: 'bold', color: selectedImages.includes(src) ? 'var(--active-select)' : 'var(--text-secondary)' }}>
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={selectedImages.includes(src)}
+                                                                onChange={(e) => {
+                                                                    if (e.target.checked) setSelectedImages(prev => prev.includes(src) ? prev : [...prev, src]);
+                                                                    else setSelectedImages(prev => prev.filter(img => img !== src));
+                                                                }}
+                                                                style={{ width: '18px', height: '18px', accentColor: 'var(--active-select)', cursor: 'pointer' }}
+                                                            />
+                                                            Select
+                                                        </label>
+                                                    </div>
+                                                    <img src={src} alt={`Website image ${idx+1}`} style={{ objectFit: 'cover', width: '100%', aspectRatio: '1', background: '#111' }} onError={(e) => { e.currentTarget.parentElement.style.display='none'; }} />
+                                                    <a
+                                                        href={src}
+                                                        onClick={(e) => handleForceDownload(e, src, `website_image_${idx+1}.jpg`)}
+                                                        style={{ display: 'flex', alignItems: 'center', position: 'absolute', bottom: '16px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.5)', border: '1px solid var(--primary)', color: 'var(--primary)', padding: '0.4rem 1.2rem', borderRadius: '30px', textDecoration: 'none', fontWeight: '500', fontSize: '0.8rem', backdropFilter: 'blur(4px)', transition: 'all 0.2s ease', opacity: '0.85', whiteSpace: 'nowrap', cursor: 'pointer' }}
+                                                        onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'rgba(0,0,0,0.7)'; }}
+                                                        onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.85'; e.currentTarget.style.background = 'rgba(0,0,0,0.5)'; }}
+                                                    >
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '0.5rem' }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                                        Download
+                                                    </a>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    );
+                                })()}
 
                                 {/* 4. Button Style Details */}
                                 {result.buttonStyles && result.buttonStyles.length > 0 && (

@@ -1390,15 +1390,17 @@ async function extractDNA(url) {
       downloadedImages.length = 0;
 
       const imgA = availableImages[0];
-      const imgB = availableImages.length > 1 ? availableImages[1] : availableImages[0];
+      // FIX: only reuse imgA for imgB if there is literally only one image — in that case
+      // we generate B from a screenshot slice instead to avoid showing the same image twice.
+      const imgB = availableImages.length > 1 ? availableImages[1] : null;
 
-      const [scrapedA, scrapedB] = await Promise.allSettled([
+      const scrapedResults = await Promise.allSettled([
         createScrapedPair(imgA, finalPrompts.taglineA, 'A'),
-        createScrapedPair(imgB, finalPrompts.taglineB, 'B'),
+        imgB ? createScrapedPair(imgB, finalPrompts.taglineB, 'B') : Promise.resolve(false),
       ]);
 
-      const gotA = scrapedA.status === 'fulfilled' && scrapedA.value;
-      const gotB = scrapedB.status === 'fulfilled' && scrapedB.value;
+      const gotA = scrapedResults[0].status === 'fulfilled' && scrapedResults[0].value;
+      const gotB = scrapedResults[1].status === 'fulfilled' && scrapedResults[1].value;
       console.log(`🖼️ Scraped images: A=${gotA ? '✅' : '❌'} B=${gotB ? '✅' : '❌'} → ${downloadedImages.length} images`);
     } else {
       // SCREENSHOT SLICE FALLBACK: When the site uses JS/React rendering and we have no static image URLs,
@@ -1485,6 +1487,10 @@ async function extractDNA(url) {
       console.log(`✅ Generated ${downloadedImages.length} branded placeholder images.`);
     }
  
+    // Deduplicate featuredImages by URL before returning (prevents duplicate cards in UI
+    // when a fallback reused the same source image for both A and B variants)
+    const uniqueFeaturedImages = [...new Set(downloadedImages.filter(Boolean))];
+
     const finalOutput = {
       mappedData: mappedFields,
       buttonStyles: extractedData.buttonStyles ? extractedData.buttonStyles.map(b => ({
@@ -1494,8 +1500,9 @@ async function extractDNA(url) {
       })) : [],
       ctas: extractedData.ctas || [],
       socialMediaLinks: extractedData.socials,
-      featuredImages: downloadedImages,
-      rawExtractedImages: extractedData.images.slice(0, 5),
+      featuredImages: uniqueFeaturedImages,
+      // Expose up to 7 raw website images so the user can pick from real site imagery
+      rawExtractedImages: extractedData.images.slice(0, 7),
       screenshotPath: screenshotPath,
       logoPath: logoLocalPath,
       screenshotUrl: screenshotPublicUrl,
