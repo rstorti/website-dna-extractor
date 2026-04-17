@@ -282,7 +282,9 @@ function App() {
                 }
             } else {
                 // Server responded with an error message — show full detail
-                setError(err.message || 'An unexpected error occurred.');
+                console.error("Extraction caught error:", err);
+                const msg = err.message || (typeof err === 'string' ? err : JSON.stringify(err)) || 'Unknown Error';
+                setError(`🚨 Extraction Terminated\n\n${msg.replace('Error: ', '')}`);
             }
         } finally {
             setLoading(false);
