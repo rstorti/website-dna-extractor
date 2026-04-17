@@ -1,0 +1,348 @@
+{
+  "campaign": {
+    "name": "Anthony Scaramucci",
+    "campaignDescription": "<p>Anthony Scaramucci, a renowned businessman, thought leader, and founder of SkyBridge Capital and SALT, maintains a dynamic platform featuring podcasts, books, and media appearances that explore finance, global affairs, and contemporary issues. His \"Open Book Q&A\" series extends this engagement by tackling a wide spectrum of provocative topics, including the true nature of Trump, the challenges facing the US dollar, and political reform, all while providing career advice and insights from his diverse reading list. Audiences are encouraged to explore his published works and recommended reads for a deeper understanding of his candid perspectives.</p>",
+    "backgroundColor": "#FFFFFF",
+    "foregroundColor": "#333333",
+    "appbarBackgroundColor": "#FFFFFF",
+    "appbarForegroundColor": "#FFFFFF",
+    "backgroundImage": "",
+    "image": "",
+    "campaignType": 1,
+    "scanType": 0,
+    "displayInSearch": true,
+    "is_enable": true,
+    "is_elevator": false,
+    "startTimeUtc": "2026-04-17T12:49:11.224Z",
+    "endTimeUtc": "2027-04-17T12:49:11.224Z",
+    "brand": {
+      "name": "Anthony Scaramucci",
+      "logo": "",
+      "website": "https://www.scaramucci.net/"
+    }
+  },
+  "productGroups": [
+    {
+      "name": "Anthony Scaramucci",
+      "modelorder": 1,
+      "products": [
+        {
+          "item_name": "Anthony Scaramucci",
+          "description": "Anthony Scaramucci, a renowned businessman, thought leader, and founder of SkyBridge Capital and SALT, maintains a dynamic platform featuring podcasts, books, and media appearances that explore finance, global affairs, and contemporary issues. His \"Open Book Q&A\" series extends this engagement by tackling a wide spectrum of provocative topics, including the true nature of Trump, the challenges facing the US dollar, and political reform, all while providing career advice and insights from his diverse reading list. Audiences are encouraged to explore his published works and recommended reads for a deeper understanding of his candid perspectives.",
+          "modelorder": 1,
+          "calories": 0,
+          "ingredients": "",
+          "item_type": "Product",
+          "deliverable": false,
+          "productImages": [],
+          "campaignItemButtons": [
+            {
+              "name": "Read Fear and Fury",
+              "buttonType": 4,
+              "modelorder": 1,
+              "backgroundColor": "#FF1436",
+              "foregroundColor": "#FFFFFF",
+              "properties": [
+                {
+                  "propertyDefinitionId": 20,
+                  "propertyValue": "https://amzn.to/428zppO",
+                  "propertyName": "URL"
+                }
+              ],
+              "shape": 1,
+              "buttonAlign": 1,
+              "textAlign": 1,
+              "enabled": true
+            },
+            {
+              "name": "Read Runnin' Down a Dream",
+              "buttonType": 4,
+              "modelorder": 2,
+              "backgroundColor": "#FF1436",
+              "foregroundColor": "#FFFFFF",
+              "properties": [
+                {
+                  "propertyDefinitionId": 20,
+                  "propertyValue": "https://amzn.to/425AQFy",
+                  "propertyName": "URL"
+                }
+              ],
+              "shape": 1,
+              "buttonAlign": 1,
+              "textAlign": 1,
+              "enabled": true
+            },
+            {
+              "name": "Explore FDR Trilogy",
+              "buttonType": 4,
+              "modelorder": 3,
+              "backgroundColor": "#FF1436",
+              "foregroundColor": "#FFFFFF",
+              "properties": [
+                {
+                  "propertyDefinitionId": 20,
+                  "propertyValue": "https://amzn.to/4swtV30",
+                  "propertyName": "URL"
+                }
+              ],
+              "shape": 1,
+              "buttonAlign": 1,
+              "textAlign": 1,
+              "enabled": true
+            },
+            {
+              "name": "Discover WWII Trilogy",
+              "buttonType": 4,
+              "modelorder": 4,
+              "backgroundColor": "#FF1436",
+              "foregroundColor": "#FFFFFF",
+              "properties": [
+                {
+                  "propertyDefinitionId": 20,
+                  "propertyValue": "https://amzn.to/47XqcnV",
+                  "propertyName": "URL"
+                }
+              ],
+              "shape": 1,
+              "buttonAlign": 1,
+              "textAlign": 1,
+              "enabled": true
+            },
+            {
+              "name": "Learn The Visionaries",
+              "buttonType": 4,
+              "modelorder": 5,
+              "backgroundColor": "#FF1436",
+              "foregroundColor": "#FFFFFF",
+              "properties": [
+                {
+                  "propertyDefinitionId": 20,
+                  "propertyValue": "https://amzn.to/41xNw85",
+                  "propertyName": "URL"
+                }
+              ],
+              "shape": 1,
+              "buttonAlign": 1,
+              "textAlign": 1,
+              "enabled": true
+            },
+            {
+              "name": "Pre-order All the Wrong Moves",
+              "buttonType": 4,
+              "modelorder": 6,
+              "backgroundColor": "#FF1436",
+              "foregroundColor": "#FFFFFF",
+              "properties": [
+                {
+                  "propertyDefinitionId": 20,
+                  "propertyValue": "https://amzn.to/3Q6beFX",
+                  "propertyName": "URL"
+                }
+              ],
+              "shape": 1,
+              "buttonAlign": 1,
+              "textAlign": 1,
+              "enabled": true
+            },
+            {
+              "name": "Deny",
+              "buttonType": 4,
+              "modelorder": 7,
+              "backgroundColor": "#FF1436",
+              "foregroundColor": "#FFFFFF",
+              "properties": [
+                {
+                  "propertyDefinitionId": 20,
+                  "propertyValue": "https://www.scaramucci.net/#",
+                  "propertyName": "URL"
+                }
+              ],
+              "shape": 1,
+              "buttonAlign": 1,
+              "textAlign": 1,
+              "enabled": true
+            },
+            {
+              "name": "Read More",
+              "buttonType": 4,
+              "modelorder": 8,
+              "backgroundColor": "#FF1436",
+              "foregroundColor": "#FFFFFF",
+              "properties": [
+                {
+                  "propertyDefinitionId": 20,
+                  "propertyValue": "https://www.scaramucci.net/books",
+                  "propertyName": "URL"
+                }
+              ],
+              "shape": 1,
+              "buttonAlign": 1,
+              "textAlign": 1,
+              "enabled": true
+            },
+            {
+              "name": "Visit SkyBridge.com",
+              "buttonType": 4,
+              "modelorder": 9,
+              "backgroundColor": "#FF1436",
+              "foregroundColor": "#FFFFFF",
+              "properties": [
+                {
+                  "propertyDefinitionId": 20,
+                  "propertyValue": "https://www.skybridge.com/",
+                  "propertyName": "URL"
+                }
+              ],
+              "shape": 1,
+              "buttonAlign": 1,
+              "textAlign": 1,
+              "enabled": true
+            },
+            {
+              "name": "Visit SALT.org",
+              "buttonType": 4,
+              "modelorder": 10,
+              "backgroundColor": "#FF1436",
+              "foregroundColor": "#FFFFFF",
+              "properties": [
+                {
+                  "propertyDefinitionId": 20,
+                  "propertyValue": "https://www.salt.org/",
+                  "propertyName": "URL"
+                }
+              ],
+              "shape": 1,
+              "buttonAlign": 1,
+              "textAlign": 1,
+              "enabled": true
+            },
+            {
+              "name": "News & Media",
+              "buttonType": 4,
+              "modelorder": 11,
+              "backgroundColor": "#FF1436",
+              "foregroundColor": "#FFFFFF",
+              "properties": [
+                {
+                  "propertyDefinitionId": 20,
+                  "propertyValue": "https://www.scaramucci.net/media",
+                  "propertyName": "URL"
+                }
+              ],
+              "shape": 1,
+              "buttonAlign": 1,
+              "textAlign": 1,
+              "enabled": true
+            },
+            {
+              "name": "Read More",
+              "buttonType": 4,
+              "modelorder": 12,
+              "backgroundColor": "#FF1436",
+              "foregroundColor": "#FFFFFF",
+              "properties": [
+                {
+                  "propertyDefinitionId": 20,
+                  "propertyValue": "https://www.scaramucci.net/anthonys-reading-list",
+                  "propertyName": "URL"
+                }
+              ],
+              "shape": 1,
+              "buttonAlign": 1,
+              "textAlign": 1,
+              "enabled": true
+            },
+            {
+              "name": "Amazon",
+              "buttonType": 4,
+              "modelorder": 13,
+              "backgroundColor": "#FF1436",
+              "foregroundColor": "#FFFFFF",
+              "properties": [
+                {
+                  "propertyDefinitionId": 20,
+                  "propertyValue": "https://a.co/d/0U4I2k7",
+                  "propertyName": "URL"
+                }
+              ],
+              "shape": 1,
+              "buttonAlign": 1,
+              "textAlign": 1,
+              "enabled": true
+            },
+            {
+              "name": "Premiere Collectibles",
+              "buttonType": 4,
+              "modelorder": 14,
+              "backgroundColor": "#FF1436",
+              "foregroundColor": "#FFFFFF",
+              "properties": [
+                {
+                  "propertyDefinitionId": 20,
+                  "propertyValue": "https://premierecollectibles.com/wallstreet",
+                  "propertyName": "URL"
+                }
+              ],
+              "shape": 1,
+              "buttonAlign": 1,
+              "textAlign": 1,
+              "enabled": true
+            }
+          ],
+          "medialinks": []
+        }
+      ]
+    }
+  ],
+  "medialinks": [
+    {
+      "name": "Youtube",
+      "icon": "https://www.google.com/s2/favicons?domain=https://youtube.com&sz=64",
+      "link_url": "https://youtube.com/channel/ucrnuo-s4nh5bgf-vg43qvbq",
+      "buttonCategoryId": 4,
+      "modelorder": 1
+    },
+    {
+      "name": "Facebook",
+      "icon": "https://www.google.com/s2/favicons?domain=https://facebook.com&sz=64",
+      "link_url": "https://facebook.com/ascaramucci",
+      "buttonCategoryId": 1,
+      "modelorder": 2
+    },
+    {
+      "name": "Twitter",
+      "icon": "https://www.google.com/s2/favicons?domain=https://twitter.com&sz=64",
+      "link_url": "https://twitter.com/scaramucci",
+      "buttonCategoryId": 2,
+      "modelorder": 3
+    },
+    {
+      "name": "Instagram",
+      "icon": "https://www.google.com/s2/favicons?domain=https://instagram.com&sz=64",
+      "link_url": "https://instagram.com/scaramucci",
+      "buttonCategoryId": 3,
+      "modelorder": 4
+    },
+    {
+      "name": "Linkedin",
+      "icon": "https://www.google.com/s2/favicons?domain=https://linkedin.com&sz=64",
+      "link_url": "https://linkedin.com/in/anscaramucci",
+      "buttonCategoryId": 5,
+      "modelorder": 5
+    },
+    {
+      "name": "Tiktok",
+      "icon": "https://www.google.com/s2/favicons?domain=https://tiktok.com&sz=64",
+      "link_url": "https://tiktok.com/@ascaramucci",
+      "buttonCategoryId": 6,
+      "modelorder": 6
+    },
+    {
+      "name": "Youtube",
+      "icon": "https://www.google.com/s2/favicons?domain=https://youtube.com&sz=64",
+      "link_url": "https://youtube.com/playlist",
+      "buttonCategoryId": 4,
+      "modelorder": 7
+    }
+  ]
+}

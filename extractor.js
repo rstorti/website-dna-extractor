@@ -342,7 +342,7 @@ async function extractDNA(url) {
         }
       }
  
-      // Attempt 2: If still no content, try a fresh page with minimal wait strategy
+  // Attempt 2: If still no content, try a fresh page with minimal wait strategy
       if (navigationSucceeded) {
         let hasContent = false;
         try { hasContent = await page.evaluate(() => !!(document.body && document.body.innerHTML.length > 200)); } catch(e) {}
@@ -351,8 +351,10 @@ async function extractDNA(url) {
           console.log(`⚠️ Page body is empty or too short. Retrying with fresh page and 'commit' waitUntil (lighter strategy)...`);
           try {
             const freshPage = await browser.newPage();
+            freshPage.setDefaultNavigationTimeout(90000);
+            freshPage.setDefaultTimeout(90000);
             await freshPage.setViewport({ width: 1280, height: 800 });
-            await freshPage.goto(url, { waitUntil: 'commit', timeout: 30000 });
+            await freshPage.goto(url, { waitUntil: 'commit', timeout: 60000 });
             await new Promise(r => setTimeout(r, 5000)); // Wait 5s after first byte for JS to mount
             const freshContent = await freshPage.evaluate(() => document.body && document.body.innerHTML.length > 200).catch(() => false);
             if (freshContent) {
@@ -504,7 +506,7 @@ async function extractDNA(url) {
               if (typeof html === 'string' && html.length > 500 && !html.toLowerCase().includes('403 forbidden') && !html.toLowerCase().includes('access denied')) {
                 console.log(`✅ HTTP Fallback succeeded (${ua.substring(0, 30)}). Retrieved ${html.length} chars.`);
                 await recreatePage();
-                await page.setContent(html, { timeout: 30000 });
+                await page.setContent(html, { timeout: 60000 });
                 htmlFetched = true;
               } else {
                 console.warn(`⚠️ HTTP blocked or too short (${html?.length || 0} chars), trying next UA...`);
@@ -1339,18 +1341,67 @@ async function extractDNA(url) {
     // Vertex AI images are supplementary when no usable site images exist
     const createScrapedPair = async (imgUrl, tagline, prefix) => {
       try {
-        const response = await axios.get(imgUrl, {
-          responseType: 'arraybuffer',
-          timeout: 15000,
-          maxContentLength: 15 * 1024 * 1024,
-          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-        });
-        if (!response.data || response.data.length < 1000) {
-          console.warn(`⚠️ Scraped image too small (${response.data?.length} bytes), skipping ${imgUrl}`);
-          return false;
+        let baseBuffer = null;
+        let fetchError = null;
+
+        try {
+          const response = await axios.get(imgUrl, {
+            responseType: 'arraybuffer',
+            timeout: 10000,
+            maxContentLength: 15 * 1024 * 1024,
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+          });
+          if (response.data && response.data.length >= 1000) {
+            baseBuffer = Buffer.from(response.data);
+          }
+        } catch(e) { fetchError = e.message; }
+
+        if (!baseBuffer && page) {
+           console.log(`⚠️ Axios failed for image (${fetchError}), trying "right-click save" via browser fetch...`);
+           const base64Data = await page.evaluate(async (url) => {
+              try {
+                  const resp = await fetch(url);
+                  const blob = await resp.blob();
+                  return await new Promise((resolve) => {
+                      const reader = new FileReader();
+                      reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                      reader.readAsDataURL(blob);
+                  });
+              } catch(e) { return null; }
+           }, imgUrl).catch(() => null);
+
+           if (base64Data) {
+               baseBuffer = Buffer.from(base64Data, 'base64');
+           } else {
+               console.log(`⚠️ In-browser fetch failed, attempting to screen capture the specific image element directly...`);
+               const elHandle = await page.evaluateHandle((url) => {
+                   return Array.from(document.querySelectorAll('img, picture, div, section')).find(el => {
+                       if (el.tagName.toLowerCase() === 'img' && el.src === url) return true;
+                       if (el.tagName.toLowerCase() === 'img' && el.src && el.src.includes(url.split('/').pop())) return true;
+                       if (el.style && el.style.backgroundImage && el.style.backgroundImage.includes(url)) return true;
+                       const computed = window.getComputedStyle(el);
+                       if (computed.backgroundImage && computed.backgroundImage.includes(url)) return true;
+                       return false;
+                   });
+               }, imgUrl).catch(() => null);
+
+               if (elHandle && elHandle.asElement()) {
+                   try {
+                       await page.evaluate(el => el.scrollIntoView({block: 'center', inline: 'center'}), elHandle);
+                       await new Promise(r => setTimeout(r, 500));
+                       baseBuffer = await elHandle.asElement().screenshot();
+                       console.log(`✅ Individual screen capture of image element successful.`);
+                   } catch(e) { console.warn(`Element screenshot failed: ${e.message}`); }
+               }
+           }
         }
+
+        if (!baseBuffer) {
+           throw new Error("Could not download or screen-capture image");
+        }
+
         // Validate it's a real image (not HTML error page)
-        const magic = Buffer.from(response.data).slice(0, 4);
+        const magic = baseBuffer.slice(0, 4);
         const isJpeg = magic[0] === 0xFF && magic[1] === 0xD8;
         const isPng  = magic[0] === 0x89 && magic[1] === 0x50;
         const isWebp = magic.toString('ascii', 0, 4) === 'RIFF';
@@ -1359,9 +1410,8 @@ async function extractDNA(url) {
           console.warn(`⚠️ Not a valid image format: ${imgUrl}`);
           return false;
         }
-        const baseBuffer = Buffer.from(response.data);
 
-        // Save Clean: crop to perfect 640×640 square (cover = no white bars)
+        // Save Clean: crop to perfect 640x640 square (cover = no white bars)
         const cleanBuffer = await sharp(baseBuffer).resize(640, 640, { fit: 'cover', position: 'top' }).jpeg({ quality: 88 }).toBuffer();
         const cleanFilename = `img_640_clean_${prefix}_${timestamp}.jpg`;
         await fs.writeFile(path.join(outputDir, cleanFilename), cleanBuffer);

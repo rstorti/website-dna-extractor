@@ -1567,31 +1567,88 @@ function App() {
                                     <h3 className="panel-title" style={{ color: 'var(--primary)' }}>🛠️ Build Final Payload</h3>
                                     <p style={{ color: 'var(--text-secondary)' }}>Review your selections above (Descriptions, Logos, Hero Images, CTAs) and generate the final payload.</p>
                                     
-                                    <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                                    <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', alignItems: 'center' }}>
                                         <button 
                                             onClick={() => {
                                                 setIsGeneratingJson(true);
                                                 setTimeout(() => {
                                                     setIsGeneratingJson(false);
                                                     setShowJsonPreview(true);
+                                                    // smooth scroll to json preview
+                                                    setTimeout(() => {
+                                                        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                                                    }, 100);
                                                 }, 1500);
                                             }}
                                             className="btn-extract" 
-                                            style={{ padding: '1rem 2rem', fontSize: '1.1rem', flex: 1,  maxWidth: '300px', display: 'flex', justifyContent: 'center' }}
+                                            style={{ padding: '0.8rem 1.5rem', fontSize: '1rem', flex: 1,  maxWidth: '220px', display: 'flex', justifyContent: 'center' }}
                                             disabled={isGeneratingJson}
                                         >
-                                            {isGeneratingJson ? <div className="loader" style={{width: '20px', height: '20px'}}></div> : 'Submit to Create JSON'}
+                                            {isGeneratingJson ? <div className="loader" style={{width: '20px', height: '20px'}}></div> : 'Export to JSON'}
                                         </button>
                                         <button 
                                             onClick={exportToExcel}
                                             className="btn-extract-custom" 
-                                            style={{ padding: '1rem 2rem', fontSize: '1.1rem', flex: 1, maxWidth: '280px', display: 'flex', gap: '0.6rem', alignItems: 'center', justifyContent: 'center', background: '#217346', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', transition: 'all 0.2s ease' }}
+                                            style={{ padding: '0.8rem 1.5rem', fontSize: '1rem', flex: 1, maxWidth: '220px', display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'center', background: '#217346', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', transition: 'all 0.2s ease' }}
                                             onMouseEnter={(e)=>{e.currentTarget.style.transform='scale(1.02)'; e.currentTarget.style.filter='brightness(1.1)';}}
                                             onMouseLeave={(e)=>{e.currentTarget.style.transform='scale(1)'; e.currentTarget.style.filter='brightness(1)';}}
                                         >
-                                           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
-                                           Export to CSV / Excel
+                                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+                                           Export to CSV
                                         </button>
+
+                                        <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
+                                            <button 
+                                                title={!showJsonPreview ? "Export to JSON to access" : "Copy JSON to clipboard"}
+                                                disabled={!showJsonPreview}
+                                                onClick={(e) => { 
+                                                    navigator.clipboard.writeText(getFinalPayloadStr()); 
+                                                    e.currentTarget.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied!'; 
+                                                    e.currentTarget.style.background = '#4caf50'; 
+                                                    e.currentTarget.style.color = 'white'; 
+                                                    e.currentTarget.style.borderColor = '#4caf50';
+                                                    setTimeout(() => { 
+                                                        if (e.currentTarget) { 
+                                                            e.currentTarget.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Copy JSON'; 
+                                                            e.currentTarget.style.background = 'transparent'; 
+                                                            e.currentTarget.style.color = 'var(--primary)'; 
+                                                            e.currentTarget.style.borderColor = 'var(--primary)'; 
+                                                        } 
+                                                    }, 2000); 
+                                                }}
+                                                style={{ 
+                                                    display: 'flex', alignItems: 'center', gap: '0.4rem', 
+                                                    background: 'transparent', color: 'var(--primary)', 
+                                                    border: '1px solid var(--primary)', borderRadius: 'var(--radius-sm)', 
+                                                    padding: '0.4rem 0.8rem', fontSize: '0.9rem', transition: 'all 0.2s',
+                                                    opacity: !showJsonPreview ? 0.3 : 1,
+                                                    cursor: !showJsonPreview ? 'not-allowed' : 'pointer'
+                                                }}
+                                                onMouseEnter={(e)=>{if(showJsonPreview && e.currentTarget.style.background === 'transparent') e.currentTarget.style.background='rgba(249, 157, 50, 0.1)'}}
+                                                onMouseLeave={(e)=>{if(showJsonPreview && e.currentTarget.style.background !== 'rgb(76, 175, 80)' && e.currentTarget.style.background !== '#4caf50') e.currentTarget.style.background='transparent'}}
+                                            >
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                                Copy JSON
+                                            </button>
+                                            <button 
+                                                title={!showJsonPreview ? "Export to JSON to access" : "Download JSON file"}
+                                                disabled={!showJsonPreview}
+                                                onClick={handleDownloadJson}
+                                                style={{ 
+                                                    display: 'flex', alignItems: 'center', gap: '0.4rem', 
+                                                    background: 'var(--primary)', color: 'black', 
+                                                    border: 'none', borderRadius: 'var(--radius-sm)', 
+                                                    padding: '0.4rem 0.8rem', fontSize: '0.9rem', fontWeight: 'bold', transition: 'all 0.2s',
+                                                    opacity: !showJsonPreview ? 0.3 : 1,
+                                                    cursor: !showJsonPreview ? 'not-allowed' : 'pointer'
+                                                }}
+                                                onMouseEnter={(e)=>{if(showJsonPreview) e.currentTarget.style.transform='scale(1.05)'}}
+                                                onMouseLeave={(e)=>{if(showJsonPreview) e.currentTarget.style.transform='scale(1)'}}
+                                            >
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                                Download JSON
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -1600,40 +1657,6 @@ function App() {
                                     <div className="glass-panel" style={{ gridColumn: '1 / -1', animation: 'fadeIn 0.5s ease forwards' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                                             <h3 className="panel-title" style={{ margin: 0 }}>⚙️ Final Campaign JSON</h3>
-                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                <button 
-                                                    onClick={(e) => { 
-                                                        navigator.clipboard.writeText(getFinalPayloadStr()); 
-                                                        e.currentTarget.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied!'; 
-                                                        e.currentTarget.style.background = '#4caf50'; 
-                                                        e.currentTarget.style.color = 'white'; 
-                                                        e.currentTarget.style.borderColor = '#4caf50';
-                                                        setTimeout(() => { 
-                                                            if (e.currentTarget) { 
-                                                                e.currentTarget.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Copy JSON'; 
-                                                                e.currentTarget.style.background = 'transparent'; 
-                                                                e.currentTarget.style.color = 'var(--primary)'; 
-                                                                e.currentTarget.style.borderColor = 'var(--primary)'; 
-                                                            } 
-                                                        }, 2000); 
-                                                    }}
-                                                    style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'transparent', color: 'var(--primary)', border: '1px solid var(--primary)', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.8rem', cursor: 'pointer', fontSize: '0.9rem', transition: 'all 0.2s' }}
-                                                    onMouseEnter={(e)=>{if(e.currentTarget.style.background === 'transparent') e.currentTarget.style.background='rgba(249, 157, 50, 0.1)'}}
-                                                    onMouseLeave={(e)=>{if(e.currentTarget.style.background !== 'rgb(76, 175, 80)' && e.currentTarget.style.background !== '#4caf50') e.currentTarget.style.background='transparent'}}
-                                                >
-                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                                                    Copy JSON
-                                                </button>
-                                                <button 
-                                                    onClick={handleDownloadJson}
-                                                    style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'var(--primary)', color: 'black', border: 'none', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.8rem', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 'bold', transition: 'all 0.2s' }}
-                                                    onMouseEnter={(e)=>{e.currentTarget.style.transform='scale(1.05)'}}
-                                                    onMouseLeave={(e)=>{e.currentTarget.style.transform='scale(1)'}}
-                                                >
-                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                                                    Download JSON
-                                                </button>
-                                            </div>
                                         </div>
                                         <div className="json-panel">
                                             <pre dangerouslySetInnerHTML={{
