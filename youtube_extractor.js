@@ -18,6 +18,9 @@ function extractVideoId(url) {
  * @param {number} [_depth=0] - Internal recursion depth guard (do not set externally).
  */
 async function extractYoutubeDetails(url, _depth = 0) {
+    if (!YOUTUBE_API_KEY) {
+        throw new Error('No YouTube API key configured — using scrape fallback');
+    }
     try {
         const videoId = extractVideoId(url);
         if (videoId) {
@@ -110,7 +113,7 @@ async function extractYoutubeDetails(url, _depth = 0) {
         }
         
         console.error('Error fetching YouTube details:', errorMessage);
-        return { error: errorMessage };
+        throw new Error(errorMessage);
     }
 }
 

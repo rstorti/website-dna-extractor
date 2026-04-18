@@ -54,13 +54,6 @@ const PUPPETEER_ARGS = [
   '--disable-setuid-sandbox',
   '--disable-dev-shm-usage',
   '--disable-gpu',
-  '--single-process',
-  '--no-zygote',
-  '--disable-web-security',
-  '--disable-features=IsolateOrigins,site-per-process',
-  '--allow-running-insecure-content',
-  '--ignore-certificate-errors',
-  '--ignore-certificate-errors-spki-list',
   '--disable-extensions',
   '--disable-background-networking',
   '--window-size=1280,800'
@@ -615,18 +608,29 @@ async function extractDNA(url) {
       const addImage = (src, area) => {
         const url = resolveUrl(src);
         if (!url || seenUrls.has(url)) return;
-        // Reject obvious non-content images
-        const bad = ['onetrust','pixel','tracking','analytics','cookie','favicon','1x1','blank','placeholder','avatar','icon-'];
+        // Reject obvious non-content images (Item 12)
+        const bad = ['onetrust','pixel','tracking','analytics','cookie','favicon','1x1','blank','placeholder','avatar','icon','logo','sprite','spacer','badge'];
         if (bad.some(p => url.toLowerCase().includes(p))) return;
+        
         seenUrls.add(url);
         imagesWithMeta.push({ src: url, area: area || 0 });
       };
 
       // 1. Standard <img> tags with all possible src sources
       Array.from(document.querySelectorAll('img')).forEach(img => {
+        // Item 13: Filter out images from header, nav, and footer contexts
+        if (img.closest && img.closest('header, nav, footer, aside, [class*="nav"], [class*="menu"], [class*="header"], [class*="footer"]')) return;
+
         const w = img.naturalWidth || img.width || img.getBoundingClientRect().width || 0;
         const h = img.naturalHeight || img.height || img.getBoundingClientRect().height || 0;
         const area = w * h;
+
+        // Item 14/15: Enforce size and aspect ratio if dimensions are known
+        if (w > 0 && h > 0) {
+            if (w < 200 || h < 200) return; // Filter tiny UI elements
+            const aspect = w / h;
+            if (aspect > 3 || aspect < 0.33) return; // Reject extreme banners/slivers
+        }
 
         // currentSrc handles <picture><source> selections
         if (img.currentSrc) addImage(img.currentSrc, area);
@@ -1329,22 +1333,10 @@ async function extractDNA(url) {
       return true;
     };
  
-    console.log(`🖼️ Generating Image Variations A & B in parallel (Natively compositing text for pixel-perfect sets)...`);
-
-    // Run A and B in parallel to halve total generation time
-    const [settledA, settledB] = await Promise.allSettled([
-      generateVariantPair(finalPrompts.cleanPromptA, finalPrompts.taglineA, 'A'),
-      generateVariantPair(finalPrompts.cleanPromptB, finalPrompts.taglineB, 'B'),
-    ]);
-
-    const genA = settledA.status === 'fulfilled' ? settledA.value : null;
-    const genB = settledB.status === 'fulfilled' ? settledB.value : null;
-    const results = [genA, genB];
-    console.log(`🎨 Image generation complete: A=${genA ? '✅' : '❌'} B=${genB ? '✅' : '❌'} (${downloadedImages.length} images ready)`);
-
- 
     // PRIMARY IMAGE STRATEGY: Always prefer scraped website images (real, relevant, reliable)
-    // Vertex AI images are supplementary when no usable site images exist
+    // Vertex AI images are strictly a fallback when no usable site images exist
+    
+    // We first declare the fallback function in case the scraped image creation fails
     const createScrapedPair = async (imgUrl, tagline, prefix) => {
       try {
         let baseBuffer = null;
@@ -1440,10 +1432,37 @@ async function extractDNA(url) {
       }
     };
 
+    let scrapedSuccessA = false;
+    let scrapedSuccessB = false;
+
     if (availableImages.length > 0) {
-      console.log(`🖼️ Building featured images from ${availableImages.length} scraped website images...`);
-      // Reset downloadedImages — discard any Vertex AI output in favour of real site images
-      downloadedImages.length = 0;
+      console.log(`🖼️ Building featured images from scraped website images...`);
+      
+      const imgA = availableImages[0];
+      const imgB = availableImages.length > 1 ? availableImages[1] : null;
+
+      const scrapedResults = await Promise.allSettled([
+        createScrapedPair(imgA, finalPrompts.taglineA, 'A'),
+        imgB ? createScrapedPair(imgB, finalPrompts.taglineB, 'B') : Promise.resolve(false),
+      ]);
+
+      scrapedSuccessA = scrapedResults[0].status === 'fulfilled' && scrapedResults[0].value;
+      scrapedSuccessB = scrapedResults[1].status === 'fulfilled' && scrapedResults[1].value;
+      console.log(`🖼️ Scraped images attempt: A=${scrapedSuccessA ? '✅' : '❌'} B=${scrapedSuccessB ? '✅' : '❌'}`);
+    }
+
+    // ----------------------------------------------------
+    // VERTEX AI FALLBACK (Only run if scraped images failed)
+    // ----------------------------------------------------
+    if (!scrapedSuccessA || !scrapedSuccessB) {
+      console.log(`🖼️ Generating missing variations via Vertex AI (A=${scrapedSuccessA ? 'SKIP' : 'RUN'}, B=${scrapedSuccessB ? 'SKIP' : 'RUN'})...`);
+
+      const genTasks = [];
+      if (!scrapedSuccessA) genTasks.push(generateVariantPair(finalPrompts.cleanPromptA, finalPrompts.taglineA, 'A'));
+      if (!scrapedSuccessB) genTasks.push(generateVariantPair(finalPrompts.cleanPromptB, finalPrompts.taglineB, 'B'));
+      
+      await Promise.allSettled(genTasks);
+    }
 
       const imgA = availableImages[0];
       // FIX: only reuse imgA for imgB if there is literally only one image — in that case
@@ -1458,58 +1477,7 @@ async function extractDNA(url) {
       const gotA = scrapedResults[0].status === 'fulfilled' && scrapedResults[0].value;
       const gotB = scrapedResults[1].status === 'fulfilled' && scrapedResults[1].value;
       console.log(`🖼️ Scraped images: A=${gotA ? '✅' : '❌'} B=${gotB ? '✅' : '❌'} → ${downloadedImages.length} images`);
-    } else {
-      // SCREENSHOT SLICE FALLBACK: When the site uses JS/React rendering and we have no static image URLs,
-      // slice the full-page screenshot into regions — gives us real branded imagery every time.
-      console.log(`📸 No scraped image URLs found. Slicing full-page screenshot into branded image pairs...`);
-      try {
-        const screenshotBuf = await fs.readFile(screenshotPath);
-        const meta = await sharp(screenshotBuf).metadata();
-        const pageW = meta.width || 1280;
-        const pageH = meta.height || 900;
 
-        // Region A = hero (top of page): 1280×1280 from (0, 0) or whatever height we have
-        const regionAH = Math.min(pageW, pageH);
-        const cleanBufA = await sharp(screenshotBuf)
-          .extract({ left: 0, top: 0, width: pageW, height: regionAH })
-          .resize(640, 640, { fit: 'cover', position: 'top' })
-          .jpeg({ quality: 88 })
-          .toBuffer();
-        const cleanFilenameA = `img_640_clean_A_${timestamp}.jpg`;
-        await fs.writeFile(path.join(outputDir, cleanFilenameA), cleanBufA);
-        const cleanUrlA = await uploadToSupabase(cleanFilenameA, cleanBufA, 'image/jpeg');
-        downloadedImages.push(cleanUrlA);
-        const safeZoneA = await performMathematicalVisionAnalysis(cleanBufA);
-        const textBufA = await overlayTextOnBuffer(cleanBufA, finalPrompts.taglineA, safeZoneA);
-        const textFilenameA = `img_640_text_A_${timestamp}.jpg`;
-        await fs.writeFile(path.join(outputDir, textFilenameA), textBufA);
-        downloadedImages.push(await uploadToSupabase(textFilenameA, textBufA, 'image/jpeg'));
-        console.log(`✅ Screenshot slice A saved (hero region, ${Math.round(cleanBufA.length/1024)}KB)`);
-
-        // Region B = content section: a different slice further down the page
-        const topB = Math.min(Math.floor(pageH * 0.3), pageH - regionAH > 0 ? Math.floor(pageH * 0.3) : 0);
-        const heightB = Math.min(pageW, pageH - topB);
-        const cleanBufB = heightB > 100
-          ? await sharp(screenshotBuf)
-              .extract({ left: 0, top: topB, width: pageW, height: heightB })
-              .resize(640, 640, { fit: 'cover', position: 'top' })
-              .jpeg({ quality: 88 })
-              .toBuffer()
-          : cleanBufA; // if page too short, reuse region A
-        const cleanFilenameB = `img_640_clean_B_${timestamp}.jpg`;
-        await fs.writeFile(path.join(outputDir, cleanFilenameB), cleanBufB);
-        downloadedImages.push(await uploadToSupabase(cleanFilenameB, cleanBufB, 'image/jpeg'));
-        const safeZoneB = await performMathematicalVisionAnalysis(cleanBufB);
-        const textBufB = await overlayTextOnBuffer(cleanBufB, finalPrompts.taglineB, safeZoneB);
-        const textFilenameB = `img_640_text_B_${timestamp}.jpg`;
-        await fs.writeFile(path.join(outputDir, textFilenameB), textBufB);
-        downloadedImages.push(await uploadToSupabase(textFilenameB, textBufB, 'image/jpeg'));
-        console.log(`✅ Screenshot slice B saved (content region, ${Math.round(cleanBufB.length/1024)}KB)`);
-        console.log(`🖼️ Screenshot slices complete → ${downloadedImages.length} images ready`);
-      } catch (sliceErr) {
-        console.warn(`⚠️ Screenshot slice fallback failed: ${sliceErr.message}`);
-      }
-    }
  
     // --- FINAL SAFETY NET: If we still have 0 images, generate branded gradient placeholders ---
     if (downloadedImages.length === 0) {

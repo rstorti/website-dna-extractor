@@ -61,12 +61,13 @@ function getSupabase() {
 
 const app = express();
 const PORT = env.PORT;
-const HISTORY_FILE = path.join(__dirname, 'outputs', 'history.json');
+const HISTORY_FILE = path.join(__dirname, '.data', 'history.json');
 
 // Mutex to prevent race conditions during concurrent local history file read/writes
 let localHistoryMutex = Promise.resolve();
 
 app.use(cors({
+// ... (lines omitted will be fixed by just updating the app.use line instead below)
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
     if (
@@ -84,8 +85,10 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Explicitly serve local outputs folder natively to prevent 404 proxy loops
-app.use('/outputs', express.static(path.join(__dirname, 'outputs')));
+// Explicitly serve local outputs folder natively (dev only) to prevent 404 proxy loops
+if (env.NODE_ENV !== 'production') {
+  app.use('/outputs', express.static(path.join(__dirname, 'outputs')));
+}
 
 // Health Endpoint — shows uptime + env var status for quick diagnosis
 app.get('/api/health', (req, res) => {
@@ -112,7 +115,16 @@ app.get('/api/download', async (req, res) => {
 
     // Handle fallback paths if Supabase Cloud Upload failed
     if (url.startsWith('/outputs/')) {
-      const localPath = path.join(__dirname, url);
+      if (env.NODE_ENV === 'production') return res.status(404).send('Local outputs not served in production');
+      
+      const outputsDir = path.resolve(__dirname, 'outputs');
+      const localPath = path.resolve(__dirname, url.slice(1)); // slice off leading '/'
+      
+      // Ensure resolved path is still within the outputs directory (traversal prevention)
+      if (!localPath.startsWith(outputsDir + path.sep)) {
+        return res.status(403).send('Path traversal blocked');
+      }
+
       try {
         await fs.access(localPath);
         res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
@@ -177,16 +189,26 @@ async function readHistory() {
 }
 
 async function appendHistory(record) {
+  let supabaseOk = false;
   // Try Supabase first
   try {
     const { supabase } = getSupabase();
     if (supabase) {
-      await supabase.from('extraction_history').insert(record);
+      const { error } = await supabase.from('extraction_history').insert(record);
+      if (!error) supabaseOk = true;
+      else console.warn('Supabase history write failed:', error.message);
     }
   } catch (e) {
     console.warn('Supabase history write failed:', e.message);
   }
-  // Always write locally as backup
+
+  // Pre-production: no local file fallback
+  if (!supabaseOk && env.NODE_ENV === 'production') {
+    console.error('[HISTORY] ⚠️ Production history persistence failed — no local fallback in production.');
+    return;
+  }
+
+  // Dev: Always write locally as backup/sync 
   localHistoryMutex = localHistoryMutex.then(async () => {
     const history = await readLocalHistory();
     history.unshift(record);
@@ -198,6 +220,14 @@ async function appendHistory(record) {
 // ============ API ROUTES ============
 
 app.get('/api/history', async (req, res) => {
+  if (env.NODE_ENV === 'production') {
+    const key = req.header('x-api-key');
+    const validKey = env.ADMIN_API_KEY || env.GEMINI_API_KEY;
+    if (!key || key !== validKey) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+  }
+
   try {
     const history = await readHistory();
     res.json(history);
@@ -263,16 +293,57 @@ try {
   console.warn('[BOOT] express-rate-limit not installed — rate limiting disabled. Run: npm install');
 }
 
+let activeExtractions = 0;
+const MAX_CONCURRENCY = 4; // Prevent OOM by capping concurrent headless browsers
+
 app.post('/api/extract', extractRateLimit, async (req, res) => {
+  if (activeExtractions >= MAX_CONCURRENCY) {
+    return res.status(429).json({ error: 'Server is at maximum capacity processing other extractions. Please try again in 1 minute.', stage: 'init' });
+  }
+  
+  activeExtractions++;
   const startTime = Date.now();
   let stage = 'init';
 
   try {
-    const { url, youtubeUrl, profileUrl } = req.body;
-    console.log(`\n[EXTRACT] Starting extraction for: url=${url}, youtubeUrl=${youtubeUrl}, profileUrl=${profileUrl}`);
+    let { url, youtubeUrl, profileUrl } = req.body;
+    console.log(`\n[EXTRACT] Starting extraction for: url=${url}, youtubeUrl=${youtubeUrl}, profileUrl=${profileUrl}. Active Jobs: ${activeExtractions}`);
 
     if (!url && !youtubeUrl && !profileUrl) {
       return res.status(400).json({ error: 'At least one URL is required', stage });
+    }
+
+    const { isAllowedUrl } = require('./lib/validateUrl');
+    
+    // Normalize and validate URLs
+    const MAX_URL_LEN = 2048;
+    for (const item of [{key:'url',val:url}, {key:'youtubeUrl',val:youtubeUrl}, {key:'profileUrl',val:profileUrl}]) {
+      if (item.val) {
+        if (typeof item.val !== 'string' || item.val.length > MAX_URL_LEN) {
+          return res.status(400).json({ error: `${item.key} must be a string under ${MAX_URL_LEN} chars`, stage });
+        }
+        let norm = item.val.trim();
+        if (!/^https?:\/\//i.test(norm)) norm = 'https://' + norm;
+        const validation = await isAllowedUrl(norm);
+        if (!validation.ok) {
+          return res.status(403).json({ error: `Security check failed for ${item.key}: ${validation.reason}`, stage });
+        }
+        if (item.key === 'url') url = validation.url;
+        if (item.key === 'youtubeUrl') {
+          const host = new URL(validation.url).hostname.toLowerCase();
+          if (!host.includes('youtube.com') && !host.includes('youtu.be')) {
+            return res.status(400).json({ error: 'YouTube URL must be a valid youtube.com or youtu.be domain', stage });
+          }
+          youtubeUrl = validation.url;
+        }
+        if (item.key === 'profileUrl') {
+          const host = new URL(validation.url).hostname.toLowerCase();
+          if (!host.includes('linktr.ee') && !host.includes('beacon.ai') && !host.includes('bio.site') && !host.includes('bento.me') && !host.includes('lnk.bio')) {
+            return res.status(400).json({ error: 'Profile URL must be a supported link-in-bio platform (e.g. linktr.ee)', stage });
+          }
+          profileUrl = validation.url;
+        }
+      }
     }
 
     let dnaResult = null;
@@ -285,6 +356,12 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
       console.log(`[EXTRACT] Stage: ${stage}`);
       const { extractDNA } = getExtractor();
       dnaResult = await extractDNA(url);
+      if (dnaResult?.error) {
+        return res.status(422).json({
+          error: dnaResult.error, stage: 'website-extraction',
+          hint: 'The website could not be scraped. It may be blocking bots, offline, or using an unsupported architecture.'
+        });
+      }
       console.log(`[EXTRACT] Website extraction complete (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
     }
 
@@ -300,6 +377,13 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
         const { scrapeYoutubeFallback } = getExtractor();
         youtubeResult = await scrapeYoutubeFallback(youtubeUrl);
       }
+      
+      if (youtubeResult?.error) {
+        return res.status(422).json({
+           error: youtubeResult.error, stage: 'youtube-extraction',
+           hint: 'Could not fetch YouTube data. The URL may be invalid or the channel private.'
+        });
+      }
       console.log(`[EXTRACT] YouTube extraction complete (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
     }
 
@@ -309,6 +393,14 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
       console.log(`[EXTRACT] Stage: ${stage}`);
       const { extractDNA: extractProfileDNA } = getExtractor();
       const profileDna = await extractProfileDNA(profileUrl);
+      
+      if (profileDna?.error) {
+         return res.status(422).json({
+            error: profileDna.error, stage: 'profile-extraction',
+            hint: 'The profile URL could not be scraped.'
+         });
+      }
+
       // FIX #7: profileDna returns the full extractDNA shape, not wrapping .verifiedData
       profileResult = {
         success: true,
@@ -419,15 +511,35 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
       elapsed: totalTime,
       hint,
     });
+  } finally {
+    activeExtractions--;
+    console.log(`[EXTRACT] Concurrency check: ${activeExtractions} active jobs remaining.`);
   }
 });
 
 // ============ START SERVER ============
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`[BOOT] ✅ Server listening on port ${PORT}`);
   console.log(`[BOOT] Environment: ${env.NODE_ENV}`);
   console.log(`[BOOT] GEMINI_API_KEY: ${env.GEMINI_API_KEY ? 'SET' : 'MISSING'}`);
   console.log(`[BOOT] YOUTUBE_API_KEY: ${env.YOUTUBE_API_KEY ? 'SET' : 'not set (optional)'}`);
   console.log(`[BOOT] SUPABASE_URL: ${env.SUPABASE_URL ? 'SET' : 'not set (optional)'}`);
+
+  // Probe Supabase Database Health
+  if (env.SUPABASE_URL && env.SUPABASE_ANON_KEY) {
+     try {
+       const { supabase } = getSupabase();
+       const { error } = await supabase.from('extraction_history').select('id').limit(1);
+       if (error) {
+         console.error(`[BOOT] ❌ Supabase schema probe failed: ${error.message}. Is 'extraction_history' table missing or has RLS blocking it?`);
+       } else {
+         console.log(`[BOOT] ✅ Supabase database responding and schema verified.`);
+       }
+     } catch(e) {
+       console.error(`[BOOT] ❌ Supabase connection failed: ${e.message}`);
+     }
+  } else {
+     console.warn(`[BOOT] ⚠️ Supabase not configured.`);
+  }
 });

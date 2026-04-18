@@ -81,7 +81,9 @@ function App() {
     const fetchHistory = async () => {
         setIsHistoryLoading(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/history`);
+            const res = await fetch(`${API_BASE_URL}/api/history`, {
+                headers: { 'x-api-key': import.meta.env.VITE_ADMIN_API_KEY || import.meta.env.VITE_GEMINI_API_KEY || '' }
+            });
             const data = await res.json();
             setHistoryData(data || []);
         } catch (e) { console.error('Failed to fetch history', e); }
@@ -133,14 +135,35 @@ function App() {
         } catch(e) { return false; }
     };
 
+    const handleCancelExtract = () => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+    };
+
     const handleExtract = async () => {
         if (!url && !profileUrl && !youtubeUrl) return;
 
         // Immediate validation sequence
         let validationFailed = false;
-        if (!isValidDomain(url)) { setUrlError(true); validationFailed = true; } else setUrlError(false);
-        if (!isValidDomain(profileUrl)) { setProfileError(true); validationFailed = true; } else setProfileError(false);
-        if (youtubeUrl && !youtubeUrl.includes('youtu')) { setYoutubeError(true); validationFailed = true; } else setYoutubeError(false);
+        if (!isValidDomain(url)) { 
+            setUrlError(true); validationFailed = true; 
+        } else setUrlError(false);
+        
+        if (profileUrl) {
+            const lcProfile = profileUrl.toLowerCase();
+            if (!isValidDomain(lcProfile) || (!lcProfile.includes('linktr.ee') && !lcProfile.includes('beacon.ai') && !lcProfile.includes('bio.site') && !lcProfile.includes('bento.me') && !lcProfile.includes('lnk.bio'))) {
+                setProfileError(true); validationFailed = true; 
+            } else setProfileError(false);
+        } else setProfileError(false);
+
+        if (youtubeUrl) {
+            const lcYoutube = youtubeUrl.toLowerCase();
+            if (!lcYoutube.includes('youtu.be') && !lcYoutube.includes('youtube.com')) { 
+                setYoutubeError(true); validationFailed = true; 
+            } else setYoutubeError(false);
+        } else setYoutubeError(false);
 
         if (validationFailed) {
             setError('⚠️ One or more URLs are invalid. Please check for typing mistakes (e.g. www.www.domain.com) and ensure the URL starts with http:// or https://.');
@@ -743,6 +766,25 @@ function App() {
         const wsBtn = XLSX.utils.aoa_to_sheet(btnData);
         formatSheet(wsBtn, btnData, { 0: 12, 5: 24 });
         XLSX.utils.book_append_sheet(wb, wsBtn, 'Button Styles');
+
+        // ── Sheet 6: Images ───────────────────────────────────────────────────
+        const processImg = (imgSrc) => imgSrc || "";
+        const logoImg = processImg(result.data?.image || result.mappedData?.image || "");
+        
+        // Filter exactly like JSON payload does
+        const isPublicUrl = (u) => u && !u.startsWith('data:') && !u.includes('localhost') && !u.includes('127.0.0.1');
+        const productImages = selectedImages.filter(isPublicUrl);
+        const safeLogoImg = isPublicUrl(logoImg) ? logoImg : "";
+
+        const imgData = [['Image Type', 'URL']];
+        if (safeLogoImg) imgData.push(['Brand Logo', safeLogoImg]);
+        productImages.forEach((imgUrl, idx) => {
+            imgData.push(['Featured Image ' + (idx + 1), imgUrl]);
+        });
+
+        const wsImages = XLSX.utils.aoa_to_sheet(imgData);
+        formatSheet(wsImages, imgData, { 0: 20, 1: 80 });
+        XLSX.utils.book_append_sheet(wb, wsImages, 'Images');
 
         XLSX.writeFile(wb, `WebsiteDNA_${safeName}.xlsx`);
     };
