@@ -151,15 +151,27 @@ async function scrapeYoutubeFallback(url) {
         '--disable-gpu',
         '--single-process',
         '--no-zygote',
-        '--disable-extensions'
+        '--disable-extensions',
+        '--disable-blink-features=AutomationControlled'
       ]
     });
     const page = await browser.newPage();
+    // Spoof a real Chrome browser to defeat YouTube bot detection
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
+    await page.setViewport({ width: 1280, height: 800 });
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+    });
+    // Mask navigator.webdriver to evade Puppeteer detection
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    });
     page.setDefaultNavigationTimeout(90000);
     page.setDefaultTimeout(90000);
     
     try {
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
     } catch (err) {
       const errMsg = err.message ? err.message.toLowerCase() : '';
       if (errMsg.includes('timeout') || errMsg.includes('detached') || errMsg.includes('aborted')) {
@@ -168,6 +180,8 @@ async function scrapeYoutubeFallback(url) {
         throw err;
       }
     }
+    // Extra wait: YouTube is JS-heavy, give it time to hydrate
+    await new Promise(r => setTimeout(r, 3000));
     
     // Handle EU consent or 'Before you continue' dialogs
     try {
@@ -1487,25 +1501,43 @@ async function extractDNA(url, progressCb = null) {
 
     // --- FINAL SAFETY NET: If we still have 0 images, generate branded gradient placeholders ---
     if (downloadedImages.length === 0) {
-      console.log(`⚠️ ZERO images available after all fallbacks. Generating branded color placeholders...`);
+      console.log(`⚠️ ZERO images available after all fallbacks. Generating branded gradient placeholders...`);
       const hexToRgb = (hex) => {
         const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
         return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : { r: 249, g: 157, b: 50 };
       };
-      const brandRgb = hexToRgb(primaryColor);
- 
+      // Ensure we always have a visible (non-black) base color
+      const rawBrandRgb = hexToRgb(primaryColor);
+      const brandRgb = (rawBrandRgb.r + rawBrandRgb.g + rawBrandRgb.b < 60)
+        ? { r: 30, g: 30, b: 60 }   // near-black brand? use dark navy instead
+        : rawBrandRgb;
+
       for (const [idx, tagline] of [finalPrompts.taglineA, finalPrompts.taglineB].entries()) {
         try {
           const prefix = idx === 0 ? 'A' : 'B';
-          // Create a solid-color branded image
-          const cleanBuffer = await sharp({
-            create: { width: 640, height: 640, channels: 3, background: brandRgb }
-          }).jpeg({ quality: 85 }).toBuffer();
+          // Create a gradient placeholder via SVG composite so it's never a flat black square
+          const darkerR = Math.max(0, brandRgb.r - 60);
+          const darkerG = Math.max(0, brandRgb.g - 60);
+          const darkerB = Math.max(0, brandRgb.b - 60);
+          const gradientSvg = `<svg width="640" height="640" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="rgb(${brandRgb.r},${brandRgb.g},${brandRgb.b})"/>
+                <stop offset="100%" stop-color="rgb(${darkerR},${darkerG},${darkerB})"/>
+              </linearGradient>
+            </defs>
+            <rect width="640" height="640" fill="url(#bg)"/>
+            <rect width="640" height="640" fill="rgba(0,0,0,0.15)"/>
+          </svg>`;
+          const cleanBuffer = await sharp(Buffer.from(gradientSvg))
+            .resize(640, 640)
+            .jpeg({ quality: 85 })
+            .toBuffer();
           const cleanFilename = `img_640_clean_${prefix}_${timestamp}.jpg`;
           await fs.writeFile(path.join(outputDir, cleanFilename), cleanBuffer);
           const cleanPublicUrl = await uploadToSupabase(cleanFilename, cleanBuffer, 'image/jpeg');
           downloadedImages.push(cleanPublicUrl);
- 
+
           // Overlay text
           const textBuffer = await overlayTextOnBuffer(cleanBuffer, tagline, 'MIDDLE');
           const textFilename = `img_640_text_${prefix}_${timestamp}.jpg`;
@@ -1514,7 +1546,7 @@ async function extractDNA(url, progressCb = null) {
           downloadedImages.push(textPublicUrl);
         } catch(e) { console.error(`Placeholder generation failed for set ${idx}:`, e.message); }
       }
-      console.log(`✅ Generated ${downloadedImages.length} branded placeholder images.`);
+      console.log(`✅ Generated ${downloadedImages.length} branded gradient placeholder images.`);
     }
  
     // Deduplicate featuredImages by URL before returning (prevents duplicate cards in UI
