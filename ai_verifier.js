@@ -6,6 +6,23 @@ const fs = require('fs/promises');
 const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY || "missing_gemini_key");
 
 /**
+ * Wraps a Gemini generateContent call with a single 12-second retry on 429.
+ */
+async function geminiCallWithRetry(fn) {
+    try {
+        return await fn();
+    } catch (e) {
+        const is429 = e?.message?.includes('429') || e?.status === 429;
+        if (is429) {
+            console.warn('⚠️  Gemini 429 quota hit — waiting 12 s then retrying...');
+            await new Promise(r => setTimeout(r, 12000));
+            return await fn();
+        }
+        throw e;
+    }
+}
+
+/**
  * Converts a local file into the format required by the Gemini API.
  */
 async function fileToGenerativePart(filePath, mimeType) {
@@ -111,7 +128,7 @@ async function verifyDNA(mappedData, screenshotPath, logoPath, youtubeData = nul
             } catch (e) { console.error("Could not load logo for AI verification"); }
         }
 
-        const result = await model.generateContent(parts);
+        const result = await geminiCallWithRetry(() => model.generateContent(parts));
         const responseText = result.response.text();
 
         // Strip markdown code blocks if Gemini aggressively formats the JSON
@@ -123,10 +140,14 @@ async function verifyDNA(mappedData, screenshotPath, logoPath, youtubeData = nul
 
     } catch (error) {
         console.error(`❌ Gemini Verification Error:`, error);
+        const is429 = error?.message?.includes('429');
+        const errMsg = is429
+            ? `⚠️ Gemini API quota exceeded (429 Too Many Requests). Please wait a minute and try again, or enable billing on your Google AI Studio key.`
+            : `⚠️ Gemini Vision API Error: ${error.message || 'Unknown error.'}`;
         return {
            verified_data: {
-              website_summary: `⚠️ Gemini Vision API Error: ${error.message || 'Unknown JSON parsing or connectivity fault.'}`,
-              youtube_summary: `⚠️ Gemini Vision API Error: ${error.message || 'Unknown JSON parsing or connectivity fault.'}`,
+              website_summary: errMsg,
+              youtube_summary: errMsg,
               combined_summary: ""
            }
         };

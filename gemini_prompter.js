@@ -4,6 +4,24 @@ const env = require('./config/env');
 // Module-level singleton — the SDK is designed to be created once and reused.
 const _genAI = env.GEMINI_API_KEY ? new GoogleGenerativeAI(env.GEMINI_API_KEY) : null;
 
+/**
+ * Wraps a Gemini generateContent call with a single 12-second retry on 429.
+ * On free-tier keys, sequential Gemini calls can exhaust the RPM quota.
+ */
+async function geminiCallWithRetry(fn) {
+    try {
+        return await fn();
+    } catch (e) {
+        const is429 = e?.message?.includes('429') || e?.status === 429;
+        if (is429) {
+            console.warn('⚠️  Gemini 429 quota hit — waiting 12 s then retrying once...');
+            await new Promise(r => setTimeout(r, 12000));
+            return await fn(); // second attempt — let it throw if it fails again
+        }
+        throw e;
+    }
+}
+
 async function generateHeroPrompts(dnaData) {
     if (!_genAI) {
         console.warn("⚠️  [Gen AI] GEMINI_API_KEY is missing from env. Skipping prompt generation.");
@@ -54,7 +72,7 @@ Return ONLY a JSON object exactly matching this format:
 `;
 
     try {
-        const result = await model.generateContent(aiPrompt);
+        const result = await geminiCallWithRetry(() => model.generateContent(aiPrompt));
         let text = result.response.text();
         if (text.startsWith("\`\`\`json")) text = text.slice(7);
         if (text.startsWith("\`\`\`")) text = text.slice(3);
@@ -89,7 +107,7 @@ async function analyzeImageForTextPlacement(imageBuffer) {
         };
 
         const aiPrompt = `Analyze this ad background. I need to overlay text at a horizontal zone safely without obscuring the main subject/product. Which vertical zone is LEAST likely to obscure the focal product: TOP, MIDDLE, or LOWER_MIDDLE? Respond with exactly one of those words. (Never pick BOTTOM).`;
-        const result = await model.generateContent([aiPrompt, imagePart]);
+        const result = await geminiCallWithRetry(() => model.generateContent([aiPrompt, imagePart]));
         let text = result.response.text().trim().toUpperCase();
 
         if (["TOP", "MIDDLE", "LOWER_MIDDLE"].includes(text)) {
