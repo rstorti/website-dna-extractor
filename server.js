@@ -24,6 +24,83 @@ const dns = require('dns');
 // Force IPv4 resolution to prevent Supabase connection timeouts on systems with broken IPv6
 dns.setDefaultResultOrder('ipv4first');
 
+// ── Lightweight profile-page scraper (no Puppeteer) ─────────────────────────
+// Linktree, Beacon, Bento etc. embed all link data in a JSON blob in the HTML.
+// Fetching without a browser avoids launching a second RAM-hungry Chrome instance
+// when the server has already run a full website + YouTube extraction.
+async function scrapeProfileLightweight(profileUrl) {
+  const https = require('https');
+  const http = require('http');
+  return new Promise((resolve) => {
+    const client = profileUrl.startsWith('https') ? https : http;
+    const req = client.get(profileUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-US,en;q=0.9'
+      },
+      timeout: 15000
+    }, (res) => {
+      // Follow redirects (max 3)
+      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+        return resolve(scrapeProfileLightweight(res.headers.location));
+      }
+      let raw = '';
+      res.on('data', chunk => raw += chunk);
+      res.on('end', () => {
+        try {
+          const links = [];
+          const socialLinks = [];
+          let displayName = '';
+
+          // Try Linktree's __NEXT_DATA__ JSON blob first (most reliable)
+          const nextDataMatch = raw.match(/<script id="__NEXT_DATA__"[^>]*>(.*?)<\/script>/s);
+          if (nextDataMatch) {
+            try {
+              const nextData = JSON.parse(nextDataMatch[1]);
+              const account = nextData?.props?.pageProps?.account || nextData?.props?.pageProps?.profile || {};
+              displayName = account.name || account.username || '';
+              const linktreeLinks = account.links || account.content_nodes || [];
+              linktreeLinks.forEach(l => {
+                const href = l.url || l.href || l.value;
+                const title = l.title || l.label || l.text;
+                if (href) links.push({ url: href, button_name: title || href, context: 'Profile Link' });
+              });
+            } catch(e) {}
+          }
+
+          // Fallback: scan all <a> tags for outbound links
+          if (links.length === 0) {
+            const anchorRegex = /<a\s[^>]*href=["']([^"'#][^"']*)["'][^>]*>([^<]*)</gi;
+            let m;
+            while ((m = anchorRegex.exec(raw)) !== null) {
+              const href = m[1];
+              const label = m[2].trim();
+              if (href.startsWith('http') && !href.includes(new URL(profileUrl).hostname)) {
+                links.push({ url: href, button_name: label || href, context: 'Profile Link' });
+              }
+            }
+          }
+
+          // Extract title as display name fallback
+          if (!displayName) {
+            const titleMatch = raw.match(/<title[^>]*>([^<]+)<\/title>/i);
+            if (titleMatch) displayName = titleMatch[1].replace(/\s*[|\-–].*$/, '').trim();
+          }
+
+          console.log(`[Profile Lite] Scraped ${links.length} links for ${profileUrl}`);
+          resolve({ success: true, links, socialLinks, displayName });
+        } catch(e) {
+          resolve({ success: false, error: e.message });
+        }
+      });
+    });
+    req.on('error', (e) => resolve({ success: false, error: e.message }));
+    req.on('timeout', () => { req.destroy(); resolve({ success: false, error: 'Lightweight fetch timed out' }); });
+  });
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // LAZY LOAD heavy modules -- defer until first extraction request
 let _extractor = null;
 let _aiVerifier = null;
@@ -416,28 +493,57 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
       console.log(`[EXTRACT] YouTube extraction complete (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
     }
 
-    // 3. Profile extraction (recursive single-URL extraction)
+    // 3. Profile extraction — try lightweight HTTP scraper first to avoid
+    //    launching a second Puppeteer browser on a memory-constrained Render instance.
     if (profileUrl) {
       setStage('profile-extraction');
-      const { extractDNA: extractProfileDNA } = getExtractor();
-      const profileDna = await extractProfileDNA(profileUrl, (internalStage) => setStage(internalStage, true, 'Profile'));
-      
-      if (profileDna?.error) {
-         return res.status(422).json({
-            error: profileDna.error, stage: 'profile-extraction',
-            hint: 'The profile URL could not be scraped.'
-         });
+
+      let profileLite = null;
+      try {
+        setStage('Profile: Lightweight Fetch', true);
+        profileLite = await scrapeProfileLightweight(profileUrl);
+      } catch(liteErr) {
+        console.warn('[Profile] Lightweight scraper threw:', liteErr.message);
       }
 
-      // FIX #7: profileDna returns the full extractDNA shape, not wrapping .verifiedData
-      profileResult = {
-        success: true,
-        data: profileDna?.mappedData || {},
-        ctas: profileDna?.ctas || [],
-        socialMediaLinks: profileDna?.socialMediaLinks || [],
-        featuredImages: profileDna?.featuredImages || [],
-        screenshotUrl: profileDna?.screenshotUrl || null,
-      };
+      if (profileLite?.success && profileLite.links?.length > 0) {
+        // Use lightweight result — no Puppeteer needed
+        setStage('Profile: Links Extracted', true);
+        console.log(`[EXTRACT] Profile lightweight scrape succeeded (${profileLite.links.length} links)`);
+        profileResult = {
+          success: true,
+          data: { name: profileLite.displayName },
+          ctas: profileLite.links,
+          socialMediaLinks: profileLite.socialLinks || [],
+          featuredImages: [],
+          screenshotUrl: null,
+        };
+      } else {
+        // Fallback to full Puppeteer extraction
+        console.log('[Profile] Lightweight scraper got no links, falling back to Puppeteer...');
+        setStage('Profile: Full Browser Fetch', true);
+        const { extractDNA: extractProfileDNA } = getExtractor();
+        const profileDna = await extractProfileDNA(profileUrl, (internalStage) => setStage(internalStage, true, 'Profile'));
+        
+        if (profileDna?.error) {
+          const stat = extractionStatus.get(targetLabel);
+          return res.status(422).json({
+            error: profileDna.error, 
+            stage: 'profile-extraction',
+            steps: stat?.steps || [],
+            elapsed: Math.round((Date.now() - startTime) / 1000),
+            hint: 'The profile URL could not be scraped. The server may have run out of memory after processing the main website. Try submitting only the Profile URL on its own.'
+          });
+        }
+        profileResult = {
+          success: true,
+          data: profileDna?.mappedData || {},
+          ctas: profileDna?.ctas || [],
+          socialMediaLinks: profileDna?.socialMediaLinks || [],
+          featuredImages: profileDna?.featuredImages || [],
+          screenshotUrl: profileDna?.screenshotUrl || null,
+        };
+      }
       console.log(`[EXTRACT] Profile extraction complete (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
     }
 
