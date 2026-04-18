@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import './index.css';
 import './loading.css';
@@ -42,6 +42,8 @@ function App() {
     const [ctaEdits, setCtaEdits] = useState({});
     const [expandedDomains, setExpandedDomains] = useState({});
     const [isGeneratingJson, setIsGeneratingJson] = useState(false);
+    const [elapsedSeconds, setElapsedSeconds] = useState(0);
+    const timerRef = useRef(null);
 
     const showToast = (message, type = 'success', duration = 4000) => {
         setToast({ message, type });
@@ -66,6 +68,24 @@ function App() {
         "Compiling metadata...",
         "Finalizing extraction..."
     ];
+
+    // Timer: start counting when loading begins, stop when done
+    useEffect(() => {
+        if (loading) {
+            setElapsedSeconds(0);
+            timerRef.current = setInterval(() => {
+                setElapsedSeconds(prev => prev + 1);
+            }, 1000);
+        } else {
+            if (timerRef.current) {
+                clearInterval(timerRef.current);
+                timerRef.current = null;
+            }
+        }
+        return () => {
+            if (timerRef.current) clearInterval(timerRef.current);
+        };
+    }, [loading]);
 
     useEffect(() => {
         let interval;
@@ -1104,8 +1124,22 @@ function App() {
                                     <div className="progress-bar-wrapper">
                                         <div className="progress-bar-fill"></div>
                                     </div>
-                                    <div className="loading-status-text">
-                                        <span className="pulsing-dot"></span> {loadingText}
+                                    <div className="loading-status-text" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <span className="pulsing-dot"></span> {loadingText}
+                                        </span>
+                                        <span style={{
+                                            fontVariantNumeric: 'tabular-nums',
+                                            fontFamily: 'monospace',
+                                            fontSize: '0.95rem',
+                                            color: 'var(--primary)',
+                                            fontWeight: '700',
+                                            letterSpacing: '0.05em',
+                                            flexShrink: 0,
+                                            marginLeft: '1rem'
+                                        }}>
+                                            ⏱ {String(Math.floor(elapsedSeconds / 60)).padStart(2, '0')}:{String(elapsedSeconds % 60).padStart(2, '0')}
+                                        </span>
                                     </div>
                                 </div>
                             )}
