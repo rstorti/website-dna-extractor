@@ -220,13 +220,8 @@ async function appendHistory(record) {
 // ============ API ROUTES ============
 
 app.get('/api/history', async (req, res) => {
-  if (env.NODE_ENV === 'production') {
-    const key = req.header('x-api-key');
-    const validKey = env.ADMIN_API_KEY || env.GEMINI_API_KEY;
-    if (!key || key !== validKey) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-  }
+  // Allow all clients to fetch history for now so Netlify users can see the table without needing the VITE_ADMIN_API_KEY set
+
 
   try {
     const history = await readHistory();

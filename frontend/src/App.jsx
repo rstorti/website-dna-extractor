@@ -1772,7 +1772,7 @@ function App() {
                                 display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem', marginTop: '2rem'
                             }}>
                                 {(() => {
-                                    if (!historyData || historyData.length === 0) return <p>No history available. Run an extraction first!</p>;
+                                    if (!historyData || !Array.isArray(historyData) || historyData.length === 0) return <p>No history available. Run an extraction first!</p>;
                                     const grouped = historyData.reduce((acc, curr) => {
                                     let domain = curr.target_url || curr.url;
                                     try { domain = new URL(curr.target_url || curr.url).hostname; } catch (e) { }
