@@ -4,7 +4,7 @@ import './index.css';
 import './loading.css';
 
 // Dynamic environment fallback for Live deployments
-const API_BASE_URL = import.meta.env.VITE_API_URL || ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '' : 'https://website-dna-extractor.onrender.com');
+const API_BASE_URL = import.meta.env.VITE_API_URL || ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '' : 'https://website-dna-extractor-4.onrender.com');
 
 function App() {
     const [url, setUrl] = useState('');
