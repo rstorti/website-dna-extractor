@@ -71,6 +71,7 @@ app.use(cors({
     if (!origin) return callback(null, true);
     if (
       origin.startsWith('http://localhost') ||
+      origin.includes('onrender.com') ||
       origin.includes('netlify.app') ||
       origin.includes('minfo.com') ||
       origin.includes('lovable.app') ||
@@ -371,18 +372,19 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
     // 6. Save to history
     stage = 'saving-history';
     try {
-      // Store only lightweight metadata — never the full payload (50–150 KB each)
-      // to prevent history.json from growing unboundedly on persistent deployments.
+      // Store full payload so the History "Review" button can fully restore the extraction.
+      // NOTE: individual records can be 50-150 KB but this is necessary for Review to work.
       await appendHistory({
         id: Date.now().toString(),
         url: url || profileUrl || youtubeUrl,
-        target_url: url,
-        youtube_url: youtubeUrl,
-        profile_url: profileUrl,
+        target_url: url || '',
+        youtube_url: youtubeUrl || '',
+        profile_url: profileUrl || '',
         timestamp: new Date().toISOString(),
         success: true,
         name: payload.data?.name || null,
         screenshotUrl: payload.screenshotUrl || null,
+        payload,
       });
     } catch (histErr) {
       console.warn('[EXTRACT] History save failed:', histErr.message);

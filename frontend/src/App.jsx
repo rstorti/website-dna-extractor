@@ -1784,69 +1784,107 @@ function App() {
                                             </div>
                                             {isExpanded && (
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                                {entries.map((entry, eIdx) => (
-                                                    <div key={eIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface-color)', padding: '0.8rem 1rem', borderRadius: 'var(--radius-sm)' }}>
-                                                        <div style={{ fontSize: '0.9rem', color: 'var(--text-color)' }}>
-                                                            {formatDate(entry.timestamp)}
+                                                {entries.map((entry, eIdx) => {
+                                                    const urlPills = [
+                                                        entry.target_url  && { key: `w-${eIdx}`, url: entry.target_url,  icon: '🌐', bg: 'rgba(255,255,255,0.06)', color: 'var(--text-secondary)' },
+                                                        entry.youtube_url && { key: `y-${eIdx}`, url: entry.youtube_url, icon: '▶',  bg: 'rgba(255,0,0,0.12)',       color: '#ff7070' },
+                                                        entry.profile_url && { key: `p-${eIdx}`, url: entry.profile_url, icon: '👤', bg: 'rgba(100,149,237,0.15)',   color: '#7aabff' },
+                                                    ].filter(Boolean);
+                                                    return (
+                                                    <div key={eIdx} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: 'var(--surface-color)', padding: '0.8rem 1rem', borderRadius: 'var(--radius-sm)' }}>
+                                                        {/* URL labels row */}
+                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', fontSize: '0.78rem' }}>
+                                                            {urlPills.map(({ key, url, icon, bg, color }) => (
+                                                                <span key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: bg, color, padding: '0.15rem 0.35rem 0.15rem 0.5rem', borderRadius: '4px', maxWidth: '100%', minWidth: 0 }}>
+                                                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{icon} {url}</span>
+                                                                    <button
+                                                                        title="Copy URL"
+                                                                        onClick={() => {
+                                                                            navigator.clipboard.writeText(url).then(() => showToast(`✅ Copied: ${url}`, 'success', 2500));
+                                                                        }}
+                                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 0.1rem', color: 'inherit', opacity: 0.6, display: 'flex', alignItems: 'center', flexShrink: 0, lineHeight: 1 }}
+                                                                        onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                                                                        onMouseLeave={e => e.currentTarget.style.opacity = '0.6'}
+                                                                    >
+                                                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                                                        </svg>
+                                                                    </button>
+                                                                </span>
+                                                            ))}
                                                         </div>
-                                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                            <button title="Delete record" onClick={() => handleDeleteExtraction(entry.timestamp)} style={{background: 'transparent', color: 'var(--primary)', border: 'none', padding: '0.4rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                                                            </button>
-                                                            <button
-                                                            onClick={() => {
-                                                                const verified = entry.payload.data || {};
-                                                                setSummaryText({
-                                                                    website: verified.website_summary || '',
-                                                                    youtube: verified.youtube_summary || '',
-                                                                    combined: verified.combined_summary || '',
-                                                                    raw_youtube: entry.payload.youtubeData?.description || ''
-                                                                });
-                                                                setSelectedSummaryType('website');
-                                                                setSelectedCtas([]);
-                                                                const heroes = entry.payload.featuredImages || [];
-                                                                if (heroes.length > 0) {
-                                                                    setSelectedImages(heroes);
-                                                                } else if (verified.image || entry.payload.mappedData?.image) {
-                                                                    setSelectedImages([verified.image || entry.payload.mappedData?.image].filter(Boolean));
-                                                                } else {
-                                                                    setSelectedImages([]);
-                                                                }
-                                                                const histBtnStyles = entry.payload.data?.buttonStyles || entry.payload.buttonStyles || [];
-                                                                setSelectedButtonStyle(histBtnStyles.length > 0 ? histBtnStyles[0] : null);
-
-                                                                const histColorsToSelect = [
-                                                                    { label: 'Background Color', hex: entry.payload.data?.background_color },
-                                                                    { label: 'Foreground Color', hex: entry.payload.data?.foreground_color },
-                                                                    { label: 'App Bar Background', hex: entry.payload.data?.background_app_bar_color },
-                                                                    { label: 'App Bar Text', hex: entry.payload.data?.foreground_app_bar_color },
-                                                                    { label: 'Button Accent', hex: entry.payload.data?.icon_background_color_left }
-                                                                ];
-                                                                setSelectedColors(histColorsToSelect.filter(c => c.hex).map(c => c.label));
-
-                                                                setUrl(entry.target_url || entry.website_url || entry.url || '');
-                                                                setYoutubeUrl(entry.youtube_url || '');
-                                                                setProfileUrl(entry.profile_url || '');
-                                                                setResult(entry.payload);
-                                                                setShowJsonPreview(false);
-                                                                setActiveTab('Dashboard');
-                                                            }}
-                                                            style={{
-                                                                background: 'var(--primary)',
-                                                                color: 'black',
-                                                                border: 'none',
-                                                                padding: '0.4rem 0.8rem',
-                                                                borderRadius: 'var(--radius-sm)',
-                                                                cursor: 'pointer',
-                                                                fontWeight: 'bold',
-                                                                fontSize: '0.85rem'
-                                                            }}
-                                                        >
-                                                                Review
-                                                            </button>
+                                                        {/* Actions row */}
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                                                {formatDate(entry.timestamp)}
+                                                            </div>
+                                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                                <button title="Delete record" onClick={() => handleDeleteExtraction(entry.timestamp)} style={{background: 'transparent', color: 'var(--primary)', border: 'none', padding: '0.4rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                                                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                                                </button>
+                                                                <button
+                                                                onClick={() => {
+                                                                    if (!entry.payload) {
+                                                                        showToast('⚠️ This record was saved before Review was supported. Please re-extract to use Review.', 'warning', 6000);
+                                                                        return;
+                                                                    }
+                                                                    const verified = entry.payload.data || {};
+                                                                    setSummaryText({
+                                                                        website: verified.website_summary || '',
+                                                                        youtube: verified.youtube_summary || '',
+                                                                        combined: verified.combined_summary || '',
+                                                                        raw_youtube: entry.payload.youtubeData?.description || ''
+                                                                    });
+                                                                    setSelectedSummaryType('website');
+                                                                    setSelectedCtas([
+                                                                        ...(verified.youtube_ctas || []),
+                                                                        ...(entry.payload.ctas || [])
+                                                                    ]);
+                                                                    setCtaEdits({});
+                                                                    const heroes = entry.payload.featuredImages || [];
+                                                                    if (heroes.length > 0) {
+                                                                        setSelectedImages(heroes);
+                                                                    } else if (verified.image || entry.payload.mappedData?.image) {
+                                                                        setSelectedImages([verified.image || entry.payload.mappedData?.image].filter(Boolean));
+                                                                    } else {
+                                                                        setSelectedImages([]);
+                                                                    }
+                                                                    const histBtnStyles = entry.payload.data?.buttonStyles || entry.payload.buttonStyles || [];
+                                                                    setSelectedButtonStyle(histBtnStyles.length > 0 ? histBtnStyles[0] : null);
+                                                                    const histColorsToSelect = [
+                                                                        { label: 'Background Color', hex: entry.payload.data?.background_color },
+                                                                        { label: 'Foreground Color', hex: entry.payload.data?.foreground_color },
+                                                                        { label: 'App Bar Background', hex: entry.payload.data?.background_app_bar_color },
+                                                                        { label: 'App Bar Text', hex: entry.payload.data?.foreground_app_bar_color },
+                                                                        { label: 'Button Accent', hex: entry.payload.data?.icon_background_color_left }
+                                                                    ];
+                                                                    setSelectedColors(histColorsToSelect.filter(c => c.hex).map(c => c.label));
+                                                                    setUrl(entry.target_url || entry.url || '');
+                                                                    setYoutubeUrl(entry.youtube_url || '');
+                                                                    setProfileUrl(entry.profile_url || '');
+                                                                    setResult(entry.payload);
+                                                                    setShowJsonPreview(false);
+                                                                    setActiveTab('Dashboard');
+                                                                }}
+                                                                style={{
+                                                                    background: entry.payload ? 'var(--primary)' : 'rgba(255,255,255,0.15)',
+                                                                    color: entry.payload ? 'black' : 'var(--text-secondary)',
+                                                                    border: 'none',
+                                                                    padding: '0.4rem 0.8rem',
+                                                                    borderRadius: 'var(--radius-sm)',
+                                                                    cursor: 'pointer',
+                                                                    fontWeight: 'bold',
+                                                                    fontSize: '0.85rem'
+                                                                }}
+                                                            >
+                                                                    Review
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                ))}
+                                                    );
+                                                })}
                                                 </div>
                                             )}
                                         </div>
