@@ -1442,6 +1442,22 @@ async function extractDNA(url, progressCb = null) {
           return false;
         }
 
+        // Brightness check: reject near-black images (dark hero sections, etc.)
+        // Sharp stats() calculates mean channel value 0-255; below 40 = too dark to use
+        try {
+          const stats = await sharp(baseBuffer).resize(64, 64).raw().toBuffer({ resolveWithObject: true });
+          const pixelCount = stats.info.width * stats.info.height * stats.info.channels;
+          const totalBrightness = stats.data.reduce((sum, val) => sum + val, 0);
+          const avgBrightness = totalBrightness / pixelCount;
+          if (avgBrightness < 40) {
+            console.warn(`⚠️ Rejecting dark image (brightness=${avgBrightness.toFixed(1)}/255): ${imgUrl}`);
+            return false;
+          }
+          console.log(`✅ Brightness OK (${avgBrightness.toFixed(1)}/255): ${imgUrl.split('/').pop()}`);
+        } catch (brightnessErr) {
+          console.warn(`⚠️ Brightness check failed, accepting image anyway:`, brightnessErr.message);
+        }
+
         // Save Clean: crop to perfect 640x640 square (cover = no white bars)
         const cleanBuffer = await sharp(baseBuffer).resize(640, 640, { fit: 'cover', position: 'top' }).jpeg({ quality: 88 }).toBuffer();
         const cleanFilename = `img_640_clean_${prefix}_${timestamp}.jpg`;
@@ -1471,10 +1487,37 @@ async function extractDNA(url, progressCb = null) {
     let scrapedSuccessB = false;
 
     if (availableImages.length > 0) {
-      console.log(`🖼️ Building featured images from scraped website images...`);
+      console.log(`🖼️ Building featured images from scraped website images (${availableImages.length} candidates)...`);
       
-      const imgA = availableImages[0];
-      const imgB = availableImages.length > 1 ? availableImages[1] : null;
+      // Try up to 5 candidates to find 2 bright, usable images
+      // (first 2 are often dark hero banners on modern sites)
+      const candidatePool = availableImages.slice(0, 5);
+      const brightImages = [];
+      for (const src of candidatePool) {
+        if (brightImages.length >= 2) break;
+        try {
+          const probe = await axios.get(src, { responseType: 'arraybuffer', timeout: 8000, maxContentLength: 5 * 1024 * 1024, headers: { 'User-Agent': 'Mozilla/5.0' } });
+          const probeBuf = Buffer.from(probe.data);
+          const stats = await sharp(probeBuf).resize(32, 32).raw().toBuffer({ resolveWithObject: true });
+          const avg = stats.data.reduce((s, v) => s + v, 0) / (stats.info.width * stats.info.height * stats.info.channels);
+          if (avg >= 40) {
+            console.log(`✅ Pre-screen passed (brightness=${avg.toFixed(0)}): ${src.split('/').pop()}`);
+            brightImages.push(src);
+          } else {
+            console.warn(`⚠️ Pre-screen rejected dark image (brightness=${avg.toFixed(0)}): ${src.split('/').pop()}`);
+          }
+        } catch (e) {
+          console.warn(`⚠️ Pre-screen fetch failed for candidate, skipping: ${e.message}`);
+        }
+      }
+      // If all candidates were too dark, fall through to gradient placeholder
+      if (brightImages.length === 0) {
+        console.log('⚠️ No bright scraped images found — falling back to gradient placeholder.');
+      }
+
+
+      const imgA = brightImages[0];
+      const imgB = brightImages.length > 1 ? brightImages[1] : null;
 
       const scrapedResults = await Promise.allSettled([
         createScrapedPair(imgA, finalPrompts.taglineA, 'A'),
