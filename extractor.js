@@ -1474,21 +1474,6 @@ async function extractDNA(url, progressCb = null) {
       await Promise.allSettled(genTasks);
     }
 
-      const imgA = availableImages[0];
-      // FIX: only reuse imgA for imgB if there is literally only one image — in that case
-      // we generate B from a screenshot slice instead to avoid showing the same image twice.
-      const imgB = availableImages.length > 1 ? availableImages[1] : null;
-
-      const scrapedResults = await Promise.allSettled([
-        createScrapedPair(imgA, finalPrompts.taglineA, 'A'),
-        imgB ? createScrapedPair(imgB, finalPrompts.taglineB, 'B') : Promise.resolve(false),
-      ]);
-
-      const gotA = scrapedResults[0].status === 'fulfilled' && scrapedResults[0].value;
-      const gotB = scrapedResults[1].status === 'fulfilled' && scrapedResults[1].value;
-      console.log(`🖼️ Scraped images: A=${gotA ? '✅' : '❌'} B=${gotB ? '✅' : '❌'} → ${downloadedImages.length} images`);
-
- 
     // --- FINAL SAFETY NET: If we still have 0 images, generate branded gradient placeholders ---
     if (downloadedImages.length === 0) {
       console.log(`⚠️ ZERO images available after all fallbacks. Generating branded color placeholders...`);

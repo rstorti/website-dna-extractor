@@ -81,8 +81,10 @@ function App() {
     }, [loading]);
 
     const fetchHistory = async (isRetry = false) => {
-        setIsHistoryLoading(true);
-        setHistoryError(null);
+        if (!isRetry) {
+            setIsHistoryLoading(true);
+            setHistoryError(null);
+        }
         
         // Ping the server first to wake it up (fire-and-forget, no await)
         fetch(`${API_BASE_URL}/api/health`).catch(() => {});
@@ -101,6 +103,7 @@ function App() {
             const data = await res.json();
             setHistoryData(data || []);
             setHistoryError(null);
+            setIsHistoryLoading(false); // ✅ Always clear spinner on success
         } catch (e) {
             clearTimeout(timeoutId);
             console.error('Failed to fetch history', e);
@@ -108,12 +111,12 @@ function App() {
                 // First failure — server was likely cold-starting. Auto-retry once after 5s.
                 console.log('[History] Retrying after cold-start delay...');
                 setTimeout(() => fetchHistory(true), 5000);
+                // Keep spinner showing while retrying — do NOT clear yet
             } else {
                 // Second failure — show an actionable error, NOT "No history"
                 setHistoryError('Could not reach the server. It may still be waking up — wait 30 seconds and try again.');
+                setIsHistoryLoading(false); // ✅ Clear spinner on final failure
             }
-        } finally {
-            if (isRetry) setIsHistoryLoading(false);
         }
     };
 
@@ -870,7 +873,7 @@ function App() {
                     <div className={`nav-item ${activeTab === 'Settings' ? 'active' : ''}`} onClick={() => setActiveTab('Settings')}>Settings</div>
                 </nav>
                 <div style={{ marginTop: 'auto', paddingBottom: '1rem', fontSize: '0.8rem', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.5px' }}>
-                    v1.1.3
+                    v1.1.4
                 </div>
             </aside>
 
