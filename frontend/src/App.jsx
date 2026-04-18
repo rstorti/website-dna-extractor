@@ -81,14 +81,24 @@ function App() {
 
     const fetchHistory = async () => {
         setIsHistoryLoading(true);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        
         try {
             const res = await fetch(`${API_BASE_URL}/api/history`, {
-                headers: { 'x-api-key': import.meta.env.VITE_ADMIN_API_KEY || import.meta.env.VITE_GEMINI_API_KEY || '' }
+                headers: { 'x-api-key': import.meta.env.VITE_ADMIN_API_KEY || import.meta.env.VITE_GEMINI_API_KEY || '' },
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
+            if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
             const data = await res.json();
             setHistoryData(data || []);
-        } catch (e) { console.error('Failed to fetch history', e); }
-        finally { setIsHistoryLoading(false); }
+        } catch (e) {
+            console.error('Failed to fetch history', e);
+            setHistoryData([]); // Reset to empty list so it doesn't spin forever
+        } finally { 
+            setIsHistoryLoading(false); 
+        }
     };
 
     useEffect(() => {

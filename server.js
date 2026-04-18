@@ -176,10 +176,15 @@ async function readHistory() {
   try {
     const { supabase } = getSupabase();
     if (supabase) {
-      const { data, error } = await supabase
+      // Implement a 5-second timeout for Supabase query to prevent infinite hanging
+      const queryPromise = supabase
         .from('extraction_history')
         .select('*')
         .order('timestamp', { ascending: false });
+        
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase query timed out')), 5000));
+      
+      const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
       if (!error && data) return data;
     }
   } catch (e) {
@@ -363,13 +368,16 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
     const targetLabel = url || profileUrl || youtubeUrl;
     extractionStatus.set(targetLabel, { stage: 'init', startTime, steps: [] });
 
-    const setStage = (s, isInternal = false) => {
-      if (!isInternal) stage = s;
-      console.log(`[EXTRACT] Stage: ${s}`);
+    const setStage = (s, isInternal = false, prefix = '') => {
+      // If internal, string together the prefix e.g., 'Profile -> Booting Browser'
+      const displayString = prefix ? `${prefix}: ${s}` : s;
+      
+      if (!isInternal) stage = displayString;
+      console.log(`[EXTRACT] Stage: ${displayString}`);
       const stat = extractionStatus.get(targetLabel);
       if (stat) {
-        if (!stat.steps.includes(s)) stat.steps.push(s);
-        extractionStatus.set(targetLabel, { stage: stage, startTime: stat.startTime, steps: stat.steps });
+        if (!stat.steps.includes(displayString)) stat.steps.push(displayString);
+        extractionStatus.set(targetLabel, { stage: displayString, startTime: stat.startTime, steps: stat.steps });
       }
     };
 
@@ -377,7 +385,7 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
     if (url) {
       setStage('website-extraction');
       const { extractDNA } = getExtractor();
-      dnaResult = await extractDNA(url, (internalStage) => setStage(internalStage, true));
+      dnaResult = await extractDNA(url, (internalStage) => setStage(internalStage, true, 'Website'));
       if (dnaResult?.error) {
         return res.status(422).json({
           error: dnaResult.error, stage: 'website-extraction',
@@ -412,7 +420,7 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
     if (profileUrl) {
       setStage('profile-extraction');
       const { extractDNA: extractProfileDNA } = getExtractor();
-      const profileDna = await extractProfileDNA(profileUrl);
+      const profileDna = await extractProfileDNA(profileUrl, (internalStage) => setStage(internalStage, true, 'Profile'));
       
       if (profileDna?.error) {
          return res.status(422).json({
