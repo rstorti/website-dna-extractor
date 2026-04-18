@@ -291,6 +291,20 @@ try {
 let activeExtractions = 0;
 const MAX_CONCURRENCY = 4; // Prevent OOM by capping concurrent headless browsers
 
+const extractionStatus = new Map();
+
+app.get('/api/status', (req, res) => {
+  const targetUrl = req.query.url;
+  if (!targetUrl || !extractionStatus.has(targetUrl)) {
+    return res.json({ status: 'not_found' });
+  }
+  const stat = extractionStatus.get(targetUrl);
+  res.json({
+    stage: stat.stage,
+    elapsed: Math.floor((Date.now() - stat.startTime) / 1000)
+  });
+});
+
 app.post('/api/extract', extractRateLimit, async (req, res) => {
   if (activeExtractions >= MAX_CONCURRENCY) {
     return res.status(429).json({ error: 'Server is at maximum capacity processing other extractions. Please try again in 1 minute.', stage: 'init' });
@@ -345,10 +359,19 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
     let youtubeResult = null;
     let profileResult = null;
 
+    const targetLabel = url || profileUrl || youtubeUrl;
+    extractionStatus.set(targetLabel, { stage: 'init', startTime });
+
+    const setStage = (s) => {
+      stage = s;
+      console.log(`[EXTRACT] Stage: ${stage}`);
+      const stat = extractionStatus.get(targetLabel);
+      if (stat) extractionStatus.set(targetLabel, { stage: s, startTime: stat.startTime });
+    };
+
     // 1. Website extraction
     if (url) {
-      stage = 'website-extraction';
-      console.log(`[EXTRACT] Stage: ${stage}`);
+      setStage('website-extraction');
       const { extractDNA } = getExtractor();
       dnaResult = await extractDNA(url);
       if (dnaResult?.error) {
@@ -362,8 +385,7 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
 
     // 2. YouTube extraction
     if (youtubeUrl) {
-      stage = 'youtube-extraction';
-      console.log(`[EXTRACT] Stage: ${stage}`);
+      setStage('youtube-extraction');
       try {
         const { extractYoutubeDetails } = getYoutubeExtractor();
         youtubeResult = await extractYoutubeDetails(youtubeUrl);
@@ -384,8 +406,7 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
 
     // 3. Profile extraction (recursive single-URL extraction)
     if (profileUrl) {
-      stage = 'profile-extraction';
-      console.log(`[EXTRACT] Stage: ${stage}`);
+      setStage('profile-extraction');
       const { extractDNA: extractProfileDNA } = getExtractor();
       const profileDna = await extractProfileDNA(profileUrl);
       
@@ -410,10 +431,9 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
 
     // 4. AI verification — only runs when there is real data to verify.
     // Skipping for YouTube-only requests (no website data) saves an unnecessary Gemini API call.
-    stage = 'ai-verification';
     let verifiedData = dnaResult?.mappedData || {};
     if (dnaResult || youtubeResult) {
-      console.log(`[EXTRACT] Stage: ${stage}`);
+      setStage('ai-verification');
       try {
         const { verifyDNA } = getAiVerifier();
         const aiResult = await verifyDNA(
@@ -433,7 +453,7 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
     }
 
     // 5. Build response
-    stage = 'building-response';
+    setStage('building-response');
     const payload = {
       success: true,
       isVerified: true,
@@ -457,7 +477,7 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
     };
 
     // 6. Save to history
-    stage = 'saving-history';
+    setStage('saving-history');
     try {
       // Store full payload so the History "Review" button can fully restore the extraction.
       // NOTE: individual records can be 50-150 KB but this is necessary for Review to work.
@@ -507,10 +527,14 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
       hint,
     });
   } finally {
+    const targetLabel = req.body.url || req.body.profileUrl || req.body.youtubeUrl;
+    if (targetLabel) extractionStatus.delete(targetLabel);
+    
     activeExtractions--;
     console.log(`[EXTRACT] Concurrency check: ${activeExtractions} active jobs remaining.`);
   }
 });
+
 
 // ============ START SERVER ============
 

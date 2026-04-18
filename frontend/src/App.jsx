@@ -4,7 +4,8 @@ import './index.css';
 import './loading.css';
 
 // Dynamic environment fallback for Live deployments
-const API_BASE_URL = import.meta.env.VITE_API_URL || ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '' : 'https://website-dna-extractor-4.onrender.com');
+// Forcing the URL explicitly because old environment variables in Netlify might be pointing to the wrong instance!
+const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '' : 'https://website-dna-extractor-4.onrender.com';
 
 function App() {
     const [url, setUrl] = useState('');
@@ -180,8 +181,18 @@ function App() {
         const timeoutId = setTimeout(() => controller.abort('timeout'), 300000); // 5-minute hard timeout
 
         const targetLabel = url || youtubeUrl || profileUrl;
+        let lastKnownStage = 'init';
+        let statusInterval;
 
         try {
+            statusInterval = setInterval(async () => {
+                try {
+                    const stRes = await fetch(`${API_BASE_URL}/api/status?url=${encodeURIComponent(targetLabel)}`);
+                    const stData = await stRes.json();
+                    if (stData.stage) lastKnownStage = stData.stage;
+                } catch(e) {}
+            }, 3000);
+
             const response = await fetch(`${API_BASE_URL}/api/extract`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -271,12 +282,13 @@ function App() {
 
         } catch (err) {
             clearTimeout(timeoutId);
+            clearInterval(statusInterval);
             abortControllerRef.current = null;
 
             if (err.name === 'AbortError' || err.message === 'timeout') {
                 // Check if it was a user-initiated cancel vs auto-timeout
                 if (err.message === 'timeout') {
-                    setError('⏱️ Extraction timed out after 5 minutes. The target website may be heavily protected or very slow.\n\n💡 Try a simpler page URL, or check if the site is accessible in your browser.');
+                    setError(`⏱️ Extraction timed out after 5 minutes.\n\n📍 Last Known Stage: ${lastKnownStage}\n\nThe target website may be heavily protected or very slow.\n💡 Try a simpler page URL, or check if the site is accessible in your browser.`);
                 } else {
                     // User hit Cancel button — clear error, just stop loading
                     setError(null);
@@ -307,7 +319,14 @@ function App() {
                 // Server responded with an error message — show full detail
                 console.error("Extraction caught error:", err);
                 const msg = err.message || (typeof err === 'string' ? err : JSON.stringify(err)) || 'Unknown Error';
-                setError(`🚨 Extraction Terminated\n\n${msg.replace('Error: ', '')}`);
+                
+                // If the error message does not already contain a Stage notation, append the polled stage
+                let finalMsg = msg.replace('Error: ', '');
+                if (!finalMsg.includes('Stage:') && lastKnownStage !== 'init') {
+                    finalMsg += `\n📍 Last Known Stage: ${lastKnownStage}`;
+                }
+                
+                setError(`🚨 Extraction Terminated\n\n${finalMsg}`);
             }
         } finally {
             setLoading(false);
