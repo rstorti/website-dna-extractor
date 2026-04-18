@@ -56,6 +56,17 @@ const PUPPETEER_ARGS = [
   '--disable-gpu',
   '--disable-extensions',
   '--disable-background-networking',
+  '--disable-background-timer-throttling',
+  '--disable-backgrounding-occluded-windows',
+  '--disable-renderer-backgrounding',
+  '--disable-infobars',
+  '--disable-breakpad',
+  '--disable-canvas-aa',
+  '--disable-2d-canvas-clip-aa',
+  '--disable-gl-drawing-for-tests',
+  '--no-zygote',
+  '--single-process',            // Saves ~100MB RAM on Render free tier
+  '--memory-pressure-off',
   '--window-size=1280,800'
 ];
 
