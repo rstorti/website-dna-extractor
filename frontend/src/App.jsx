@@ -136,13 +136,6 @@ function App() {
         } catch(e) { return false; }
     };
 
-    const handleCancelExtract = () => {
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort();
-            abortControllerRef.current = null;
-        }
-    };
-
     const handleExtract = async () => {
         if (!url && !profileUrl && !youtubeUrl) return;
 
@@ -182,6 +175,7 @@ function App() {
 
         const targetLabel = url || youtubeUrl || profileUrl;
         let lastKnownStage = 'init';
+        let lastKnownSteps = [];
         let statusInterval;
 
         try {
@@ -190,6 +184,7 @@ function App() {
                     const stRes = await fetch(`${API_BASE_URL}/api/status?url=${encodeURIComponent(targetLabel)}`);
                     const stData = await stRes.json();
                     if (stData.stage) lastKnownStage = stData.stage;
+                    if (Array.isArray(stData.steps)) lastKnownSteps = stData.steps;
                 } catch(e) {}
             }, 3000);
 
@@ -225,11 +220,18 @@ function App() {
             if (!response.ok) {
                 // Build a multi-line diagnostic from the structured server error
                 const parts = [];
-                // Strip the generic "Extraction Failed: " prefix the server sometimes prepends
                 const rawMsg = (data.error || 'Extraction failed').replace(/^Extraction Failed:\s*/i, '');
-                parts.push(rawMsg);
-                if (data.stage) parts.push(`Stage: ${data.stage}   Elapsed: ${data.elapsed}s`);
-                if (data.hint) parts.push(`\n${data.hint}`);
+                
+                const stepList = data.steps || lastKnownSteps || [];
+                if (stepList.length > 0) {
+                    parts.push('--- DIAGNOSTIC CHECKLIST ---');
+                    parts.push(stepList.map(s => `✅ ${s}`).join('\n'));
+                }
+                
+                parts.push(`❌ FAILED AT: ${data.stage || lastKnownStage || 'Unknown'} (Elapsed: ${data.elapsed || 0}s)\n`);
+                parts.push(`Message: ${rawMsg}`);
+                if (data.hint) parts.push(`\n💡 Hint: ${data.hint}`);
+                
                 throw new Error(parts.join('\n'));
             }
 
@@ -288,7 +290,13 @@ function App() {
             if (err.name === 'AbortError' || err.message === 'timeout') {
                 // Check if it was a user-initiated cancel vs auto-timeout
                 if (err.message === 'timeout') {
-                    setError(`⏱️ Extraction timed out after 5 minutes.\n\n📍 Last Known Stage: ${lastKnownStage}\n\nThe target website may be heavily protected or very slow.\n💡 Try a simpler page URL, or check if the site is accessible in your browser.`);
+                    let parts = ['⏱️ Extraction timed out after 5 minutes. The target website may be heavily protected or very slow.'];
+                    if (lastKnownSteps.length > 0) {
+                         parts.push('\n--- STAGES COMPLETED BEFORE TIMEOUT ---');
+                         parts.push(lastKnownSteps.map(s => `✅ ${s}`).join('\n'));
+                    }
+                    parts.push(`\n❌ HUNG AT: ${lastKnownStage}\n\n💡 Try a simpler page URL, or check if the site is accessible in your browser.`);
+                    setError(parts.join('\n'));
                 } else {
                     // User hit Cancel button — clear error, just stop loading
                     setError(null);
@@ -320,10 +328,10 @@ function App() {
                 console.error("Extraction caught error:", err);
                 const msg = err.message || (typeof err === 'string' ? err : JSON.stringify(err)) || 'Unknown Error';
                 
-                // If the error message does not already contain a Stage notation, append the polled stage
+                // If the error message does not already contain a checklist, append the polled stage
                 let finalMsg = msg.replace('Error: ', '');
-                if (!finalMsg.includes('Stage:') && lastKnownStage !== 'init') {
-                    finalMsg += `\n📍 Last Known Stage: ${lastKnownStage}`;
+                if (!finalMsg.includes('DIAGNOSTIC CHECKLIST') && lastKnownSteps.length > 0) {
+                     finalMsg = `--- TRUNCATED DIAGNOSTIC CHECKLIST ---\n${lastKnownSteps.map(s => `✅ ${s}`).join('\n')}\n❌ FAILED AT: ${lastKnownStage}\n\n` + finalMsg;
                 }
                 
                 setError(`🚨 Extraction Terminated\n\n${finalMsg}`);

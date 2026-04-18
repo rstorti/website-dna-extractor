@@ -301,6 +301,7 @@ app.get('/api/status', (req, res) => {
   const stat = extractionStatus.get(targetUrl);
   res.json({
     stage: stat.stage,
+    steps: stat.steps,
     elapsed: Math.floor((Date.now() - stat.startTime) / 1000)
   });
 });
@@ -360,20 +361,23 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
     let profileResult = null;
 
     const targetLabel = url || profileUrl || youtubeUrl;
-    extractionStatus.set(targetLabel, { stage: 'init', startTime });
+    extractionStatus.set(targetLabel, { stage: 'init', startTime, steps: [] });
 
-    const setStage = (s) => {
-      stage = s;
-      console.log(`[EXTRACT] Stage: ${stage}`);
+    const setStage = (s, isInternal = false) => {
+      if (!isInternal) stage = s;
+      console.log(`[EXTRACT] Stage: ${s}`);
       const stat = extractionStatus.get(targetLabel);
-      if (stat) extractionStatus.set(targetLabel, { stage: s, startTime: stat.startTime });
+      if (stat) {
+        if (!stat.steps.includes(s)) stat.steps.push(s);
+        extractionStatus.set(targetLabel, { stage: stage, startTime: stat.startTime, steps: stat.steps });
+      }
     };
 
     // 1. Website extraction
     if (url) {
       setStage('website-extraction');
       const { extractDNA } = getExtractor();
-      dnaResult = await extractDNA(url);
+      dnaResult = await extractDNA(url, (internalStage) => setStage(internalStage, true));
       if (dnaResult?.error) {
         return res.status(422).json({
           error: dnaResult.error, stage: 'website-extraction',
@@ -518,12 +522,17 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
       'building-response': 'Failed while assembling the final response payload.',
       'saving-history':    'Extraction succeeded but history save failed — data may not appear in History tab.',
     };
-    const hint = stageHints[stage] || `Failed at stage "${stage}" — check server logs for details.`;
-
-    res.status(500).json({
-      error: `[${stage}] ${error.message || 'Extraction failed'}`,
-      stage,
-      elapsed: totalTime,
+    const hint = stageHints[stage] || "An unexpected error occurred during extraction.";
+    
+    const targetLabel = req.body.url || req.body.profileUrl || req.body.youtubeUrl;
+    const stat = extractionStatus.get(targetLabel);
+    
+    // Explicitly send back detailed properties so the frontend can parse the UI
+    res.status(500).json({ 
+      error: error.message, 
+      stage, 
+      steps: stat ? stat.steps : [],
+      elapsed: Math.floor((Date.now() - startTime) / 1000),
       hint,
     });
   } finally {

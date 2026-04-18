@@ -238,8 +238,10 @@ async function scrapeYoutubeFallback(url) {
   }
 }
  
-async function extractDNA(url) {
+async function extractDNA(url, progressCb = null) {
+  const logStage = (msg) => { if (progressCb) progressCb(msg); };
   console.log(`\n🚀 Launching Puppeteer DNA Extractor for: ${url} `);
+  logStage('Booting Headless Browser');
  
   let browser;
   try {
@@ -252,6 +254,7 @@ async function extractDNA(url) {
     return { error: launchErr.message };
   }
  
+  logStage(`Configuring virtual browser for ${url}`);
   let page = await browser.newPage();
   page.setDefaultNavigationTimeout(90000);
   page.setDefaultTimeout(90000);
@@ -304,6 +307,7 @@ async function extractDNA(url) {
     let fallbackToWayback = false;
  
     // --- Tier 1: Live Fetch (with progressive timeout strategy) ---
+    logStage('Attempting Live Fetch');
     try {
       let navigationSucceeded = false;
  
@@ -314,7 +318,8 @@ async function extractDNA(url) {
       } catch (err) {
         const errMsg = err.message ? err.message.toLowerCase() : '';
         if (errMsg.includes('timeout') || errMsg.includes('detached') || errMsg.includes('aborted')) {
-          console.log(`⚠️ Navigation interrupted for ${url} (${err.message}). Proceeding with partially loaded DOM...`);
+          logStage('Scraping DOM Geometry & Text');
+          console.log(`📡 Analyzing DOM structure for ${url} (${err.message}). Proceeding with partially loaded DOM...`);
           navigationSucceeded = true; // Partial DOM is still usable
         } else {
           // Automatic fallback for apex domains with broken SSL (e.g., minfo.com -> www.minfo.com)
@@ -342,6 +347,7 @@ async function extractDNA(url) {
       }
  
   // Attempt 2: If still no content, try a fresh page with minimal wait strategy
+      logStage('Locating High-Res Logo');
       if (navigationSucceeded) {
         let hasContent = false;
         try { hasContent = await page.evaluate(() => !!(document.body && document.body.innerHTML.length > 200)); } catch(e) {}
@@ -353,7 +359,7 @@ async function extractDNA(url) {
             freshPage.setDefaultNavigationTimeout(90000);
             freshPage.setDefaultTimeout(90000);
             await freshPage.setViewport({ width: 1280, height: 800 });
-            await freshPage.goto(url, { waitUntil: 'commit', timeout: 60000 });
+            await freshPage.goto(url, { waitUntil: 'commit', timeout: 90000 });
             await new Promise(r => setTimeout(r, 5000)); // Wait 5s after first byte for JS to mount
             const freshContent = await freshPage.evaluate(() => document.body && document.body.innerHTML.length > 200).catch(() => false);
             if (freshContent) {
@@ -417,6 +423,7 @@ async function extractDNA(url) {
  
     // --- Tier 2: Wayback Machine Fetch ---
     if (fallbackToWayback) {
+       logStage('Processing HTML Response (Wayback/HTTP)');
        console.log(`\n======================================================`);
        console.log(`🌐 TIER 2: FETCHING FROM WAYBACK MACHINE ARCHIVE`);
        
@@ -428,12 +435,12 @@ async function extractDNA(url) {
        try {
           let archiveLoaded = false;
           try {
-            await page.goto(archiveUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+            await page.goto(archiveUrl, { waitUntil: 'domcontentloaded', timeout: 90000 });
             archiveLoaded = true;
           } catch (firstArchiveErr) {
             console.warn(`⚠️ Latest Wayback snapshot failed (${firstArchiveErr.message}). Trying timestamp-neutral URL...`);
             archiveUrl = `https://web.archive.org/web/0/${url}`;
-            await page.goto(archiveUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+            await page.goto(archiveUrl, { waitUntil: 'domcontentloaded', timeout: 90000 });
             archiveLoaded = true;
           }
           
@@ -505,7 +512,7 @@ async function extractDNA(url) {
               if (typeof html === 'string' && html.length > 500 && !html.toLowerCase().includes('403 forbidden') && !html.toLowerCase().includes('access denied')) {
                 console.log(`✅ HTTP Fallback succeeded (${ua.substring(0, 30)}). Retrieved ${html.length} chars.`);
                 await recreatePage();
-                await page.setContent(html, { timeout: 60000 });
+                await page.setContent(html, { timeout: 90000 });
                 htmlFetched = true;
               } else {
                 console.warn(`⚠️ HTTP blocked or too short (${html?.length || 0} chars), trying next UA...`);
@@ -1020,6 +1027,7 @@ async function extractDNA(url) {
       context_files: []
     };
  
+    logStage('Capturing Hero Screenshot');
     // --- Screenshot Capture ---
     console.log(`📸 Taking full-page screenshot...`);
     const outputDir = path.join(__dirname, 'outputs');
@@ -1432,6 +1440,8 @@ async function extractDNA(url) {
       }
     };
 
+    logStage('Extracting Image Assets');
+    console.log(`📥 Processing extracted images for ${url}`);
     let scrapedSuccessA = false;
     let scrapedSuccessB = false;
 
