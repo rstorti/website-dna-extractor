@@ -22,6 +22,7 @@ function App() {
     const [activeTab, setActiveTab] = useState('Dashboard');
     const [historyData, setHistoryData] = useState([]);
     const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+    const [historyError, setHistoryError] = useState(null);
     const [loadingText, setLoadingText] = useState('Extracting Brand DNA & Outpainting Assets...');
     const [toast, setToast] = useState(null); // { message, type: 'success'|'info'|'warning' }
     const [jsonCopied, setJsonCopied] = useState(false);
@@ -79,10 +80,16 @@ function App() {
         return () => clearInterval(interval);
     }, [loading]);
 
-    const fetchHistory = async () => {
+    const fetchHistory = async (isRetry = false) => {
         setIsHistoryLoading(true);
+        setHistoryError(null);
+        
+        // Ping the server first to wake it up (fire-and-forget, no await)
+        fetch(`${API_BASE_URL}/api/health`).catch(() => {});
+        
+        // Give the server up to 45s — enough to cover a full Render cold-start
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 45000);
         
         try {
             const res = await fetch(`${API_BASE_URL}/api/history`, {
@@ -90,14 +97,23 @@ function App() {
                 signal: controller.signal
             });
             clearTimeout(timeoutId);
-            if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+            if (!res.ok) throw new Error(`Server returned ${res.status}`);
             const data = await res.json();
             setHistoryData(data || []);
+            setHistoryError(null);
         } catch (e) {
+            clearTimeout(timeoutId);
             console.error('Failed to fetch history', e);
-            setHistoryData([]); // Reset to empty list so it doesn't spin forever
-        } finally { 
-            setIsHistoryLoading(false); 
+            if (!isRetry) {
+                // First failure — server was likely cold-starting. Auto-retry once after 5s.
+                console.log('[History] Retrying after cold-start delay...');
+                setTimeout(() => fetchHistory(true), 5000);
+            } else {
+                // Second failure — show an actionable error, NOT "No history"
+                setHistoryError('Could not reach the server. It may still be waking up — wait 30 seconds and try again.');
+            }
+        } finally {
+            if (isRetry) setIsHistoryLoading(false);
         }
     };
 
@@ -854,7 +870,7 @@ function App() {
                     <div className={`nav-item ${activeTab === 'Settings' ? 'active' : ''}`} onClick={() => setActiveTab('Settings')}>Settings</div>
                 </nav>
                 <div style={{ marginTop: 'auto', paddingBottom: '1rem', fontSize: '0.8rem', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.5px' }}>
-                    v1.1.1
+                    v1.1.2
                 </div>
             </aside>
 
@@ -1805,14 +1821,20 @@ function App() {
                         {isHistoryLoading ? (
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '4rem 0', gap: '1rem' }}>
                                 <div className="loader" style={{ width: '40px', height: '40px', borderWidth: '4px' }}></div>
-                                <p style={{ color: 'var(--text-secondary)' }}>Loading past extractions...</p>
+                                <p style={{ color: 'var(--text-secondary)' }}>Loading history... (server may be waking up, please wait)</p>
+                            </div>
+                        ) : historyError ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '4rem 0', gap: '1.5rem', textAlign: 'center' }}>
+                                <span style={{ fontSize: '2.5rem' }}>⚠️</span>
+                                <p style={{ color: 'var(--text-secondary)', maxWidth: '500px' }}>{historyError}</p>
+                                <button onClick={() => fetchHistory()} style={{ background: 'var(--primary)', color: '#000', border: 'none', padding: '0.75rem 2rem', borderRadius: 'var(--radius-sm)', fontWeight: 700, cursor: 'pointer', fontSize: '1rem' }}>↺ Retry</button>
                             </div>
                         ) : (
                             <div className="history-grid" style={{
                                 display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem', marginTop: '2rem'
                             }}>
                                 {(() => {
-                                    if (!historyData || !Array.isArray(historyData) || historyData.length === 0) return <p>No history available. Run an extraction first!</p>;
+                                    if (!historyData || !Array.isArray(historyData) || historyData.length === 0) return <p style={{ color: 'var(--text-secondary)' }}>No extractions found. Run an extraction on the Dashboard first.</p>;
                                     const grouped = historyData.reduce((acc, curr) => {
                                     let domain = curr.target_url || curr.url;
                                     try { domain = new URL(curr.target_url || curr.url).hostname; } catch (e) { }
