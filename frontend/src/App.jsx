@@ -1319,48 +1319,111 @@ function App() {
                                     );
                                 })()}
 
-                                {/* 3b. Raw website images — real images scraped directly from the page */}
+                                {/* 3b. Imageye-style Image Picker — all images scraped from the page */}
                                 {result.rawExtractedImages?.length > 0 && (() => {
                                     const rawImgs = [...new Set(result.rawExtractedImages.filter(s => s && s.startsWith('http')))];
                                     if (rawImgs.length === 0) return null;
+                                    const pickerSelected = rawImgs.filter(s => selectedImages.includes(s));
+                                    const selectAll = () => setSelectedImages(prev => [...new Set([...prev, ...rawImgs])]);
+                                    const clearAll = () => setSelectedImages(prev => prev.filter(s => !rawImgs.includes(s)));
                                     return (
                                     <div className="glass-panel">
-                                        <h3 className="panel-title">🌐 Website Images (Original)</h3>
-                                        <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>Real images scraped directly from the website. Tick any to include their original URL in the JSON export.</p>
-                                        <div className="hero-images-grid">
-                                            {rawImgs.map((src, idx) => (
-                                                <div key={src} className="hero-image-card" style={{ position: 'relative', display: 'flex', flexDirection: 'column' }}>
-                                                    <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10, background: 'rgba(0,0,0,0.7)', padding: '0.4rem 0.6rem', borderRadius: 'var(--radius-sm)', backdropFilter: 'blur(4px)' }}>
-                                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', margin: 0, fontWeight: 'bold', color: selectedImages.includes(src) ? 'var(--active-select)' : 'var(--text-secondary)' }}>
-                                                            <input 
-                                                                type="checkbox" 
-                                                                checked={selectedImages.includes(src)}
-                                                                onChange={(e) => {
-                                                                    if (e.target.checked) setSelectedImages(prev => prev.includes(src) ? prev : [...prev, src]);
-                                                                    else setSelectedImages(prev => prev.filter(img => img !== src));
-                                                                }}
-                                                                style={{ width: '18px', height: '18px', accentColor: 'var(--active-select)', cursor: 'pointer' }}
-                                                            />
-                                                            Select
-                                                        </label>
-                                                    </div>
-                                                    <img src={src} alt={`Website image ${idx+1}`} style={{ objectFit: 'cover', width: '100%', aspectRatio: '1', background: '#111' }} onError={(e) => { e.currentTarget.parentElement.style.display='none'; }} />
-                                                    <a
-                                                        href={src}
-                                                        onClick={(e) => handleForceDownload(e, src, `website_image_${idx+1}.jpg`)}
-                                                        style={{ display: 'flex', alignItems: 'center', position: 'absolute', bottom: '16px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.5)', border: '1px solid var(--primary)', color: 'var(--primary)', padding: '0.4rem 1.2rem', borderRadius: '30px', textDecoration: 'none', fontWeight: '500', fontSize: '0.8rem', backdropFilter: 'blur(4px)', transition: 'all 0.2s ease', opacity: '0.85', whiteSpace: 'nowrap', cursor: 'pointer' }}
-                                                        onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'rgba(0,0,0,0.7)'; }}
-                                                        onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.85'; e.currentTarget.style.background = 'rgba(0,0,0,0.5)'; }}
+                                        {/* Header bar */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1 }}>
+                                                <span style={{ fontSize: '1.2rem' }}>🔍</span>
+                                                <h3 className="panel-title" style={{ margin: 0 }}>Image Picker</h3>
+                                                <span style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', padding: '0.1rem 0.6rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '600' }}>
+                                                    {rawImgs.length} images found
+                                                </span>
+                                                {pickerSelected.length > 0 && (
+                                                    <span style={{ background: 'rgba(var(--primary-rgb),0.2)', color: 'var(--primary)', padding: '0.1rem 0.6rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '700' }}>
+                                                        {pickerSelected.length} selected
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                <button
+                                                    onClick={selectAll}
+                                                    style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.8)', padding: '0.3rem 0.8rem', borderRadius: '20px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '600', transition: 'all 0.2s' }}
+                                                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
+                                                    onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                                                >
+                                                    ☑ Select All
+                                                </button>
+                                                <button
+                                                    onClick={clearAll}
+                                                    style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.8)', padding: '0.3rem 0.8rem', borderRadius: '20px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '600', transition: 'all 0.2s' }}
+                                                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
+                                                    onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                                                >
+                                                    ✕ Clear
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: '0.85rem' }}>
+                                            All images scraped from the website via Puppeteer. Tick any image to include it in the JSON export as a product image.
+                                        </p>
+                                        {/* Image grid */}
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '0.6rem' }}>
+                                            {rawImgs.map((src, idx) => {
+                                                const isSelected = selectedImages.includes(src);
+                                                return (
+                                                    <div
+                                                        key={src}
+                                                        onClick={() => {
+                                                            if (isSelected) setSelectedImages(prev => prev.filter(s => s !== src));
+                                                            else setSelectedImages(prev => [...prev, src]);
+                                                        }}
+                                                        style={{
+                                                            position: 'relative',
+                                                            aspectRatio: '1',
+                                                            borderRadius: '8px',
+                                                            overflow: 'hidden',
+                                                            cursor: 'pointer',
+                                                            border: isSelected ? '2px solid var(--primary)' : '2px solid transparent',
+                                                            transition: 'border 0.15s, transform 0.15s, box-shadow 0.15s',
+                                                            boxShadow: isSelected ? '0 0 0 1px var(--primary), 0 4px 16px rgba(0,0,0,0.4)' : '0 2px 8px rgba(0,0,0,0.3)',
+                                                            transform: isSelected ? 'scale(0.97)' : 'scale(1)',
+                                                        }}
                                                     >
-                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '0.5rem' }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                                                        Download
-                                                    </a>
-                                                </div>
-                                            ))}
+                                                        <img
+                                                            src={src}
+                                                            alt={`Site image ${idx + 1}`}
+                                                            style={{ width: '100%', height: '100%', objectFit: 'cover', background: '#1a1a2e', display: 'block' }}
+                                                            onError={e => { e.currentTarget.closest('div[style]').style.display = 'none'; }}
+                                                        />
+                                                        {/* Selection overlay */}
+                                                        <div style={{
+                                                            position: 'absolute', inset: 0,
+                                                            background: isSelected ? 'rgba(var(--primary-rgb, 249,157,50),0.18)' : 'transparent',
+                                                            transition: 'background 0.15s'
+                                                        }} />
+                                                        {/* Checkbox tick */}
+                                                        <div style={{
+                                                            position: 'absolute', top: '6px', left: '6px',
+                                                            width: '20px', height: '20px',
+                                                            borderRadius: '4px',
+                                                            background: isSelected ? 'var(--primary)' : 'rgba(0,0,0,0.55)',
+                                                            border: isSelected ? '2px solid var(--primary)' : '2px solid rgba(255,255,255,0.4)',
+                                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                            fontSize: '12px', transition: 'all 0.15s'
+                                                        }}>
+                                                            {isSelected && '✓'}
+                                                        </div>
+                                                        {/* Image number badge */}
+                                                        <div style={{ position: 'absolute', bottom: '4px', right: '6px', fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)', fontFamily: 'monospace' }}>
+                                                            #{idx + 1}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                     );
                                 })()}
+
+
 
                                 {/* 4. Button Style Details */}
                                 {result.buttonStyles && result.buttonStyles.length > 0 && (

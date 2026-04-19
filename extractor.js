@@ -1642,7 +1642,7 @@ async function extractDNA(url, progressCb = null) {
       socialMediaLinks: extractedData.socials,
       featuredImages: uniqueFeaturedImages,
       // Expose up to 7 raw website images so the user can pick from real site imagery
-      rawExtractedImages: extractedData.images.slice(0, 7),
+      rawExtractedImages: extractedData.images.slice(0, 40), // all scraped images for the Image Picker UI
       screenshotPath: screenshotPath,
       logoPath: logoLocalPath,
       screenshotUrl: screenshotPublicUrl,
