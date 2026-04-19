@@ -1300,6 +1300,13 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
  
     const overlayTextOnBuffer = async (buffer, tagline, zone = "TOP") => {
       if (!buffer || !tagline) return buffer;
+
+      // --- Text fitting: enforce 620px max width (10px padding each side on 640px canvas) ---
+      // Approximate character width for bold Arial at a given font size = fontSize * 0.6
+      // We start at the desired size and scale DOWN until the longest line fits within 620px.
+      const MAX_TEXT_WIDTH = 620;
+      const CANVAS_W = 640;
+
       const words = tagline.split(' ');
       let lines = [];
       let curLine = words[0];
@@ -1312,31 +1319,39 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
         }
       }
       lines.push(curLine);
- 
-      const fontSize = lines.length > 2 ? 46 : 58;
+
+      // Start at desired font size, reduce until longest line fits within MAX_TEXT_WIDTH
+      let fontSize = lines.length > 2 ? 46 : 58;
+      const longestLine = lines.reduce((a, b) => (a.length > b.length ? a : b), '');
+      const charWidthRatio = 0.62; // empirical for bold Arial uppercase
+      while (fontSize > 18 && longestLine.length * fontSize * charWidthRatio > MAX_TEXT_WIDTH) {
+        fontSize -= 2;
+      }
       const lineSpacing = fontSize * 1.25;
- 
+
       let baseCenterY = 110; // 'TOP' shifted much higher to avoid product occlusion
       if (zone === "MIDDLE") baseCenterY = 280;
       if (zone === "LOWER_MIDDLE") baseCenterY = 400; // Leaves bottom 240px safe
- 
+
       const startY = baseCenterY - ((lines.length - 1) * lineSpacing) / 2;
- 
+
+      // textLength clamps SVG rendering to MAX_TEXT_WIDTH so glyphs never bleed outside padding
       const textNodes = lines.map((line, index) => {
-        return `<text x="50%" y="${startY + (index * lineSpacing)}" text-anchor="middle" dominant-baseline="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="${fontSize}" fill="#ffffff" filter="url(#drop-shadow)">${line.toUpperCase().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</text>`;
+        const escapedLine = line.toUpperCase()
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const estimatedW = Math.min(line.length * fontSize * charWidthRatio, MAX_TEXT_WIDTH);
+        return `<text x="${CANVAS_W / 2}" y="${startY + (index * lineSpacing)}" text-anchor="middle" dominant-baseline="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="${fontSize}" textLength="${estimatedW.toFixed(0)}" lengthAdjust="spacingAndGlyphs" fill="#ffffff" filter="url(#drop-shadow)">${escapedLine}</text>`;
       }).join('');
- 
-      const svgText = `
-        <svg width="640" height="640">
+
+      const svgText = `<svg width="${CANVAS_W}" height="640" xmlns="http://www.w3.org/2000/svg">
         <defs>
-            <filter id="drop-shadow" x="-30%" y="-30%" width="160%" height="160%">
+          <filter id="drop-shadow" x="-30%" y="-30%" width="160%" height="160%">
             <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000000" flood-opacity="0.8"/>
-            </filter>
+          </filter>
         </defs>
         ${textNodes}
-        </svg>
-        `;
- 
+      </svg>`;
+
       try {
         return await sharp(buffer)
           .composite([{ input: Buffer.from(svgText), top: 0, left: 0 }])
@@ -1533,7 +1548,7 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
       const brightImages = probeResults
         .filter(r => r.status === 'fulfilled' && (isPreset || r.value.avg >= 40))
         .map(r => { console.log(`✅ Pre-screen passed (brightness=${r.value.avg.toFixed(0)}): ${r.value.src.split('/').pop()}`); return r.value.src; })
-        .slice(0, 4); // keep up to 4 images (enough for 2 pairs)
+        .slice(0, 8); // keep up to 8 images (4 originals × 2 = 8 total outputs)
 
       probeResults.filter(r => r.status === 'rejected').forEach(r => console.warn(`⚠️ Pre-screen fetch failed: ${r.reason?.message}`));
       probeResults.filter(r => r.status === 'fulfilled' && r.value.avg < 40).forEach(r => console.warn(`⚠️ Pre-screen rejected dark image (brightness=${r.value.avg.toFixed(0)}): ${r.value.src.split('/').pop()}`));
@@ -1541,17 +1556,19 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
       console.log(`🔍 Pre-screen complete: ${brightImages.length} bright images found from ${candidatePool.length} candidates`);
       if (brightImages.length === 0) console.log('⚠️ No bright scraped images found — falling back to gradient placeholder.');
 
-      const imgA = brightImages[0];
-      const imgB = brightImages.length > 1 ? brightImages[1] : null;
+      // Support up to 4 originals → 4 clean + 4 tagged = 8 total images
+      const slotLabels = ['A', 'B', 'C', 'D'];
+      const taglines   = [finalPrompts.taglineA, finalPrompts.taglineB, finalPrompts.taglineA, finalPrompts.taglineB];
+      const scrapedTasks = brightImages.slice(0, 4).map((imgSrc, i) =>
+        imgSrc ? createScrapedPair(imgSrc, taglines[i], slotLabels[i]) : Promise.resolve(false)
+      );
 
-      const scrapedResults = await Promise.allSettled([
-        createScrapedPair(imgA, finalPrompts.taglineA, 'A'),
-        imgB ? createScrapedPair(imgB, finalPrompts.taglineB, 'B') : Promise.resolve(false),
-      ]);
+      const scrapedResults = await Promise.allSettled(scrapedTasks);
 
-      scrapedSuccessA = scrapedResults[0].status === 'fulfilled' && scrapedResults[0].value;
-      scrapedSuccessB = scrapedResults[1].status === 'fulfilled' && scrapedResults[1].value;
-      console.log(`🖼️ Scraped images attempt: A=${scrapedSuccessA ? '✅' : '❌'} B=${scrapedSuccessB ? '✅' : '❌'}`);
+      scrapedSuccessA = scrapedResults[0]?.status === 'fulfilled' && scrapedResults[0]?.value;
+      scrapedSuccessB = scrapedResults[1]?.status === 'fulfilled' && scrapedResults[1]?.value;
+      console.log(`🖼️ Scraped images: A=${scrapedSuccessA?'✅':'❌'} B=${scrapedSuccessB?'✅':'❌'} C=${scrapedResults[2]?.value?'✅':'❌'} D=${scrapedResults[3]?.value?'✅':'❌'}`);
+
     }
 
     // ----------------------------------------------------

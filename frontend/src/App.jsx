@@ -356,7 +356,7 @@ function App() {
             const autoImages = featured
                 .filter(Boolean)
                 .filter((v, i, a) => a.indexOf(v) === i) // dedupe
-                .slice(0, 4); // hard cap at 4 (2 pairs)
+                .slice(0, 8); // up to 4 pairs = 8 images (4 clean + 4 tagged)
             setSelectedImages(autoImages);
 
             // Store timing data for Settings > Logs
@@ -963,7 +963,7 @@ function App() {
                     <div className={`nav-item ${activeTab === 'Settings' ? 'active' : ''}`} onClick={() => setActiveTab('Settings')}>Settings</div>
                 </nav>
                 <div style={{ marginTop: 'auto', paddingBottom: '1rem', fontSize: '0.8rem', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.5px' }}>
-                    v1.3.1
+                    v1.3.2
                 </div>
             </aside>
 
