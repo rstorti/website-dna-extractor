@@ -1,23 +1,23 @@
 {
   "campaign": {
     "name": "Innovate UK",
-    "campaignDescription": "<p>Innovate UK is the UK's national innovation agency, supporting business-led innovation across all sectors and regions. Their recently launched prospectus, highlighted in a video, outlines a bold vision to transform breakthrough ideas into industry giants, actively assisting innovators to start, scale, and thrive throughout the UK.</p>",
+    "campaignDescription": "<p>Innovate UK is the UK's national innovation agency, dedicated to supporting business-led innovation across all sectors, technologies, and regions to drive economic growth and development. There was no supplementary information available from the associated YouTube video.</p>",
     "backgroundColor": "#FFFFFF",
     "foregroundColor": "#262626",
     "appbarBackgroundColor": "#FFFFFF",
-    "appbarForegroundColor": "#2E2D62",
+    "appbarForegroundColor": "#FFFFFF",
     "backgroundImage": "",
-    "image": "",
+    "image": "https://lgefgdyrhvtjehnqblvu.supabase.co/storage/v1/object/public/outputs/logo_256_1776586807521.png",
     "campaignType": 1,
     "scanType": 0,
     "displayInSearch": true,
     "is_enable": true,
     "is_elevator": false,
-    "startTimeUtc": "2026-04-17T02:39:06.778Z",
-    "endTimeUtc": "2027-04-17T02:39:06.778Z",
+    "startTimeUtc": "2026-04-19T08:56:09.464Z",
+    "endTimeUtc": "2027-04-19T08:56:09.464Z",
     "brand": {
       "name": "Innovate UK",
-      "logo": "",
+      "logo": "https://lgefgdyrhvtjehnqblvu.supabase.co/storage/v1/object/public/outputs/logo_256_1776586807521.png",
       "website": "https://www.ukri.org/councils/innovate-uk/"
     }
   },
@@ -28,36 +28,27 @@
       "products": [
         {
           "item_name": "Innovate UK",
-          "description": "Innovate UK is the UK's national innovation agency, supporting business-led innovation across all sectors and regions. Their recently launched prospectus, highlighted in a video, outlines a bold vision to transform breakthrough ideas into industry giants, actively assisting innovators to start, scale, and thrive throughout the UK.",
+          "description": "Innovate UK is the UK's national innovation agency, dedicated to supporting business-led innovation across all sectors, technologies, and regions to drive economic growth and development. There was no supplementary information available from the associated YouTube video.",
           "modelorder": 1,
           "calories": 0,
           "ingredients": "",
           "item_type": "Product",
           "deliverable": false,
-          "productImages": [],
-          "campaignItemButtons": [
+          "productImages": [
             {
-              "name": "Uncover Future Innovations",
-              "buttonType": 4,
-              "modelorder": 1,
-              "backgroundColor": "#2E2D62",
-              "foregroundColor": "#FFFFFF",
-              "properties": [
-                {
-                  "propertyDefinitionId": 20,
-                  "propertyValue": "https://www.ukri.org/publications/turning-breakthrough-ideas-into-the-uks-next-industry-giants/",
-                  "propertyName": "URL"
-                }
-              ],
-              "shape": 1,
-              "buttonAlign": 1,
-              "textAlign": 1,
-              "enabled": true
+              "image_url": "https://lgefgdyrhvtjehnqblvu.supabase.co/storage/v1/object/public/outputs/img_640_text_B_1776586807521.jpg",
+              "modelorder": 1
             },
+            {
+              "image_url": "https://lgefgdyrhvtjehnqblvu.supabase.co/storage/v1/object/public/outputs/img_640_text_A_1776586807521.jpg",
+              "modelorder": 2
+            }
+          ],
+          "campaignItemButtons": [
             {
               "name": "Subscribe",
               "buttonType": 4,
-              "modelorder": 2,
+              "modelorder": 1,
               "backgroundColor": "#2E2D62",
               "foregroundColor": "#FFFFFF",
               "properties": [
@@ -75,7 +66,7 @@
             {
               "name": "Our councils",
               "buttonType": 4,
-              "modelorder": 3,
+              "modelorder": 2,
               "backgroundColor": "#2E2D62",
               "foregroundColor": "#FFFFFF",
               "properties": [
@@ -93,7 +84,7 @@
             {
               "name": "Our strategy",
               "buttonType": 4,
-              "modelorder": 4,
+              "modelorder": 3,
               "backgroundColor": "#2E2D62",
               "foregroundColor": "#FFFFFF",
               "properties": [
@@ -111,7 +102,7 @@
             {
               "name": "View all Innovate UK news",
               "buttonType": 4,
-              "modelorder": 5,
+              "modelorder": 4,
               "backgroundColor": "#2E2D62",
               "foregroundColor": "#FFFFFF",
               "properties": [

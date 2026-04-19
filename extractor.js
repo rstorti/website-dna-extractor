@@ -1454,7 +1454,8 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
           const pixelCount = stats.info.width * stats.info.height * stats.info.channels;
           const totalBrightness = stats.data.reduce((sum, val) => sum + val, 0);
           const avgBrightness = totalBrightness / pixelCount;
-          if (avgBrightness < 40) {
+          const isPresetSelection = presetSelectedImages && presetSelectedImages.length > 0;
+          if (avgBrightness < 40 && !isPresetSelection) {
             console.warn(`⚠️ Rejecting dark image (brightness=${avgBrightness.toFixed(1)}/255): ${imgUrl}`);
             return false;
           }
