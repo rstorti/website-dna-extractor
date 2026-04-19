@@ -482,7 +482,7 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
   let stage = 'init';
 
   try {
-    let { url, youtubeUrl, profileUrl } = req.body;
+    let { url, youtubeUrl, profileUrl, selectedImages } = req.body;
     console.log(`\n[EXTRACT] Starting extraction for: url=${url}, youtubeUrl=${youtubeUrl}, profileUrl=${profileUrl}. Active Jobs: ${activeExtractions}`);
 
     if (!url && !youtubeUrl && !profileUrl) {
@@ -558,7 +558,7 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
     if (url) {
       setStage('website-extraction');
       const { extractDNA } = getExtractor();
-      dnaResult = await extractDNA(url, (internalStage) => setStage(internalStage, true, 'Website'));
+      dnaResult = await extractDNA(url, (internalStage) => setStage(internalStage, true, 'Website'), selectedImages || []);
       if (dnaResult?.error) {
         return res.status(422).json({
           error: dnaResult.error, stage: 'website-extraction',

@@ -263,7 +263,7 @@ async function scrapeYoutubeFallback(url) {
   }
 }
  
-async function extractDNA(url, progressCb = null) {
+async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
   const logStage = (msg) => { if (progressCb) progressCb(msg); };
   console.log(`\n🚀 Launching Puppeteer DNA Extractor for: ${url} `);
   logStage('Booting Headless Browser');
@@ -1213,12 +1213,14 @@ async function extractDNA(url, progressCb = null) {
     }
  
     // FIX #8: Also filter out Wayback Machine archive proxy URLs from the image pool
-    const availableImages = extractedData.images.filter(src =>
-      src &&
-      src.startsWith('http') &&
-      src !== mappedFields.image &&
-      !src.includes('web.archive.org')
-    );
+    const availableImages = presetSelectedImages && presetSelectedImages.length > 0 
+      ? presetSelectedImages.slice(0, 20) // prioritize user selections directly
+      : extractedData.images.filter(src =>
+          src &&
+          src.startsWith('http') &&
+          src !== mappedFields.image &&
+          !src.includes('web.archive.org')
+        );
     const downloadedImages = [];
  
     // --- Generate Prompts via Gemini ---
@@ -1508,10 +1510,12 @@ async function extractDNA(url, progressCb = null) {
       );
 
       // Collect all passing results, sorted by brightness (brightest first)
+      // If the user manually selected preset images, skip the brightness filter!
+      const isPreset = presetSelectedImages && presetSelectedImages.length > 0;
       const brightImages = probeResults
-        .filter(r => r.status === 'fulfilled' && r.value.avg >= 40)
+        .filter(r => r.status === 'fulfilled' && (isPreset || r.value.avg >= 40))
         .map(r => { console.log(`✅ Pre-screen passed (brightness=${r.value.avg.toFixed(0)}): ${r.value.src.split('/').pop()}`); return r.value.src; })
-        .slice(0, 4); // keep up to 4 bright images (enough for 2 pairs)
+        .slice(0, 4); // keep up to 4 images (enough for 2 pairs)
 
       probeResults.filter(r => r.status === 'rejected').forEach(r => console.warn(`⚠️ Pre-screen fetch failed: ${r.reason?.message}`));
       probeResults.filter(r => r.status === 'fulfilled' && r.value.avg < 40).forEach(r => console.warn(`⚠️ Pre-screen rejected dark image (brightness=${r.value.avg.toFixed(0)}): ${r.value.src.split('/').pop()}`));

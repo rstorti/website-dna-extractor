@@ -55,6 +55,13 @@ function App() {
     const [scanMinWidth, setScanMinWidth] = useState(0);    // min natural width filter (px)
     const [scanSelected, setScanSelected] = useState([]);   // selected image urls
     const [scanDims, setScanDims] = useState({});           // { url: { w, h } } populated on image load
+    // Dashboard pre-scan state
+    const [dashScanResults, setDashScanResults] = useState(null);
+    const [isDashScanning, setIsDashScanning] = useState(false);
+    const [dashScanError, setDashScanError] = useState(null);
+    const [dashSelectedImages, setDashSelectedImages] = useState([]);
+    const [dashScanDims, setDashScanDims] = useState({});
+    
     const timerRef = useRef(null);
 
     const showToast = (message, type = 'success', duration = 4000) => {
@@ -111,6 +118,35 @@ function App() {
         }
         return () => clearInterval(interval);
     }, [loading]);
+
+    // Auto-scan Website URL for Dashboard Images
+    useEffect(() => {
+        if (!url || !isValidDomain(url)) {
+            setDashScanResults(null);
+            setDashSelectedImages([]);
+            return;
+        }
+        const timer = setTimeout(async () => {
+            setIsDashScanning(true);
+            setDashScanError(null);
+            try {
+                const API_BASE = import.meta.env.VITE_API_URL || '';
+                const r = await fetch(`${API_BASE}/api/scan-images`, { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify({ url: url.trim() }) 
+                });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.error || 'Autoscan failed');
+                if (d.images) d.images = d.images.slice(0, 100); // cap to 100
+                setDashScanResults(d);
+            } catch(e) {
+                setDashScanError(e.message);
+            }
+            setIsDashScanning(false);
+        }, 800); // 800ms debounce
+        return () => clearTimeout(timer);
+    }, [url]);
 
     const fetchHistory = async (isRetry = false) => {
         if (!isRetry) {
@@ -252,7 +288,7 @@ function App() {
             const response = await fetch(`${API_BASE_URL}/api/extract`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url, youtubeUrl, profileUrl }),
+                body: JSON.stringify({ url, youtubeUrl, profileUrl, selectedImages: dashSelectedImages }),
                 signal: controller.signal
             });
             clearTimeout(timeoutId);
@@ -927,7 +963,7 @@ function App() {
                     <div className={`nav-item ${activeTab === 'Settings' ? 'active' : ''}`} onClick={() => setActiveTab('Settings')}>Settings</div>
                 </nav>
                 <div style={{ marginTop: 'auto', paddingBottom: '1rem', fontSize: '0.8rem', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.5px' }}>
-                    v1.2.2
+                    v1.3.0
                 </div>
             </aside>
 
@@ -1105,7 +1141,58 @@ function App() {
                                         </button>
                                     )}
                                 </div>
+                                </div>
                             </div>
+
+                            {/* Dashboard Image Auto-Scanner */}
+                            {dashScanResults && dashScanResults.images.length > 0 && (
+                                <div style={{ marginTop: '1.5rem', marginBottom: '2.5rem', background: 'rgba(0,0,0,0.2)', padding: '1.5rem', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                        <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--primary)' }}>Select Base Images (Optional)</h3>
+                                        <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)' }}>{dashScanResults.images.length} images found • Select preferred images to process for 1:1 640x640</span>
+                                    </div>
+                                    <div className="scanner-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '1rem', maxHeight: '400px', overflowY: 'auto', paddingRight: '0.5rem' }}>
+                                        {dashScanResults.images.map((img) => {
+                                            const isSel = dashSelectedImages.includes(img.url);
+                                            const dim = dashScanDims[img.url];
+                                            const ext = (img.url.split('.').pop().split('?')[0] || '?').toUpperCase();
+                                            return (
+                                                <div key={img.url} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                    <div
+                                                        onClick={() => setDashSelectedImages(prev => isSel ? prev.filter(s => s !== img.url) : [...prev, img.url])}
+                                                        title={img.url}
+                                                        style={{ position: 'relative', aspectRatio: '1', borderRadius: '8px', overflow: 'hidden', cursor: 'pointer', border: isSel ? '2px solid var(--primary)' : '2px solid rgba(255,255,255,0.07)', transition: 'all 0.15s', boxShadow: isSel ? '0 0 0 1px var(--primary), 0 4px 16px rgba(0,0,0,0.5)' : '0 2px 6px rgba(0,0,0,0.3)', transform: isSel ? 'scale(0.97)' : 'scale(1)', background: '#111' }}
+                                                    >
+                                                        <img
+                                                            src={img.url}
+                                                            alt=""
+                                                            loading="lazy"
+                                                            style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}
+                                                            onLoad={e => { const el = e.target; setDashScanDims(prev => ({ ...prev, [img.url]: { w: el.naturalWidth, h: el.naturalHeight } })); }}
+                                                            onError={e => { e.target.closest('div[style]').style.display = 'none'; }}
+                                                        />
+                                                        <div style={{ position:'absolute', inset:0, background: isSel ? 'rgba(249,157,50,0.15)' : 'transparent', transition:'background 0.15s', pointerEvents:'none' }} />
+                                                        <div style={{ position:'absolute', top:'5px', left:'5px', width:'18px', height:'18px', borderRadius:'4px', background: isSel ? 'var(--primary)' : 'rgba(0,0,0,0.6)', border: isSel ? '2px solid var(--primary)' : '2px solid rgba(255,255,255,0.35)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px', fontWeight:'900', color:'#000', pointerEvents:'none' }}>
+                                                            {isSel && '✓'}
+                                                        </div>
+                                                        {img.context === 'og' && <div style={{ position:'absolute', top:'5px', right:'5px', background:'rgba(74,222,128,0.8)', borderRadius:'3px', fontSize:'0.55rem', padding:'1px 3px', color:'#000', fontWeight:'700', pointerEvents:'none' }}>OG</div>}
+                                                    </div>
+                                                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.7rem', color:'rgba(255,255,255,0.6)', fontFamily:'monospace', padding: '0 2px' }}>
+                                                        <span>{ext.length > 4 ? ext.substring(0,4) : ext}</span>
+                                                        <span>{dim ? `${dim.w}×${dim.h}` : 'Loading...'}</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                                        <span style={{ fontSize: '0.85rem', color: dashSelectedImages.length > 0 ? 'var(--primary)' : 'rgba(255,255,255,0.4)', fontWeight: dashSelectedImages.length > 0 ? '600' : 'normal' }}>
+                                            {dashSelectedImages.length > 0 ? `${dashSelectedImages.length} images selected for extraction editing.` : 'No images selected. Extraction will auto-select the best images.'}
+                                        </span>
+                                        {dashSelectedImages.length > 0 && <button onClick={() => setDashSelectedImages([])} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.7)', borderRadius: '4px', padding: '0.2rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer' }}>Clear Selection</button>}
+                                    </div>
+                                </div>
+                            )}
                             
                             {error && (() => {
                                 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -2266,33 +2353,34 @@ function App() {
                                     const dim = scanDims[img.url];
                                     const ext = getExt(img.url).toUpperCase() || '?';
                                     return (
-                                        <div
-                                            key={img.url}
-                                            onClick={() => setScanSelected(prev => isSel ? prev.filter(s => s !== img.url) : [...prev, img.url])}
-                                            title={img.url}
-                                            style={{ position: 'relative', aspectRatio: '1', borderRadius: '8px', overflow: 'hidden', cursor: 'pointer', border: isSel ? '2px solid var(--primary)' : '2px solid rgba(255,255,255,0.07)', transition: 'all 0.15s', boxShadow: isSel ? '0 0 0 1px var(--primary), 0 4px 16px rgba(0,0,0,0.5)' : '0 2px 6px rgba(0,0,0,0.3)', transform: isSel ? 'scale(0.97)' : 'scale(1)', background: '#111' }}
-                                        >
-                                            <img
-                                                src={img.url}
-                                                alt=""
-                                                loading="lazy"
-                                                style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}
-                                                onLoad={e => { const el = e.target; setScanDims(prev => ({ ...prev, [img.url]: { w: el.naturalWidth, h: el.naturalHeight } })); }}
-                                                onError={e => { e.target.closest('div[style]').style.display = 'none'; }}
-                                            />
-                                            {/* Selection overlay */}
-                                            <div style={{ position:'absolute', inset:0, background: isSel ? 'rgba(249,157,50,0.15)' : 'transparent', transition:'background 0.15s', pointerEvents:'none' }} />
-                                            {/* Checkbox */}
-                                            <div style={{ position:'absolute', top:'5px', left:'5px', width:'18px', height:'18px', borderRadius:'4px', background: isSel ? 'var(--primary)' : 'rgba(0,0,0,0.6)', border: isSel ? '2px solid var(--primary)' : '2px solid rgba(255,255,255,0.35)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px', fontWeight:'900', color:'#000', pointerEvents:'none' }}>
-                                                {isSel && '✓'}
+                                        <div key={img.url} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                            <div
+                                                onClick={() => setScanSelected(prev => isSel ? prev.filter(s => s !== img.url) : [...prev, img.url])}
+                                                title={img.url}
+                                                style={{ position: 'relative', aspectRatio: '1', borderRadius: '8px', overflow: 'hidden', cursor: 'pointer', border: isSel ? '2px solid var(--primary)' : '2px solid rgba(255,255,255,0.07)', transition: 'all 0.15s', boxShadow: isSel ? '0 0 0 1px var(--primary), 0 4px 16px rgba(0,0,0,0.5)' : '0 2px 6px rgba(0,0,0,0.3)', transform: isSel ? 'scale(0.97)' : 'scale(1)', background: '#111' }}
+                                            >
+                                                <img
+                                                    src={img.url}
+                                                    alt=""
+                                                    loading="lazy"
+                                                    style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}
+                                                    onLoad={e => { const el = e.target; setScanDims(prev => ({ ...prev, [img.url]: { w: el.naturalWidth, h: el.naturalHeight } })); }}
+                                                    onError={e => { e.target.closest('div[style]').style.display = 'none'; }}
+                                                />
+                                                {/* Selection overlay */}
+                                                <div style={{ position:'absolute', inset:0, background: isSel ? 'rgba(249,157,50,0.15)' : 'transparent', transition:'background 0.15s', pointerEvents:'none' }} />
+                                                {/* Checkbox */}
+                                                <div style={{ position:'absolute', top:'5px', left:'5px', width:'18px', height:'18px', borderRadius:'4px', background: isSel ? 'var(--primary)' : 'rgba(0,0,0,0.6)', border: isSel ? '2px solid var(--primary)' : '2px solid rgba(255,255,255,0.35)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px', fontWeight:'900', color:'#000', pointerEvents:'none' }}>
+                                                    {isSel && '✓'}
+                                                </div>
+                                                {/* Source badge */}
+                                                {img.context === 'og' && <div style={{ position:'absolute', top:'5px', right:'5px', background:'rgba(74,222,128,0.8)', borderRadius:'3px', fontSize:'0.55rem', padding:'1px 3px', color:'#000', fontWeight:'700', pointerEvents:'none' }}>OG</div>}
                                             </div>
-                                            {/* Dimension badge */}
-                                            {dim && <div style={{ position:'absolute', bottom:'3px', left:'3px', right:'3px', display:'flex', justifyContent:'space-between', fontSize:'0.6rem', color:'rgba(255,255,255,0.55)', fontFamily:'monospace', pointerEvents:'none' }}>
-                                                <span>{ext}</span>
+                                            {/* Dimension badge moved below image */}
+                                            {dim && <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.7rem', color:'rgba(255,255,255,0.6)', fontFamily:'monospace', padding: '0 2px' }}>
+                                                <span>{ext.length > 4 ? ext.substring(0,4) : ext}</span>
                                                 <span>{dim.w}×{dim.h}</span>
                                             </div>}
-                                            {/* Source badge */}
-                                            {img.context === 'og' && <div style={{ position:'absolute', top:'5px', right:'5px', background:'rgba(74,222,128,0.8)', borderRadius:'3px', fontSize:'0.55rem', padding:'1px 3px', color:'#000', fontWeight:'700', pointerEvents:'none' }}>OG</div>}
                                         </div>
                                     );
                                 })}
