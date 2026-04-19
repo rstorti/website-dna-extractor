@@ -45,6 +45,7 @@ function App() {
     const [elapsedSeconds, setElapsedSeconds] = useState(0);
     const [stageTimings, setStageTimings] = useState([]);   // per-stage timing from last extraction
     const [totalMs, setTotalMs] = useState(null);           // total extraction ms
+    const [lastExtractionUrls, setLastExtractionUrls] = useState(null); // URLs used in last extraction
     const timerRef = useRef(null);
 
     const showToast = (message, type = 'success', duration = 4000) => {
@@ -316,6 +317,8 @@ function App() {
             // Store timing data for Settings > Logs
             if (data.stageTimings) setStageTimings(data.stageTimings);
             if (data.totalMs) setTotalMs(data.totalMs);
+            // Store the input URLs for the Settings log
+            setLastExtractionUrls({ website: url, youtube: youtubeUrl, profile: profileUrl });
 
             // Warn (non-blocking) if YouTube was skipped
             if (data.youtubeWarning) {
@@ -2145,6 +2148,29 @@ function App() {
                             {/* Extraction Timing Log */}
                             <div className="glass-panel" style={{ gridColumn: '1 / -1' }}>
                                 <h3 style={{ marginBottom: '0.5rem', color: 'var(--primary)' }}>⏱ Last Extraction Timing Report</h3>
+
+                                {/* Input URLs panel */}
+                                {lastExtractionUrls && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '1.2rem', padding: '0.8rem 1rem', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                                        <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.35)', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Extraction Inputs</div>
+                                        {[
+                                            { label: 'Website', url: lastExtractionUrls.website, icon: '🌐' },
+                                            { label: 'YouTube', url: lastExtractionUrls.youtube, icon: '▶️' },
+                                            { label: 'Profile', url: lastExtractionUrls.profile, icon: '👤' },
+                                        ].filter(r => r.url).map(r => (
+                                            <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.82rem' }}>
+                                                <span style={{ width: '20px', textAlign: 'center' }}>{r.icon}</span>
+                                                <span style={{ color: 'rgba(255,255,255,0.4)', minWidth: '55px' }}>{r.label}</span>
+                                                <a href={r.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}
+                                                    onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
+                                                    onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
+                                                >{r.url}</a>
+                                                <button onClick={() => navigator.clipboard.writeText(r.url)} title="Copy URL" style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.25)', cursor: 'pointer', padding: '0 2px', fontSize: '0.75rem' }}>⎘</button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
                                 {stageTimings.length === 0 ? (
                                     <p style={{ color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>No extraction run yet this session. Run an extraction to see stage timings.</p>
                                 ) : (

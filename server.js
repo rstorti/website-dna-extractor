@@ -487,31 +487,56 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
     // 2. YouTube extraction — NON-FATAL: timeouts and errors are caught and
     //    logged but do not abort the overall extraction. YouTubeResult will be
     //    null/partial if scraping fails; the rest of the data still returns.
+    //    Priority: (1) YouTube Data API → (2) oEmbed (no auth) → (3) Puppeteer
     let youtubeWarning = null;
     if (youtubeUrl) {
       setStage('youtube-extraction');
       try {
+        // Tier 1: YouTube Data API (fastest, richest data, but requires quota)
         const { extractYoutubeDetails } = getYoutubeExtractor();
         youtubeResult = await extractYoutubeDetails(youtubeUrl);
         if (youtubeResult?.error) throw new Error(youtubeResult.error);
+        console.log('[EXTRACT] YouTube Data API succeeded');
       } catch (ytErr) {
-        console.warn('[EXTRACT] YouTube API failed, trying Puppeteer fallback:', ytErr.message);
+        console.warn('[EXTRACT] YouTube API failed, trying oEmbed fallback:', ytErr.message);
         try {
-          const { scrapeYoutubeFallback } = getExtractor();
-          // 45s hard timeout on Puppeteer YouTube scrape — YouTube is slow to load
-          youtubeResult = await Promise.race([
-            scrapeYoutubeFallback(youtubeUrl),
-            new Promise((_, rej) => setTimeout(() => rej(new Error('YouTube Puppeteer timeout after 45s')), 45_000))
-          ]);
-          if (youtubeResult?.error) throw new Error(youtubeResult.error);
-        } catch (fallbackErr) {
-          // Non-fatal: record the warning and continue with whatever website data we have
-          youtubeWarning = `YouTube extraction skipped: ${fallbackErr.message}`;
-          console.warn(`[EXTRACT] ⚠️ YouTube fallback also failed (non-fatal): ${fallbackErr.message}`);
-          youtubeResult = null;
+          // Tier 2: oEmbed — zero-auth, no quota, works for any public video/channel URL
+          // Returns: title, channel name (author_name), thumbnail_url, provider_name
+          const oEmbedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(youtubeUrl)}&format=json`;
+          const oEmbedRes = await axios.get(oEmbedUrl, { timeout: 10_000 });
+          if (oEmbedRes.data && oEmbedRes.data.title) {
+            youtubeResult = {
+              title: oEmbedRes.data.title,
+              channel: oEmbedRes.data.author_name,
+              description: `${oEmbedRes.data.author_name} — ${oEmbedRes.data.title}`,
+              thumbnail: oEmbedRes.data.thumbnail_url || null,
+              channelLogo: null,
+            };
+            console.log(`[EXTRACT] oEmbed fallback succeeded: "${youtubeResult.title}" by ${youtubeResult.channel}`);
+          } else {
+            throw new Error('oEmbed returned no data');
+          }
+        } catch (oEmbedErr) {
+          console.warn('[EXTRACT] oEmbed failed, trying Puppeteer fallback:', oEmbedErr.message);
+          try {
+            const { scrapeYoutubeFallback } = getExtractor();
+            // Tier 3: Puppeteer — 30s hard timeout (reduced from 45s)
+            youtubeResult = await Promise.race([
+              scrapeYoutubeFallback(youtubeUrl),
+              new Promise((_, rej) => setTimeout(() => rej(new Error('YouTube Puppeteer timeout after 30s')), 30_000))
+            ]);
+            if (youtubeResult?.error) throw new Error(youtubeResult.error);
+          } catch (fallbackErr) {
+            // Non-fatal: record the warning and continue with whatever website data we have
+            youtubeWarning = `YouTube extraction skipped: ${fallbackErr.message}`;
+            console.warn(`[EXTRACT] ⚠️ All YouTube methods failed (non-fatal): ${fallbackErr.message}`);
+            youtubeResult = null;
+          }
         }
       }
       console.log(`[EXTRACT] YouTube stage complete (${((Date.now() - startTime) / 1000).toFixed(1)}s) — ${youtubeWarning ? 'SKIPPED' : 'OK'}`);
+    }
+
     }
 
     // 3. Profile extraction — try lightweight HTTP scraper first to avoid
