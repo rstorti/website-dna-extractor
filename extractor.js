@@ -640,8 +640,9 @@ async function extractDNA(url, progressCb = null) {
       const addImage = (src, area) => {
         const url = resolveUrl(src);
         if (!url || seenUrls.has(url)) return;
-        // Reject obvious non-content images (Item 12)
-        const bad = ['onetrust','pixel','tracking','analytics','cookie','favicon','1x1','blank','placeholder','avatar','icon','logo','sprite','spacer','badge'];
+        // Reject obvious non-content utility images only — do NOT reject 'logo' since many
+        // sites use logo in content image paths; brightness filter will handle dark images
+        const bad = ['onetrust','pixel','tracking','analytics','cookie','favicon','1x1','blank','placeholder','sprite','spacer','badge'];
         if (bad.some(p => url.toLowerCase().includes(p))) return;
         
         seenUrls.add(url);
@@ -1490,33 +1491,33 @@ async function extractDNA(url, progressCb = null) {
 
     if (availableImages.length > 0) {
       console.log(`🖼️ Building featured images from scraped website images (${availableImages.length} candidates)...`);
-      
-      // Try up to 5 candidates to find 2 bright, usable images
-      // (first 2 are often dark hero banners on modern sites)
-      const candidatePool = availableImages.slice(0, 5);
-      const brightImages = [];
-      for (const src of candidatePool) {
-        if (brightImages.length >= 2) break;
-        try {
+
+      // Probe ALL available candidates IN PARALLEL — much faster than sequential
+      // (previously 5 sequential 8s-timeout probes = up to 40s; now all run simultaneously)
+      const candidatePool = availableImages.slice(0, 20); // try up to 20 candidates
+      console.log(`🔍 Running parallel brightness pre-screen on ${candidatePool.length} candidates...`);
+
+      const probeResults = await Promise.allSettled(
+        candidatePool.map(async (src) => {
           const probe = await axios.get(src, { responseType: 'arraybuffer', timeout: 8000, maxContentLength: 5 * 1024 * 1024, headers: { 'User-Agent': 'Mozilla/5.0' } });
           const probeBuf = Buffer.from(probe.data);
           const stats = await sharp(probeBuf).resize(32, 32).raw().toBuffer({ resolveWithObject: true });
           const avg = stats.data.reduce((s, v) => s + v, 0) / (stats.info.width * stats.info.height * stats.info.channels);
-          if (avg >= 40) {
-            console.log(`✅ Pre-screen passed (brightness=${avg.toFixed(0)}): ${src.split('/').pop()}`);
-            brightImages.push(src);
-          } else {
-            console.warn(`⚠️ Pre-screen rejected dark image (brightness=${avg.toFixed(0)}): ${src.split('/').pop()}`);
-          }
-        } catch (e) {
-          console.warn(`⚠️ Pre-screen fetch failed for candidate, skipping: ${e.message}`);
-        }
-      }
-      // If all candidates were too dark, fall through to gradient placeholder
-      if (brightImages.length === 0) {
-        console.log('⚠️ No bright scraped images found — falling back to gradient placeholder.');
-      }
+          return { src, avg };
+        })
+      );
 
+      // Collect all passing results, sorted by brightness (brightest first)
+      const brightImages = probeResults
+        .filter(r => r.status === 'fulfilled' && r.value.avg >= 40)
+        .map(r => { console.log(`✅ Pre-screen passed (brightness=${r.value.avg.toFixed(0)}): ${r.value.src.split('/').pop()}`); return r.value.src; })
+        .slice(0, 4); // keep up to 4 bright images (enough for 2 pairs)
+
+      probeResults.filter(r => r.status === 'rejected').forEach(r => console.warn(`⚠️ Pre-screen fetch failed: ${r.reason?.message}`));
+      probeResults.filter(r => r.status === 'fulfilled' && r.value.avg < 40).forEach(r => console.warn(`⚠️ Pre-screen rejected dark image (brightness=${r.value.avg.toFixed(0)}): ${r.value.src.split('/').pop()}`));
+
+      console.log(`🔍 Pre-screen complete: ${brightImages.length} bright images found from ${candidatePool.length} candidates`);
+      if (brightImages.length === 0) console.log('⚠️ No bright scraped images found — falling back to gradient placeholder.');
 
       const imgA = brightImages[0];
       const imgB = brightImages.length > 1 ? brightImages[1] : null;

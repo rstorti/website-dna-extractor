@@ -1169,6 +1169,22 @@ function App() {
                         {result && (
                             <div className="dashboard-grid" style={{ '--active-select': showJsonPreview ? '#4caf50' : 'var(--primary)' }}>
 
+                                {/* Total extraction time badge */}
+                                {totalMs && (
+                                    <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: '1.5rem', padding: '0.6rem 1.2rem', background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.25)', borderRadius: 'var(--radius-sm)', fontSize: '0.9rem' }}>
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#4ade80', fontWeight: '700', fontFamily: 'monospace', fontSize: '1rem' }}>
+                                            ⏱ {(totalMs / 1000).toFixed(1)}s
+                                        </span>
+                                        <span style={{ color: 'rgba(255,255,255,0.5)' }}>Total extraction time</span>
+                                        {result.youtubeWarning && (
+                                            <span style={{ marginLeft: 'auto', color: '#fbbf24', fontSize: '0.8rem' }}>⚠️ YouTube skipped</span>
+                                        )}
+                                        <button onClick={() => setActiveTab('Settings')} style={{ marginLeft: result.youtubeWarning ? '0.5rem' : 'auto', background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.5)', padding: '0.2rem 0.6rem', borderRadius: '20px', cursor: 'pointer', fontSize: '0.75rem' }}>
+                                            View stage breakdown →
+                                        </button>
+                                    </div>
+                                )}
+
                                 {result.data?.isWaybackFallback && (
                                     <div style={{ gridColumn: '1 / -1', background: 'rgba(255, 165, 0, 0.1)', border: '1px solid orange', color: 'orange', padding: '0.5rem 1rem', borderRadius: 'var(--radius-sm)', textAlign: 'center', fontWeight: '500' }}>
                                         <strong>🏛️ Historical Archive Fallback:</strong> The live site actively blocked our agents, so this visual data and screenshot was safely extracted from the Wayback Machine. Date of capture may vary.
