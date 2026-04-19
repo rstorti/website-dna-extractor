@@ -445,12 +445,24 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
     const targetLabel = url || profileUrl || youtubeUrl;
     extractionStatus.set(targetLabel, { stage: 'init', startTime, steps: [] });
 
+    // stageTimings: [{stage, elapsedMs}] — recorded every time a new stage begins.
+    // This powers the admin timing report in Settings > Logs.
+    const stageTimings = [];
+    let lastStageTime = startTime;
+
     const setStage = (s, isInternal = false, prefix = '') => {
       // If internal, string together the prefix e.g., 'Profile -> Booting Browser'
       const displayString = prefix ? `${prefix}: ${s}` : s;
-      
+      const now = Date.now();
+      const durationMs = now - lastStageTime;
+      lastStageTime = now;
+
       if (!isInternal) stage = displayString;
-      console.log(`[EXTRACT] Stage: ${displayString}`);
+      console.log(`[EXTRACT] Stage: ${displayString} (+${durationMs}ms)`);
+
+      // Record timing for every stage (including internal sub-stages)
+      stageTimings.push({ stage: displayString, elapsedMs: now - startTime, durationMs });
+
       const stat = extractionStatus.get(targetLabel);
       if (stat) {
         if (!stat.steps.includes(displayString)) stat.steps.push(displayString);
@@ -472,25 +484,34 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
       console.log(`[EXTRACT] Website extraction complete (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
     }
 
-    // 2. YouTube extraction
+    // 2. YouTube extraction — NON-FATAL: timeouts and errors are caught and
+    //    logged but do not abort the overall extraction. YouTubeResult will be
+    //    null/partial if scraping fails; the rest of the data still returns.
+    let youtubeWarning = null;
     if (youtubeUrl) {
       setStage('youtube-extraction');
       try {
         const { extractYoutubeDetails } = getYoutubeExtractor();
         youtubeResult = await extractYoutubeDetails(youtubeUrl);
+        if (youtubeResult?.error) throw new Error(youtubeResult.error);
       } catch (ytErr) {
-        console.warn('[EXTRACT] YouTube extraction failed, trying fallback:', ytErr.message);
-        const { scrapeYoutubeFallback } = getExtractor();
-        youtubeResult = await scrapeYoutubeFallback(youtubeUrl);
+        console.warn('[EXTRACT] YouTube API failed, trying Puppeteer fallback:', ytErr.message);
+        try {
+          const { scrapeYoutubeFallback } = getExtractor();
+          // 45s hard timeout on Puppeteer YouTube scrape — YouTube is slow to load
+          youtubeResult = await Promise.race([
+            scrapeYoutubeFallback(youtubeUrl),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('YouTube Puppeteer timeout after 45s')), 45_000))
+          ]);
+          if (youtubeResult?.error) throw new Error(youtubeResult.error);
+        } catch (fallbackErr) {
+          // Non-fatal: record the warning and continue with whatever website data we have
+          youtubeWarning = `YouTube extraction skipped: ${fallbackErr.message}`;
+          console.warn(`[EXTRACT] ⚠️ YouTube fallback also failed (non-fatal): ${fallbackErr.message}`);
+          youtubeResult = null;
+        }
       }
-      
-      if (youtubeResult?.error) {
-        return res.status(422).json({
-           error: youtubeResult.error, stage: 'youtube-extraction',
-           hint: 'Could not fetch YouTube data. The URL may be invalid or the channel private.'
-        });
-      }
-      console.log(`[EXTRACT] YouTube extraction complete (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
+      console.log(`[EXTRACT] YouTube stage complete (${((Date.now() - startTime) / 1000).toFixed(1)}s) — ${youtubeWarning ? 'SKIPPED' : 'OK'}`);
     }
 
     // 3. Profile extraction — try lightweight HTTP scraper first to avoid
@@ -572,16 +593,18 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
 
     // 5. Build response
     setStage('building-response');
+    const totalMs = Date.now() - startTime;
     const payload = {
       success: true,
       isVerified: true,
-      // FIX #2: Forward isWaybackFallback so UI can show the archive badge
       isWaybackFallback: dnaResult?.isWaybackFallback || false,
+      youtubeWarning: youtubeWarning || null,   // non-null if YouTube was skipped
+      totalMs,                                   // total extraction time in ms
+      stageTimings,                              // [{stage, elapsedMs, durationMs}]
       data: {
         ...verifiedData,
         buttonStyles: dnaResult?.buttonStyles || [],
         featuredImages: dnaResult?.featuredImages || [],
-        // FIX #2: Also embed in data for App.jsx to pick up via result.data.isWaybackFallback
         isWaybackFallback: dnaResult?.isWaybackFallback || false,
       },
       mappedData: dnaResult?.mappedData,
