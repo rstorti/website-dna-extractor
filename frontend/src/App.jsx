@@ -1264,8 +1264,6 @@ function App() {
                                     </div>
                                 </div>
                             )}
-                        </div>
-
                         {result && (
                             <div className="dashboard-grid" style={{ '--active-select': showJsonPreview ? '#4caf50' : 'var(--primary)' }}>
 
