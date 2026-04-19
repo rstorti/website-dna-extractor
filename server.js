@@ -388,6 +388,90 @@ app.get('/api/status', (req, res) => {
   });
 });
 
+// ── /api/scan-images ─────────────────────────────────────────────────────────
+// Lightweight Imageye-style image scanner. Given any URL, fetches the HTML and
+// extracts every image reference it can find — img src, srcset, picture source,
+// OG/Twitter meta, inline background-image, lazy-load data-src, link[rel=icon].
+// No Puppeteer → typical response time 1-3 seconds.
+// ─────────────────────────────────────────────────────────────────────────────
+app.post('/api/scan-images', async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'url is required' });
+
+  let targetUrl;
+  try {
+    targetUrl = new URL(url.startsWith('http') ? url : `https://${url}`);
+  } catch {
+    return res.status(400).json({ error: 'Invalid URL' });
+  }
+
+  try {
+    const axios = require('axios');
+    const html = await (async () => {
+      // Try with a realistic browser UA — many sites reject bot UAs
+      const r = await axios.get(targetUrl.href, {
+        timeout: 15_000,
+        maxContentLength: 5 * 1024 * 1024, // 5 MB cap
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+      });
+      return typeof r.data === 'string' ? r.data : JSON.stringify(r.data);
+    })();
+
+    const base = targetUrl.origin;
+    const seen = new Set();
+    const images = [];
+
+    // Resolve a possibly-relative URL against the page base
+    const resolve = (src) => {
+      if (!src || src.startsWith('data:')) return null;
+      try {
+        return new URL(src, base).href;
+      } catch { return null; }
+    };
+
+    const add = (src, context) => {
+      const u = resolve(src);
+      if (!u || seen.has(u)) return;
+      seen.add(u);
+      images.push({ url: u, context });
+    };
+
+    // 1. <img src> and data-src (lazy-load)
+    for (const m of html.matchAll(/\bdata-src\s*=\s*["']([^"']+)["']/gi))  add(m[1], 'img-lazy');
+    for (const m of html.matchAll(/<img[^>]+\bsrc\s*=\s*["']([^"']+)["']/gi)) add(m[1], 'img');
+    // 2. srcset — multiple sizes, take the last (highest res)
+    for (const m of html.matchAll(/\bsrcset\s*=\s*["']([^"']+)["']/gi)) {
+      const last = m[1].trim().split(',').map(s => s.trim().split(/\s+/)[0]).filter(Boolean).slice(-1)[0];
+      if (last) add(last, 'srcset');
+    }
+    // 3. <source src> (picture/video)
+    for (const m of html.matchAll(/<source[^>]+\bsrc(?:set)?\s*=\s*["']([^"']+)["']/gi)) add(m[1], 'source');
+    // 4. OG / Twitter meta
+    for (const m of html.matchAll(/<meta[^>]+property\s*=\s*["']og:image["'][^>]+content\s*=\s*["']([^"']+)["']/gi)) add(m[1], 'og');
+    for (const m of html.matchAll(/<meta[^>]+content\s*=\s*["']([^"']+)["'][^>]+property\s*=\s*["']og:image["']/gi)) add(m[1], 'og');
+    for (const m of html.matchAll(/<meta[^>]+name\s*=\s*["']twitter:image["'][^>]+content\s*=\s*["']([^"']+)["']/gi)) add(m[1], 'twitter');
+    for (const m of html.matchAll(/<meta[^>]+content\s*=\s*["']([^"']+)["'][^>]+name\s*=\s*["']twitter:image["']/gi)) add(m[1], 'twitter');
+    // 5. Inline background-image: url(...)
+    for (const m of html.matchAll(/background(?:-image)?\s*:\s*url\(['"]?([^'")\s]+)['"]?\)/gi)) add(m[1], 'css-bg');
+    // 6. <link rel="icon|apple-touch-icon">
+    for (const m of html.matchAll(/<link[^>]+rel\s*=\s*["'][^"']*(icon|apple-touch)[^"']*["'][^>]+href\s*=\s*["']([^"']+)["']/gi)) add(m[2], 'icon');
+    // 7. JSON-LD / Next.js __NEXT_DATA__ image URLs
+    for (const m of html.matchAll(/"(?:image|src|url|thumbnail|photo|cover|hero|banner)"\s*:\s*"(https?:\/\/[^"]+\.(jpe?g|png|webp|gif|svg|avif)[^"]*)"/gi)) add(m[1], 'json');
+
+    // Dedupe, cap at 200
+    const result = images.slice(0, 200);
+    console.log(`[SCAN] ${targetUrl.host} → ${result.length} images found`);
+    res.json({ success: true, images: result, total: result.length, host: targetUrl.host });
+  } catch (err) {
+    console.error('[SCAN] Error:', err.message);
+    res.status(500).json({ error: `Scan failed: ${err.message}` });
+  }
+});
+
 app.post('/api/extract', extractRateLimit, async (req, res) => {
   if (activeExtractions >= MAX_CONCURRENCY) {
     return res.status(429).json({ error: 'Server is at maximum capacity processing other extractions. Please try again in 1 minute.', stage: 'init' });
