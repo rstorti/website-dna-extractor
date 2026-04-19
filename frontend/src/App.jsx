@@ -300,7 +300,20 @@ function App() {
                 ...(data.ctas || [])
             ]);
             setCtaEdits({}); // Reset CTA edits on new extraction
-            setSelectedImages(data.data?.image ? [data.data.image] : []);
+
+            // Auto-select 2–4 product images: logo + up to 3 clean featured images.
+            // featuredImages array ordering: [cleanA, taggedA, cleanB, taggedB, ...]
+            // Even indices (0,2,4...) = clean versions. We take clean ones to avoid
+            // pre-selecting text-overlaid images, leaving the user in control of tagged picks.
+            const logoImg = data.data?.image || '';
+            const featured = data.featuredImages || [];
+            const cleanFeatured = featured.filter((_, i) => i % 2 === 0); // even = clean
+            const autoImages = [
+                logoImg,
+                ...cleanFeatured.slice(0, 3)   // up to 3 more = max 4 total
+            ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i); // dedupe
+            setSelectedImages(autoImages.slice(0, 4));  // hard cap at 4
+
 
             const btnStyles = data.data?.buttonStyles || data.buttonStyles || [];
             setSelectedButtonStyle(btnStyles.length > 0 ? btnStyles[0] : null);
