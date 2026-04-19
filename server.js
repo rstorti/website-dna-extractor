@@ -20,6 +20,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs/promises');
 const dns = require('dns');
+const axios = require('axios');
 
 // Force IPv4 resolution to prevent Supabase connection timeouts on systems with broken IPv6
 dns.setDefaultResultOrder('ipv4first');
@@ -406,7 +407,6 @@ app.post('/api/scan-images', async (req, res) => {
   }
 
   try {
-    const axios = require('axios');
     const html = await (async () => {
       // Try with a realistic browser UA — many sites reject bot UAs
       const r = await axios.get(targetUrl.href, {
