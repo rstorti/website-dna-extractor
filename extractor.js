@@ -1064,6 +1064,12 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
     const screenshotPath = path.join(outputDir, screenshotFilename);
  
     // Calculate the absolute deepest scrolling content on the page (bypassing 100vh limits)
+    // ⚠️ OOM GUARD: Render free tier has only 512MB RAM. fullPage screenshots of tall pages
+    // (>1600px) render the entire page into a single in-memory buffer and will SIGKILL the process.
+    // On production we cap height at 1600px and use a fixed-viewport screenshot (no fullPage:true).
+    const IS_PRODUCTION = env.NODE_ENV === 'production' || !!env.RENDER_EXTERNAL_URL;
+    const MAX_SCREENSHOT_HEIGHT = IS_PRODUCTION ? 1600 : 3000;
+
     const contentHeight = await page.evaluate(() => {
         let maxBottom = document.body.scrollHeight || 0;
         const elements = document.querySelectorAll('*');
@@ -1075,22 +1081,33 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
                 if (totalH > maxBottom) maxBottom = totalH;
             }
         }
-        // Force minimum 800, max 4000 so we don't crash Puppeteer memory on Render Free Tier
-        return Math.min(Math.max(maxBottom, 800), 4000);
+        return Math.min(Math.max(maxBottom, 800), 99999); // raw value, capped server-side below
     }).catch(() => 1080); // Fallback to 1080 if evaluate fails
+
+    const cappedHeight = Math.min(contentHeight, MAX_SCREENSHOT_HEIGHT);
+    console.log(`📐 Content height: ${Math.ceil(contentHeight)}px → capped to ${cappedHeight}px (production: ${IS_PRODUCTION})`);
+
  
-    console.log(`📐 Resizing viewport physically to ${Math.ceil(contentHeight)}px to un-truncate SPAs...`);
-    
     let screenshotSuccess = false;
     for (let attempts = 0; attempts < 3; attempts++) {
         try {
             // Scroll back to TOP so the header/logo is captured in the screenshot
             await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
             await new Promise(r => setTimeout(r, 600));
-            // Use a standard viewport height; fullPage:true captures everything top-to-bottom
-            await page.setViewport({ width: 1280, height: 900 });
-            await new Promise(r => setTimeout(r, 800));
-            await page.screenshot({ path: screenshotPath, fullPage: true, type: 'jpeg', quality: 70 });
+            // ⚠️ OOM GUARD: On production (512MB RAM), use a fixed viewport instead of fullPage:true.
+            // fullPage:true forces Chrome to allocate memory for the ENTIRE page height at once,
+            // which SIGKILL-crashes the server when pages are tall (>1600px).
+            // On dev we still use fullPage:true for better quality screenshots.
+            if (IS_PRODUCTION) {
+                // Fixed-viewport screenshot: resize to capped height, scroll to top, capture visible area only
+                await page.setViewport({ width: 1280, height: Math.ceil(cappedHeight) });
+                await new Promise(r => setTimeout(r, 800));
+                await page.screenshot({ path: screenshotPath, fullPage: false, type: 'jpeg', quality: 75 });
+            } else {
+                await page.setViewport({ width: 1280, height: 900 });
+                await new Promise(r => setTimeout(r, 800));
+                await page.screenshot({ path: screenshotPath, fullPage: true, type: 'jpeg', quality: 70 });
+            }
             console.log(`🖼️ Screenshot saved locally to: ${screenshotPath}`);
             screenshotSuccess = true;
             break;
