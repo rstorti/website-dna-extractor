@@ -537,8 +537,6 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
       console.log(`[EXTRACT] YouTube stage complete (${((Date.now() - startTime) / 1000).toFixed(1)}s) — ${youtubeWarning ? 'SKIPPED' : 'OK'}`);
     }
 
-    }
-
     // 3. Profile extraction — try lightweight HTTP scraper first to avoid
     //    launching a second Puppeteer browser on a memory-constrained Render instance.
     if (profileUrl) {
