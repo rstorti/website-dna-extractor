@@ -303,18 +303,15 @@ function App() {
             ]);
             setCtaEdits({}); // Reset CTA edits on new extraction
 
-            // Auto-select 2–4 product images: logo + up to 3 clean featured images.
-            // featuredImages array ordering: [cleanA, taggedA, cleanB, taggedB, ...]
-            // Even indices (0,2,4...) = clean versions. We take clean ones to avoid
-            // pre-selecting text-overlaid images, leaving the user in control of tagged picks.
-            const logoImg = data.data?.image || '';
+            // Auto-select featured 640×640 images only (min 2 pairs = 4 images: cleanA, taggedA, cleanB, taggedB).
+            // Logo is NOT included here — it lives in campaign.image / brand.logo fields separately.
+            // featuredImages ordering: [cleanA, taggedA, cleanB, taggedB, ...]
             const featured = data.featuredImages || [];
-            const cleanFeatured = featured.filter((_, i) => i % 2 === 0); // even = clean
-            const autoImages = [
-                logoImg,
-                ...cleanFeatured.slice(0, 3)   // up to 3 more = max 4 total
-            ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i); // dedupe
-            setSelectedImages(autoImages.slice(0, 4));  // hard cap at 4
+            const autoImages = featured
+                .filter(Boolean)
+                .filter((v, i, a) => a.indexOf(v) === i) // dedupe
+                .slice(0, 4); // hard cap at 4 (2 pairs)
+            setSelectedImages(autoImages);
 
             // Store timing data for Settings > Logs
             if (data.stageTimings) setStageTimings(data.stageTimings);

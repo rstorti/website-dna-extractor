@@ -1541,7 +1541,39 @@ async function extractDNA(url, progressCb = null) {
       if (!scrapedSuccessA) genTasks.push(generateVariantPair(finalPrompts.cleanPromptA, finalPrompts.taglineA, 'A'));
       if (!scrapedSuccessB) genTasks.push(generateVariantPair(finalPrompts.cleanPromptB, finalPrompts.taglineB, 'B'));
       
-      await Promise.allSettled(genTasks);
+      const vertexResults = await Promise.allSettled(genTasks);
+
+      // Per-slot gradient placeholder: if Vertex AI also failed for a slot,
+      // generate a branded gradient so we always have a minimum of 2 image pairs.
+      const vertexAFailed = !scrapedSuccessA && (vertexResults[0]?.status !== 'fulfilled' || !vertexResults[0]?.value);
+      const vertexBFailed = !scrapedSuccessB && (!genTasks[!scrapedSuccessA ? 1 : 0] || vertexResults[!scrapedSuccessA && !scrapedSuccessB ? 1 : 0]?.status !== 'fulfilled');
+
+      const hexToRgb = (hex) => {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : { r: 249, g: 157, b: 50 };
+      };
+      const rawBrandRgb = hexToRgb(primaryColor);
+      const brandRgb = (rawBrandRgb.r + rawBrandRgb.g + rawBrandRgb.b < 60) ? { r: 30, g: 30, b: 60 } : rawBrandRgb;
+      const darkerR = Math.max(0, brandRgb.r - 60);
+      const darkerG = Math.max(0, brandRgb.g - 60);
+      const darkerB = Math.max(0, brandRgb.b - 60);
+      const gradientSvg = `<svg width="640" height="640" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="rgb(${brandRgb.r},${brandRgb.g},${brandRgb.b})"/><stop offset="100%" stop-color="rgb(${darkerR},${darkerG},${darkerB})"/></linearGradient></defs><rect width="640" height="640" fill="url(#bg)"/><rect width="640" height="640" fill="rgba(0,0,0,0.15)"/></svg>`;
+
+      for (const [prefix, tagline, shouldGen] of [['A', finalPrompts.taglineA, vertexAFailed], ['B', finalPrompts.taglineB, vertexBFailed]]) {
+        if (!shouldGen) continue;
+        try {
+          console.log(`⚠️ Vertex AI failed for ${prefix} — generating gradient placeholder...`);
+          const cleanBuffer = await sharp(Buffer.from(gradientSvg)).resize(640, 640).jpeg({ quality: 85 }).toBuffer();
+          const cleanFilename = `img_640_clean_${prefix}_${timestamp}.jpg`;
+          await fs.writeFile(path.join(outputDir, cleanFilename), cleanBuffer);
+          downloadedImages.push(await uploadToSupabase(cleanFilename, cleanBuffer, 'image/jpeg'));
+          const textBuffer = await overlayTextOnBuffer(cleanBuffer, tagline, 'MIDDLE');
+          const textFilename = `img_640_text_${prefix}_${timestamp}.jpg`;
+          await fs.writeFile(path.join(outputDir, textFilename), textBuffer);
+          downloadedImages.push(await uploadToSupabase(textFilename, textBuffer, 'image/jpeg'));
+          console.log(`✅ Gradient placeholder generated for slot ${prefix}`);
+        } catch(e) { console.error(`Gradient placeholder failed for ${prefix}:`, e.message); }
+      }
     }
 
     // --- FINAL SAFETY NET: If we still have 0 images, generate branded gradient placeholders ---
