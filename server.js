@@ -582,29 +582,112 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
         if (youtubeResult?.error) throw new Error(youtubeResult.error);
         console.log('[EXTRACT] YouTube Data API succeeded');
       } catch (ytErr) {
-        console.warn('[EXTRACT] YouTube API failed, trying oEmbed fallback:', ytErr.message);
+        console.warn('[EXTRACT] YouTube API failed, trying oEmbed + HTML scrape fallback:', ytErr.message);
         try {
           // Tier 2: oEmbed — zero-auth, no quota, works for any public video/channel URL
-          // Returns: title, channel name (author_name), thumbnail_url, provider_name
+          // Returns: title, channel name (author_name), thumbnail_url
+          // NOTE: oEmbed does NOT return description. We supplement with a fast HTML scrape below.
           const oEmbedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(youtubeUrl)}&format=json`;
           const oEmbedRes = await axios.get(oEmbedUrl, { timeout: 10_000 });
           if (oEmbedRes.data && oEmbedRes.data.title) {
             youtubeResult = {
               title: oEmbedRes.data.title,
               channel: oEmbedRes.data.author_name,
-              description: `${oEmbedRes.data.author_name} — ${oEmbedRes.data.title}`,
+              description: '', // Will be filled by Tier 2.5 below
               thumbnail: oEmbedRes.data.thumbnail_url || null,
               channelLogo: null,
             };
-            console.log(`[EXTRACT] oEmbed fallback succeeded: "${youtubeResult.title}" by ${youtubeResult.channel}`);
+            console.log(`[EXTRACT] oEmbed succeeded: "${youtubeResult.title}" by ${youtubeResult.channel}`);
+
+            // Tier 2.5: Fast HTML scrape for real description from ytInitialData or ytInitialPlayerResponse
+            // This avoids launching Puppeteer just to get the description text + links.
+            try {
+              console.log('[EXTRACT] Tier 2.5: Scraping ytInitialData for real description...');
+              const pageRes = await axios.get(youtubeUrl, {
+                timeout: 12_000,
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                  'Accept-Language': 'en-US,en;q=0.9',
+                  'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
+                }
+              });
+              const html = pageRes.data || '';
+
+              // Strategy 1: Extract from ytInitialPlayerResponse.videoDetails.shortDescription
+              const playerMatch = html.match(/ytInitialPlayerResponse\s*=\s*(\{.{0,5000}?\});/s);
+              if (playerMatch) {
+                try {
+                  const playerData = JSON.parse(playerMatch[1]);
+                  const desc = playerData?.videoDetails?.shortDescription;
+                  if (desc && desc.length > 20) {
+                    youtubeResult.description = desc;
+                    console.log(`[EXTRACT] Tier 2.5: Got description from ytInitialPlayerResponse (${desc.length} chars)`);
+                  }
+                } catch(e) { /* partial JSON, skip */ }
+              }
+
+              // Strategy 2: Extract from ytInitialData snippet.description.runs
+              if (!youtubeResult.description) {
+                const dataMatch = html.match(/"shortDescription"\s*:\s*\{"runs"\s*:\s*(\[.*?\])\s*\}/s);
+                if (dataMatch) {
+                  try {
+                    const runs = JSON.parse(dataMatch[1]);
+                    const desc = runs.map(r => r.text || '').join('');
+                    if (desc && desc.length > 20) {
+                      youtubeResult.description = desc;
+                      console.log(`[EXTRACT] Tier 2.5: Got description from runs (${desc.length} chars)`);
+                    }
+                  } catch(e) { /* skip */ }
+                }
+              }
+
+              // Strategy 3: Simple regex for shortDescription string value
+              if (!youtubeResult.description) {
+                const sdMatch = html.match(/"shortDescription"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+                if (sdMatch) {
+                  const desc = sdMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+                  if (desc && desc.length > 20) {
+                    youtubeResult.description = desc;
+                    console.log(`[EXTRACT] Tier 2.5: Got description via regex (${desc.length} chars)`);
+                  }
+                }
+              }
+
+              if (!youtubeResult.description) {
+                console.warn('[EXTRACT] Tier 2.5: Could not extract description from HTML — falling back to Puppeteer');
+                throw new Error('No description found in HTML');
+              }
+            } catch(htmlScrapeErr) {
+              console.warn(`[EXTRACT] Tier 2.5 HTML scrape failed (${htmlScrapeErr.message}), trying Puppeteer for description...`);
+              // Tier 3: Puppeteer — only for description, we already have title/channel from oEmbed
+              try {
+                const { scrapeYoutubeFallback } = getExtractor();
+                const puppeteerResult = await Promise.race([
+                  scrapeYoutubeFallback(youtubeUrl),
+                  new Promise((_, rej) => setTimeout(() => rej(new Error('YouTube Puppeteer timeout after 30s')), 30_000))
+                ]);
+                if (puppeteerResult?.description && puppeteerResult.description.length > 20) {
+                  youtubeResult.description = puppeteerResult.description;
+                  console.log(`[EXTRACT] Tier 3 (Puppeteer) got description (${puppeteerResult.description.length} chars)`);
+                } else {
+                  // Last resort: use synthetic description so Gemini at least has title/channel context
+                  youtubeResult.description = `${youtubeResult.channel} — ${youtubeResult.title}`;
+                  console.warn('[EXTRACT] All description methods failed, using synthetic fallback');
+                }
+              } catch(puppErr) {
+                youtubeResult.description = `${youtubeResult.channel} — ${youtubeResult.title}`;
+                console.warn(`[EXTRACT] Puppeteer description fallback also failed: ${puppErr.message}`);
+              }
+            }
           } else {
             throw new Error('oEmbed returned no data');
           }
         } catch (oEmbedErr) {
+          if (oEmbedErr.message !== 'oEmbed returned no data') throw oEmbedErr; // already handled above
           console.warn('[EXTRACT] oEmbed failed, trying Puppeteer fallback:', oEmbedErr.message);
           try {
             const { scrapeYoutubeFallback } = getExtractor();
-            // Tier 3: Puppeteer — 30s hard timeout (reduced from 45s)
+            // Tier 3: Puppeteer — 30s hard timeout
             youtubeResult = await Promise.race([
               scrapeYoutubeFallback(youtubeUrl),
               new Promise((_, rej) => setTimeout(() => rej(new Error('YouTube Puppeteer timeout after 30s')), 30_000))
@@ -620,6 +703,7 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
       }
       console.log(`[EXTRACT] YouTube stage complete (${((Date.now() - startTime) / 1000).toFixed(1)}s) — ${youtubeWarning ? 'SKIPPED' : 'OK'}`);
     }
+
 
     // 3. Profile extraction — try lightweight HTTP scraper first to avoid
     //    launching a second Puppeteer browser on a memory-constrained Render instance.
