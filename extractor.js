@@ -1157,9 +1157,11 @@ async function extractDNA(url, progressCb = null) {
         const logoFilename = `logo_256_${timestamp}.png`;
         logoLocalPath = path.join(outputDir, logoFilename);
         
-        // 1. Initial Resize with transparency intact
+        // 1. Initial Resize with transparency intact — resize to 232×232 to leave
+        //    12px padding on each side, keeping the final output at 256×256
         let logoBuffer = await sharp(response.data)
-          .resize(256, 256, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 0 } })
+          .resize(232, 232, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 0 } })
+          .extend({ top: 12, bottom: 12, left: 12, right: 12, background: { r: 255, g: 255, b: 255, alpha: 0 } })
           .png()
           .toBuffer();
  
