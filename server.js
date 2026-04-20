@@ -145,12 +145,12 @@ const HISTORY_FILE = path.join(__dirname, '.data', 'history.json');
 let localHistoryMutex = Promise.resolve();
 
 app.use(cors({
-// ... (lines omitted will be fixed by just updating the app.use line instead below)
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
     if (
       origin.startsWith('http://localhost') ||
       origin.includes('onrender.com') ||
+      origin.includes('railway.app') ||
       origin.includes('netlify.app') ||
       origin.includes('minfo.com') ||
       origin.includes('lovable.app') ||
@@ -173,12 +173,16 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({
     status: 'ok',
     uptime: process.uptime(),
+    platform: process.env.RAILWAY_PUBLIC_DOMAIN ? 'railway' : (env.RENDER_EXTERNAL_URL ? 'render' : 'local'),
     env: {
       GEMINI_API_KEY: env.GEMINI_API_KEY ? 'SET' : '❌ MISSING',
       YOUTUBE_API_KEY: env.YOUTUBE_API_KEY ? 'SET' : 'not set (optional)',
       SUPABASE_URL: env.SUPABASE_URL ? 'SET' : '⚠️ not set — images will use localhost fallback',
       SUPABASE_ANON_KEY: env.SUPABASE_ANON_KEY ? 'SET' : '⚠️ not set',
-      RENDER_EXTERNAL_URL: env.RENDER_EXTERNAL_URL || '⚠️ not set — localhost fallback URLs will be used',
+      GCP_CREDENTIALS: process.env.GCP_CREDENTIALS_JSON ? 'SET' : '⚠️ not set — Vertex AI image gen disabled',
+      SERVER_URL: process.env.RAILWAY_PUBLIC_DOMAIN
+        ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+        : (env.RENDER_EXTERNAL_URL || '⚠️ localhost fallback'),
     }
   });
 });
