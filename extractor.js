@@ -12,9 +12,10 @@ const env = require('./config/env');
  
 // FIX #3: Screenshots can be 5-8MB as base64 strings which crashes Render's 512MB RAM.
 // Derive the server's public base URL for local /outputs/ file links
-// On Render this is the external URL; locally it's http://localhost:PORT
+// On Render this is the external URL; on Railway it's RAILWAY_PUBLIC_DOMAIN; locally it's localhost
 const getServerBaseUrl = () => {
   if (env.RENDER_EXTERNAL_URL) return env.RENDER_EXTERNAL_URL.replace(/\/$/, '');
+  if (process.env.RAILWAY_PUBLIC_DOMAIN) return `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
   return `http://localhost:${env.PORT || 3001}`;
 };
 
@@ -1067,7 +1068,7 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
     // ⚠️ OOM GUARD: Render free tier has only 512MB RAM. fullPage screenshots of tall pages
     // (>1600px) render the entire page into a single in-memory buffer and will SIGKILL the process.
     // On production we cap height at 1600px and use a fixed-viewport screenshot (no fullPage:true).
-    const IS_PRODUCTION = env.NODE_ENV === 'production' || !!env.RENDER_EXTERNAL_URL;
+    const IS_PRODUCTION = env.NODE_ENV === 'production' || !!env.RENDER_EXTERNAL_URL || !!process.env.RAILWAY_PUBLIC_DOMAIN;
     const MAX_SCREENSHOT_HEIGHT = IS_PRODUCTION ? 1600 : 3000;
 
     const contentHeight = await page.evaluate(() => {
