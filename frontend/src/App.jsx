@@ -3,10 +3,13 @@ import * as XLSX from 'xlsx';
 import './index.css';
 import './loading.css';
 
-// API routing: use Netlify proxy in production (routes to Railway via netlify.toml [[redirects]])
-// Empty string means requests go to /api/* which Netlify proxies to the Railway backend.
-// For local dev, this also works fine as Vite serves on the same origin.
-const API_BASE_URL = '';
+// API routing:
+// - LOCAL: empty string → Vite dev server proxies /api/* to localhost:3001
+// - PRODUCTION: call Railway directly — Netlify's [[redirects]] proxy has a ~26s timeout
+//   which kills long-running extractions (60-300s) with HTTP 504. Bypassing it with a
+//   direct Railway URL is safe because Railway already has CORS configured for netlify.app.
+const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const API_BASE_URL = IS_LOCAL ? '' : 'https://website-dna-extractor-production.up.railway.app';
 
 function App() {
     const [url, setUrl] = useState('');
@@ -964,7 +967,7 @@ function App() {
                     <div className={`nav-item ${activeTab === 'Settings' ? 'active' : ''}`} onClick={() => setActiveTab('Settings')}>Settings</div>
                 </nav>
                 <div style={{ marginTop: 'auto', paddingBottom: '1rem', fontSize: '0.8rem', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.5px' }}>
-                    v1.3.6
+                    v1.3.7
                 </div>
             </aside>
 
