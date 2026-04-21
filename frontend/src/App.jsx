@@ -304,7 +304,7 @@ function App() {
                     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
                     const contextMsg = isLocalhost
                         ? `💥 Local backend crashed (HTTP ${response.status}). Check your terminal for the Node.js stack trace.\n\nRaw output: ${rawText.substring(0, 300)}`
-                        : `💥 Server Error (HTTP ${response.status}): The backend may be restarting on Render — wait about 30 seconds and try again.\n\nRaw: ${rawText.substring(0, 80)}`;
+                        : `💥 Server Error (HTTP ${response.status}): The backend crashed mid-request. Railway is restarting it — wait 20 seconds and try again.\n\nRaw: ${rawText.substring(0, 80)}`;
                     throw new Error(contextMsg);
                 }
                 throw new Error(`❌ Invalid response (HTTP ${response.status}): Backend returned non-JSON.\n\n${rawText.substring(0, 150)}`);
@@ -434,12 +434,12 @@ function App() {
                 } else {
                     setError(
                         '🔌 Cannot reach the extraction server\n\n' +
-                        'The backend on Render.com is asleep and needs ~30 seconds to wake up.' +
-                        ' This is normal after periods of inactivity.\n\n' +
+                        'The Railway backend may have crashed or is restarting.' +
+                        ' This can happen after a heavy extraction request.\n\n' +
                         '💡 What to do:\n' +
-                        '  1. Wait 30 seconds, then click Extract Info again\n' +
-                        '  2. If it still fails after 2 minutes, open the health link below to force a wake-up\n' +
-                        '  3. Once the health page loads, come back here and try again'
+                        '  1. Wait 20 seconds, then click Extract Info again\n' +
+                        '  2. If it still fails, click "Check backend health" below\n' +
+                        '  3. Once the health page shows \'ok\', try again'
                     );
                 }
             } else {
@@ -964,7 +964,7 @@ function App() {
                     <div className={`nav-item ${activeTab === 'Settings' ? 'active' : ''}`} onClick={() => setActiveTab('Settings')}>Settings</div>
                 </nav>
                 <div style={{ marginTop: 'auto', paddingBottom: '1rem', fontSize: '0.8rem', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.5px' }}>
-                    v1.3.5
+                    v1.3.6
                 </div>
             </aside>
 

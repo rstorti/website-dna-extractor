@@ -65,11 +65,9 @@ const PUPPETEER_ARGS = [
   '--disable-canvas-aa',
   '--disable-2d-canvas-clip-aa',
   '--disable-gl-drawing-for-tests',
-  '--no-zygote',
-  // NOTE: --single-process removed — it causes page.screenshot() to hang/crash
-  // because Chrome cannot safely snapshot renderer memory in single-process mode.
-  // Use these stable alternatives instead:
-  '--js-flags=--max-old-space-size=256',  // Cap V8 heap at 256MB
+  // NOTE: --single-process removed — causes page.screenshot() to hang in Docker
+  // NOTE: --no-zygote removed — only safe alongside --single-process;
+  //       without it, Chrome segfaults when forking renderer processes in Docker
   '--memory-pressure-off',
   '--window-size=1280,800'
 ];
