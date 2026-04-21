@@ -964,7 +964,7 @@ function App() {
                     <div className={`nav-item ${activeTab === 'Settings' ? 'active' : ''}`} onClick={() => setActiveTab('Settings')}>Settings</div>
                 </nav>
                 <div style={{ marginTop: 'auto', paddingBottom: '1rem', fontSize: '0.8rem', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.5px' }}>
-                    v1.3.4
+                    v1.3.5
                 </div>
             </aside>
 
@@ -1199,7 +1199,7 @@ function App() {
                                 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
                                 const healthUrl = isLocalhost
                                     ? 'http://localhost:3001/api/health'
-                                    : 'https://website-dna-extractor-4.onrender.com/api/health';
+                                    : 'https://website-dna-extractor-production.up.railway.app/api/health';
                                 const isNetworkError = error.includes('Cannot reach') || error.includes('Failed to fetch') || error.includes('NetworkError');
                                 const isTimeout = error.includes('timed out') || error.includes('Timed Out') || error.includes('timed out after') || error.includes('Process timed out');
                                 const errorTitle = isNetworkError ? 'Server Unreachable' : isTimeout ? 'Request Timed Out' : 'Extraction Failed';
