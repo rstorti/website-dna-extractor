@@ -53,7 +53,7 @@ async function uploadToSupabase(filename, buffer, mimeType = 'image/jpeg') {
 const PUPPETEER_ARGS = [
   '--no-sandbox',
   '--disable-setuid-sandbox',
-  '--disable-dev-shm-usage',
+  '--disable-dev-shm-usage',        // Use /tmp instead of /dev/shm (too small in Docker)
   '--disable-gpu',
   '--disable-extensions',
   '--disable-background-networking',
@@ -66,7 +66,10 @@ const PUPPETEER_ARGS = [
   '--disable-2d-canvas-clip-aa',
   '--disable-gl-drawing-for-tests',
   '--no-zygote',
-  '--single-process',            // Saves ~100MB RAM on Render free tier
+  // NOTE: --single-process removed — it causes page.screenshot() to hang/crash
+  // because Chrome cannot safely snapshot renderer memory in single-process mode.
+  // Use these stable alternatives instead:
+  '--js-flags=--max-old-space-size=256',  // Cap V8 heap at 256MB
   '--memory-pressure-off',
   '--window-size=1280,800'
 ];
@@ -145,16 +148,7 @@ async function scrapeYoutubeFallback(url) {
       headless: "new",
       executablePath: env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
       protocolTimeout: 120000,
-      args: [
-        '--no-sandbox', 
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--single-process',
-        '--no-zygote',
-        '--disable-extensions',
-        '--disable-blink-features=AutomationControlled'
-      ]
+      args: PUPPETEER_ARGS
     });
     const page = await browser.newPage();
     // Spoof a real Chrome browser to defeat YouTube bot detection
