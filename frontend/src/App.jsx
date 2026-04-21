@@ -3,9 +3,10 @@ import * as XLSX from 'xlsx';
 import './index.css';
 import './loading.css';
 
-// Dynamic environment fallback for Live deployments
-// Forcing the URL explicitly because old environment variables in Netlify might be pointing to the wrong instance!
-const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? '' : 'https://website-dna-extractor-4.onrender.com';
+// API routing: use Netlify proxy in production (routes to Railway via netlify.toml [[redirects]])
+// Empty string means requests go to /api/* which Netlify proxies to the Railway backend.
+// For local dev, this also works fine as Vite serves on the same origin.
+const API_BASE_URL = '';
 
 function App() {
     const [url, setUrl] = useState('');
