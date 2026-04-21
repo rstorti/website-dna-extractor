@@ -1071,51 +1071,51 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
     const IS_PRODUCTION = env.NODE_ENV === 'production' || !!env.RENDER_EXTERNAL_URL || !!process.env.RAILWAY_PUBLIC_DOMAIN;
     const MAX_SCREENSHOT_HEIGHT = IS_PRODUCTION ? 1600 : 3000;
 
-    const contentHeight = await page.evaluate(() => {
-        let maxBottom = document.body.scrollHeight || 0;
-        const elements = document.querySelectorAll('*');
-        for (const el of elements) {
-            const style = window.getComputedStyle(el);
-            // If the element is technically scrollable or hides overflow, figure out its internal data height
-            if (style.overflowY === 'scroll' || style.overflowY === 'auto' || style.overflow === 'scroll' || style.overflow === 'auto' || style.overflowY === 'hidden' || style.overflow === 'hidden') {
-                const totalH = el.getBoundingClientRect().top + el.scrollHeight;
-                if (totalH > maxBottom) maxBottom = totalH;
-            }
-        }
-        return Math.min(Math.max(maxBottom, 800), 99999); // raw value, capped server-side below
-    }).catch(() => 1080); // Fallback to 1080 if evaluate fails
+    // Use a simple, fast height check — the full *-selector loop was hanging on complex sites
+    const contentHeight = await Promise.race([
+      page.evaluate(() => Math.min(Math.max(document.body.scrollHeight || 0, 800), 99999)),
+      new Promise(resolve => setTimeout(() => resolve(1080), 5000)) // 5s max, fallback to 1080
+    ]).catch(() => 1080);
 
     const cappedHeight = Math.min(contentHeight, MAX_SCREENSHOT_HEIGHT);
     console.log(`📐 Content height: ${Math.ceil(contentHeight)}px → capped to ${cappedHeight}px (production: ${IS_PRODUCTION})`);
 
  
     let screenshotSuccess = false;
-    for (let attempts = 0; attempts < 3; attempts++) {
-        try {
-            // Scroll back to TOP so the header/logo is captured in the screenshot
-            await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
-            await new Promise(r => setTimeout(r, 600));
-            // ⚠️ OOM GUARD: On production (512MB RAM), use a fixed viewport instead of fullPage:true.
-            // fullPage:true forces Chrome to allocate memory for the ENTIRE page height at once,
-            // which SIGKILL-crashes the server when pages are tall (>1600px).
-            // On dev we still use fullPage:true for better quality screenshots.
-            if (IS_PRODUCTION) {
-                // Fixed-viewport screenshot: resize to capped height, scroll to top, capture visible area only
-                await page.setViewport({ width: 1280, height: Math.ceil(cappedHeight) });
-                await new Promise(r => setTimeout(r, 800));
-                await page.screenshot({ path: screenshotPath, fullPage: false, type: 'jpeg', quality: 75 });
-            } else {
-                await page.setViewport({ width: 1280, height: 900 });
-                await new Promise(r => setTimeout(r, 800));
-                await page.screenshot({ path: screenshotPath, fullPage: true, type: 'jpeg', quality: 70 });
+    try {
+      // Hard 30s timeout on the entire screenshot block — page.setViewport/page.screenshot
+      // can stall indefinitely on complex or JS-heavy pages. Non-fatal: falls back to blank canvas.
+      await Promise.race([
+        (async () => {
+          for (let attempts = 0; attempts < 2; attempts++) {
+            try {
+                await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+                await new Promise(r => setTimeout(r, 600));
+                if (IS_PRODUCTION) {
+                    await page.setViewport({ width: 1280, height: Math.min(Math.ceil(cappedHeight), 1600) });
+                    await new Promise(r => setTimeout(r, 800));
+                    await page.screenshot({ path: screenshotPath, fullPage: false, type: 'jpeg', quality: 75 });
+                } else {
+                    await page.setViewport({ width: 1280, height: 900 });
+                    await new Promise(r => setTimeout(r, 800));
+                    await page.screenshot({ path: screenshotPath, fullPage: true, type: 'jpeg', quality: 70 });
+                }
+                console.log(`🖼️ Screenshot saved locally to: ${screenshotPath}`);
+                screenshotSuccess = true;
+                break;
+            } catch(err) {
+                console.warn(`⚠️ Screenshot attempt ${attempts + 1} failed (${err.message}). Retrying...`);
+                await new Promise(r => setTimeout(r, 2000));
             }
-            console.log(`🖼️ Screenshot saved locally to: ${screenshotPath}`);
-            screenshotSuccess = true;
-            break;
-        } catch(err) {
-            console.warn(`⚠️ Screenshot failed (${err.message}). Frame likely redirecting. Waiting 3s...`);
-            await new Promise(r => setTimeout(r, 3000));
-        }
+          }
+        })(),
+        new Promise(resolve => setTimeout(() => {
+          console.warn('⏱️ Screenshot hard timeout (30s) — using blank canvas fallback');
+          resolve();
+        }, 30000))
+      ]);
+    } catch(screenshotErr) {
+      console.warn(`⚠️ Screenshot block error: ${screenshotErr.message}`);
     }
  
     if (!screenshotSuccess) {
