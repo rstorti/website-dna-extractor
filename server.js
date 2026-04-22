@@ -517,9 +517,15 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
           youtubeUrl = validation.url;
         }
         if (item.key === 'profileUrl') {
-          const host = new URL(validation.url).hostname.toLowerCase();
-          if (!host.includes('linktr.ee') && !host.includes('beacon.ai') && !host.includes('bio.site') && !host.includes('bento.me') && !host.includes('lnk.bio')) {
-            return res.status(400).json({ error: 'Profile URL must be a supported link-in-bio platform (e.g. linktr.ee)', stage });
+          const fullUrl = validation.url.toLowerCase();
+          const ALLOWED_BIO_DOMAINS = [
+            'linktr.ee', 'beacon.ai', 'bio.site', 'bento.me', 'lnk.bio',
+            'bit.ly', 'solo.to', 'tap.bio', 'milkshake.app', 'hoo.be',
+            'campsite.bio', 'later.com', 'linkin.bio'
+          ];
+          const isBioDomain = ALLOWED_BIO_DOMAINS.some(d => fullUrl.includes(d));
+          if (!isBioDomain) {
+            return res.status(400).json({ error: 'Profile URL must be a supported bio link service. Accepted: Linktree, Bitly (bit.ly), Beacon, Bio.site, Bento.me, Lnk.bio, Solo.to, Tap.bio, Milkshake, Hoo.be, Campsite.', stage });
           }
           profileUrl = validation.url;
         }
@@ -566,7 +572,8 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
       if (dnaResult?.error) {
         return res.status(422).json({
           error: dnaResult.error, stage: 'website-extraction',
-          hint: 'The website could not be scraped. It may be blocking bots, offline, or using an unsupported architecture.'
+          elapsed: Math.round((Date.now() - startTime) / 1000),
+          hint: 'The website could not be scraped. It may be blocking bots, offline, or using an unsupported architecture. Connectors tried: Puppeteer/Chromium → Wayback Machine → Axios HTTP.'
         });
       }
       console.log(`[EXTRACT] Website extraction complete (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
@@ -579,14 +586,15 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
     let youtubeWarning = null;
     if (youtubeUrl) {
       setStage('youtube-extraction');
+      const ytStageStart = Date.now();
       try {
         // Tier 1: YouTube Data API (fastest, richest data, but requires quota)
         const { extractYoutubeDetails } = getYoutubeExtractor();
         youtubeResult = await extractYoutubeDetails(youtubeUrl);
         if (youtubeResult?.error) throw new Error(youtubeResult.error);
-        console.log('[EXTRACT] YouTube Data API succeeded');
+        console.log(`[EXTRACT] YouTube Data API succeeded (connector=YouTubeDataAPIv3, ${((Date.now() - ytStageStart)/1000).toFixed(1)}s)`);
       } catch (ytErr) {
-        console.warn('[EXTRACT] YouTube API failed, trying oEmbed + HTML scrape fallback:', ytErr.message);
+        console.warn(`[EXTRACT] YouTube API failed after ${((Date.now() - ytStageStart)/1000).toFixed(1)}s, trying oEmbed + HTML scrape fallback: ${ytErr.message}`);
         try {
           // Tier 2: oEmbed — zero-auth, no quota, works for any public video/channel URL
           // Returns: title, channel name (author_name), thumbnail_url
@@ -768,6 +776,7 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
     let verifiedData = dnaResult?.mappedData || {};
     if (dnaResult || youtubeResult) {
       setStage('ai-verification');
+      const aiStart = Date.now();
       try {
         const { verifyDNA } = getAiVerifier();
         const aiResult = await verifyDNA(
@@ -781,9 +790,9 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
           ...(aiResult?.verified_data || {})
         };
       } catch (aiErr) {
-        console.warn('[EXTRACT] AI verification failed, using raw data:', aiErr.message);
+        console.warn(`[EXTRACT] [connector=GoogleGenerativeAI/gemini-3.1-pro-preview] AI verification failed after ${((Date.now() - aiStart)/1000).toFixed(1)}s, using raw data: ${aiErr.message}`);
       }
-      console.log(`[EXTRACT] AI verification complete (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
+      console.log(`[EXTRACT] AI verification complete (connector=GoogleGenerativeAI/gemini-3.1-pro-preview, ${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
     }
 
     // 5. Build response
@@ -844,15 +853,15 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
     // Build a human-readable hint based on the stage that failed
     const stageHints = {
       'init':              'Failed during initialisation — check server logs.',
-      'scraping':          'Failed while scraping the website. The site may be blocking bots, offline, or returning a 403/WAF error.',
-      'screenshot':        'Failed while taking a screenshot. The page may use strict CSP or require login.',
-      'logo':              'Failed while extracting the logo. This is usually non-fatal — try again.',
-      'images':            'Failed while processing hero images. Check Supabase credentials and storage bucket.',
-      'youtube':           'Failed while fetching YouTube data. Check your YOUTUBE_API_KEY is valid and not over quota.',
-      'profile':           'Failed while scraping the profile/Linktree URL.',
-      'ai-verification':   'Failed during AI verification (Gemini). Check your GEMINI_API_KEY.',
+      'scraping':          'Failed while scraping the website. Connector: Puppeteer/Chromium → Wayback Machine → Axios. The site may be blocking bots, offline, or returning a 403/WAF error.',
+      'screenshot':        'Failed while taking a screenshot (connector=Puppeteer/Chromium). The page may use strict CSP or require login.',
+      'logo':              'Failed while extracting the logo (connector=Axios→Supabase-Storage). Usually non-fatal — try again.',
+      'images':            'Failed while processing hero images (connector=Axios/Sharp→Supabase-Storage). Check Supabase credentials and storage bucket.',
+      'youtube':           'Failed while fetching YouTube data. Connectors: YouTubeDataAPIv3 → oEmbed → Puppeteer fallback. Check your YOUTUBE_API_KEY is valid and not over quota.',
+      'profile':           'Failed while scraping the profile/Linktree URL (connector=Puppeteer/Chromium).',
+      'ai-verification':   'Failed during AI verification (connector=GoogleGenerativeAI, model=gemini-3.1-pro-preview). Check your GEMINI_API_KEY.',
       'building-response': 'Failed while assembling the final response payload.',
-      'saving-history':    'Extraction succeeded but history save failed — data may not appear in History tab.',
+      'saving-history':    'Extraction succeeded but history save failed (connector=Supabase DB) — data may not appear in History tab.',
     };
     const hint = stageHints[stage] || "An unexpected error occurred during extraction.";
     
@@ -865,6 +874,7 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
       stage, 
       steps: stat ? stat.steps : [],
       elapsed: Math.floor((Date.now() - startTime) / 1000),
+      stageTimings,   // include per-stage timings so frontend/logs show where time was spent
       hint,
     });
   } finally {
