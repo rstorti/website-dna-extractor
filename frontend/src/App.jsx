@@ -248,7 +248,13 @@ function App() {
         
         if (profileUrl) {
             const lcProfile = profileUrl.toLowerCase();
-            if (!isValidDomain(lcProfile) || (!lcProfile.includes('linktr.ee') && !lcProfile.includes('beacon.ai') && !lcProfile.includes('bio.site') && !lcProfile.includes('bento.me') && !lcProfile.includes('lnk.bio'))) {
+            const ALLOWED_BIO_DOMAINS = [
+                'linktr.ee', 'beacon.ai', 'bio.site', 'bento.me', 'lnk.bio',
+                'bit.ly', 'solo.to', 'tap.bio', 'milkshake.app', 'hoo.be',
+                'campsite.bio', 'later.com/p/', 'linkin.bio'
+            ];
+            const isBioDomain = ALLOWED_BIO_DOMAINS.some(d => lcProfile.includes(d));
+            if (!isValidDomain(lcProfile) || !isBioDomain) {
                 setProfileError(true); validationFailed = true; 
             } else setProfileError(false);
         } else setProfileError(false);
@@ -261,7 +267,7 @@ function App() {
         } else setYoutubeError(false);
 
         if (validationFailed) {
-            setError('⚠️ One or more URLs are invalid. Please check for typing mistakes (e.g. www.www.domain.com) and ensure the URL starts with http:// or https://.');
+            setError('⚠️ One or more URLs are invalid. The Bio Link field accepts: Linktree, Bitly, Beacon, Bio.site, Bento.me, Lnk.bio, Solo.to, Tap.bio. Please ensure all URLs start with https://');
             return;
         }
 
@@ -329,7 +335,17 @@ function App() {
                     parts.push(stepList.map(s => `✅ ${s}`).join('\n'));
                 }
                 
-                parts.push(`❌ FAILED AT: ${data.stage || lastKnownStage || 'Unknown'} (Elapsed: ${data.elapsed || 0}s)\n`);
+                // Per-stage timing breakdown (only shown on errors so it aids debugging)
+                const timings = data.stageTimings || [];
+                if (timings.length > 0) {
+                    parts.push('\n--- STAGE TIMINGS (connector/AI → ms taken) ---');
+                    timings.forEach(t => {
+                        const sec = (t.durationMs / 1000).toFixed(1);
+                        parts.push(`⏱️  ${t.stage.padEnd(40)} ${sec}s  (total: ${(t.elapsedMs/1000).toFixed(1)}s)`);
+                    });
+                }
+                
+                parts.push(`\n❌ FAILED AT: ${data.stage || lastKnownStage || 'Unknown'} (Total elapsed: ${data.elapsed || 0}s)\n`);
                 parts.push(`Message: ${rawMsg}`);
                 if (data.hint) parts.push(`\n💡 Hint: ${data.hint}`);
                 
@@ -1070,7 +1086,7 @@ function App() {
                                             <input
                                                 type="url"
                                                 className="url-input"
-                                                placeholder="Link-in-Bio / Profile Page URL (Optional)"
+                                                placeholder="Link-in-Bio URL — Linktree, Bitly, Beacon, Solo.to… (Optional)"
                                                 style={{ width: '100%', height: '100%', padding: '0 1.2rem 0 3.2rem', background: 'rgba(0,0,0,0.4)', border: `1px solid ${profileError ? '#ff4444' : 'var(--border-color)'}`, borderRadius: 'var(--radius-sm)' }}
                                                 value={profileUrl}
                                                 onChange={(e) => setProfileUrl(e.target.value)}
