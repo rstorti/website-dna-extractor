@@ -30,7 +30,9 @@ function App() {
     const [loadingText, setLoadingText] = useState('Extracting Brand DNA & Outpainting Assets...');
     const [toast, setToast] = useState(null); // { message, type: 'success'|'info'|'warning' }
     const [jsonCopied, setJsonCopied] = useState(false);
-    const abortControllerRef = { current: null };
+    // useRef ensures the AbortController reference persists across re-renders.
+    // A plain object { current: null } is recreated each render, making Cancel a no-op.
+    const abortControllerRef = useRef(null);
     
     // Interactive Selection States
     const [selectedSummaryType, setSelectedSummaryType] = useState('website'); // website, youtube, combined
@@ -134,8 +136,7 @@ function App() {
             setIsDashScanning(true);
             setDashScanError(null);
             try {
-                const API_BASE = import.meta.env.VITE_API_URL || '';
-                const r = await fetch(`${API_BASE}/api/scan-images`, { 
+                const r = await fetch(`${API_BASE_URL}/api/scan-images`, { 
                     method: 'POST', 
                     headers: { 'Content-Type': 'application/json' }, 
                     body: JSON.stringify({ url: url.trim() }) 

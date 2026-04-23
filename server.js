@@ -29,7 +29,7 @@ dns.setDefaultResultOrder('ipv4first');
 // Linktree, Beacon, Bento etc. embed all link data in a JSON blob in the HTML.
 // Fetching without a browser avoids launching a second RAM-hungry Chrome instance
 // when the server has already run a full website + YouTube extraction.
-async function scrapeProfileLightweight(profileUrl) {
+async function scrapeProfileLightweight(profileUrl, _depth = 0) {
   const https = require('https');
   const http = require('http');
   return new Promise((resolve) => {
@@ -42,9 +42,10 @@ async function scrapeProfileLightweight(profileUrl) {
       },
       timeout: 15000
     }, (res) => {
-      // Follow redirects (max 3)
+      // Follow redirects (max 5 hops to prevent infinite loops)
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
-        return resolve(scrapeProfileLightweight(res.headers.location));
+        if (_depth >= 5) return resolve({ success: false, error: 'Too many redirects (max 5)' });
+        return resolve(scrapeProfileLightweight(res.headers.location, _depth + 1));
       }
       let raw = '';
       res.on('data', chunk => raw += chunk);
@@ -149,7 +150,6 @@ app.use(cors({
     if (!origin) return callback(null, true);
     if (
       origin.startsWith('http://localhost') ||
-      origin.includes('onrender.com') ||
       origin.includes('railway.app') ||
       origin.includes('netlify.app') ||
       origin.includes('minfo.com') ||
@@ -695,7 +695,9 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
             throw new Error('oEmbed returned no data');
           }
         } catch (oEmbedErr) {
-          if (oEmbedErr.message !== 'oEmbed returned no data') throw oEmbedErr; // already handled above
+          // Always fall through to Puppeteer Tier 3 for any oEmbed failure.
+          // Previously, non-sentinel errors were re-thrown here which bubbled out of
+          // the entire youtube block and caused the whole extraction to fail.
           console.warn('[EXTRACT] oEmbed failed, trying Puppeteer fallback:', oEmbedErr.message);
           try {
             const { scrapeYoutubeFallback } = getExtractor();
@@ -827,7 +829,7 @@ app.post('/api/extract', extractRateLimit, async (req, res) => {
       // Store full payload so the History "Review" button can fully restore the extraction.
       // NOTE: individual records can be 50-150 KB but this is necessary for Review to work.
       await appendHistory({
-        id: Date.now().toString(),
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         url: url || profileUrl || youtubeUrl,
         target_url: url || '',
         youtube_url: youtubeUrl || '',

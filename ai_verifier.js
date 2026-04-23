@@ -44,7 +44,9 @@ async function verifyDNA(mappedData, screenshotPath, logoPath, youtubeData = nul
         return null;
     }
 
-    console.log(`\n🤖 Launching Gemini Vision Verification...`);
+    console.log(`\n🤖 Launching Gemini Vision Verification... [connector=GoogleGenerativeAI, model=gemini-3.1-pro-preview]`);
+    const verifyStart = Date.now();
+    const elapsed = () => `${Date.now() - verifyStart}ms`;
 
     try {
 
@@ -56,7 +58,9 @@ async function verifyDNA(mappedData, screenshotPath, logoPath, youtubeData = nul
         let imagePart = null;
         if (screenshotPath) {
             try {
-                imagePart = await fileToGenerativePart(screenshotPath, "image/png");
+                // Detect MIME type from extension — screenshots are saved as .jpg, not .png
+                const screenshotMime = screenshotPath.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+                imagePart = await fileToGenerativePart(screenshotPath, screenshotMime);
             } catch (e) { console.error("Could not load screenshot for AI verification"); }
         }
 
@@ -129,21 +133,24 @@ async function verifyDNA(mappedData, screenshotPath, logoPath, youtubeData = nul
         }
 
         const result = await geminiCallWithRetry(() => model.generateContent(parts));
+        const callMs = Date.now() - verifyStart;
         const responseText = result.response.text();
+        console.log(`⏱️  [GoogleGenerativeAI/gemini-3.1-pro-preview] Gemini API call returned after ${callMs}ms`);
 
         // Strip markdown code blocks if Gemini aggressively formats the JSON
         const cleanJsonString = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
         const verificationResult = JSON.parse(cleanJsonString);
 
-        console.log(`✅ AI Verification Complete (Confidence: ${verificationResult.ai_confidence_score}%)`);
+        console.log(`✅ [connector=GoogleGenerativeAI, model=gemini-3.1-pro-preview] AI Verification Complete in ${elapsed()} (Confidence: ${verificationResult.ai_confidence_score}%)`);
         return verificationResult;
 
     } catch (error) {
-        console.error(`❌ Gemini Verification Error:`, error);
+        const failedMs = Date.now() - verifyStart;
+        console.error(`❌ [connector=GoogleGenerativeAI, model=gemini-3.1-pro-preview] Gemini Verification FAILED after ${failedMs}ms:`, error);
         const is429 = error?.message?.includes('429');
         const errMsg = is429
-            ? `⚠️ Gemini API quota exceeded (429 Too Many Requests). Please wait a minute and try again, or enable billing on your Google AI Studio key.`
-            : `⚠️ Gemini Vision API Error: ${error.message || 'Unknown error.'}`;
+            ? `⚠️ [GoogleGenerativeAI/gemini-3.1-pro-preview] Gemini API quota exceeded (429 Too Many Requests) after ${failedMs}ms. Please wait a minute and try again, or enable billing on your Google AI Studio key.`
+            : `⚠️ [GoogleGenerativeAI/gemini-3.1-pro-preview] Gemini Vision API Error after ${failedMs}ms: ${error.message || 'Unknown error.'}`;
         return {
            verified_data: {
               website_summary: errMsg,

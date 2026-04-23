@@ -137,17 +137,42 @@ function rgbToHex(rgb) {
   if (!match) return null;
   return "#" + (1 << 24 | match[1] << 16 | match[2] << 8 | match[3]).toString(16).slice(1).toUpperCase();
 }
+
+// Inverse of rgbToHex — converts a hex colour string to { r, g, b }
+// Falls back to a warm orange if the input is unparseable.
+function hexToRgb(hex) {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result
+    ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) }
+    : { r: 249, g: 157, b: 50 };
+}
  
+// ── Micro-timer helper ───────────────────────────────────────────────────────
+// Returns a function that, when called, logs how long since the timer was created.
+// Usage:  const t = makeTimer('Puppeteer launch');  …  t('done');  // logs elapsed ms
+function makeTimer(label) {
+  const start = Date.now();
+  return (suffix = 'done', extraInfo = '') => {
+    const ms = Date.now() - start;
+    console.log(`⏱️  [${label}] ${suffix} — ${ms}ms${extraInfo ? ` (${extraInfo})` : ''}`);
+    return ms;
+  };
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function scrapeYoutubeFallback(url) {
+  const fnTimer = makeTimer('scrapeYoutubeFallback');
   let browser = null;
   try {
     console.log(`\n🕵️♂️ PUPPETEER FALLBACK: Scraping YouTube DOM for ${url}...`);
+    const launchTimer = makeTimer('Puppeteer launch [YouTube fallback]');
     browser = await puppeteer.launch({
       headless: "new",
       executablePath: env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath(),
       protocolTimeout: 120000,
       args: PUPPETEER_ARGS
     });
+    launchTimer('browser ready', 'connector=Puppeteer/Chromium');
     const page = await browser.newPage();
     // Spoof a real Chrome browser to defeat YouTube bot detection
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
@@ -163,13 +188,17 @@ async function scrapeYoutubeFallback(url) {
     page.setDefaultNavigationTimeout(90000);
     page.setDefaultTimeout(90000);
     
+    const navTimer = makeTimer('Puppeteer page.goto [YouTube]');
     try {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      navTimer('navigation complete', `url=${url}`);
     } catch (err) {
       const errMsg = err.message ? err.message.toLowerCase() : '';
       if (errMsg.includes('timeout') || errMsg.includes('detached') || errMsg.includes('aborted')) {
+        navTimer('navigation interrupted — salvaging partial DOM', `connector=Puppeteer, error=${err.message}`);
         console.log(`⚠️ YouTube navigation interrupted for ${url} (Timeout or Detached). Attempting to salvage loaded DOM...`);
       } else {
+        navTimer(`navigation failed — re-throwing`, `connector=Puppeteer, error=${err.message}`);
         throw err;
       }
     }
@@ -247,29 +276,36 @@ async function scrapeYoutubeFallback(url) {
     }).catch(() => 'Unknown Channel');
  
     console.log(`✅ Puppeteer YouTube Scrape Complete. Title: ${title}`);
+    fnTimer('scrapeYoutubeFallback complete');
     return { title, channel, description, publishedAt: 'Agent Extracted' };
   } catch (error) {
-    console.error(`❌ Puppeteer YouTube Fallback Error: ${error.message}`);
-    return { error: `Agent Fallback scraping failed: ${error.message}` };
+    fnTimer(`scrapeYoutubeFallback FAILED — connector=Puppeteer/chrome`, `error=${error.message}`);
+    console.error(`❌ Puppeteer YouTube Fallback Error (connector=Puppeteer): ${error.message}`);
+    return { error: `[Puppeteer/YouTube] Agent Fallback scraping failed after ${Date.now()}ms: ${error.message}` };
   } finally {
     if (browser) await browser.close().catch(console.error);
   }
 }
  
 async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
+  const stageTimer = makeTimer('extractDNA');
   const logStage = (msg) => { if (progressCb) progressCb(msg); };
+  const dnaStart = Date.now();
+  const elapsed = () => `${Date.now() - dnaStart}ms`;
   console.log(`\n🚀 Launching Puppeteer DNA Extractor for: ${url} `);
   logStage('Booting Headless Browser');
  
   let browser;
   try {
+    const launchT = makeTimer('Puppeteer browser launch [extractDNA]');
     browser = await Promise.race([
       launchBrowser(),
       new Promise((_, reject) => setTimeout(() => reject(new Error('Browser launch timed out after 30s. Server may be out of memory — try again in 1 minute.')), 30_000))
     ]);
+    launchT('browser ready', 'connector=Puppeteer/Chromium');
   } catch (launchErr) {
-    console.error(`❌ Browser Launch Failed: ${launchErr.message}`);
-    return { error: launchErr.message };
+    console.error(`❌ [connector=Puppeteer/Chromium] Browser Launch Failed at +${elapsed()}: ${launchErr.message}`);
+    return { error: `[Puppeteer/Chromium] Browser launch failed at +${elapsed()}: ${launchErr.message}` };
   }
  
   logStage(`Configuring virtual browser for ${url}`);
@@ -330,8 +366,10 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
       let navigationSucceeded = false;
  
       // Attempt 1: Standard fetch with domcontentloaded (45s)
+      const tier1Timer = makeTimer('Tier1 Live Fetch [Puppeteer page.goto]');
       try {
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+        tier1Timer('live fetch complete', `connector=Puppeteer, url=${url}`);
         navigationSucceeded = true;
       } catch (err) {
         const errMsg = err.message ? err.message.toLowerCase() : '';
@@ -435,7 +473,7 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
         fallbackToWayback = true;
       }
     } catch (liveErr) {
-      console.warn(`⚠️ Live fetch failed entirely (${liveErr.message}). Falling back to Wayback Machine.`);
+      console.warn(`⚠️ [connector=Puppeteer] Live fetch failed entirely at +${elapsed()} — (${liveErr.message}). Falling back to Wayback Machine.`);
       fallbackToWayback = true;
     }
  
@@ -443,7 +481,8 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
     if (fallbackToWayback) {
        logStage('Processing HTML Response (Wayback/HTTP)');
        console.log(`\n======================================================`);
-       console.log(`🌐 TIER 2: FETCHING FROM WAYBACK MACHINE ARCHIVE`);
+       console.log(`🌐 TIER 2: FETCHING FROM WAYBACK MACHINE ARCHIVE (connector=Puppeteer→archive.org, elapsed=${elapsed()})`);
+       const tier2Timer = makeTimer('Tier2 Wayback Machine fetch [Puppeteer]');
        
        // Completely recreate page to guarantee we drop any detached frame corruption
        await recreatePage();
@@ -490,11 +529,13 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
           }
 
         } catch (archiveErr) {
-          console.error(`❌ Wayback Machine fallback failed: ${archiveErr.message}`);
+          tier2Timer('FAILED', `connector=Puppeteer/archive.org, error=${archiveErr.message}`);
+          console.error(`❌ [connector=Puppeteer/archive.org] Wayback Machine fallback failed at +${elapsed()}: ${archiveErr.message}`);
 
           // --- Tier 3: Rotating User-Agent HTTP Fetch ---
           console.log(`\n======================================================`);
-          console.log(`🌐 TIER 3: ROTATING USER-AGENT HTTP FALLBACK`);
+          console.log(`🌐 TIER 3: ROTATING USER-AGENT HTTP FALLBACK (connector=Axios, elapsed=${elapsed()})`);
+          const tier3Timer = makeTimer('Tier3 Rotating UA HTTP [Axios]');
           
           const userAgents = [
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
@@ -541,8 +582,11 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
           }
           
           if (!htmlFetched) {
-            console.error(`❌ All Tier 3 user-agents failed.`);
-            throw new Error('All tiers failed (Live blocked, Wayback blocked, HTTP all user-agents rejected).');
+            tier3Timer('ALL UAs FAILED', `connector=Axios, url=${url}`);
+            console.error(`❌ [connector=Axios] All Tier 3 user-agents failed at +${elapsed()}.`);
+            throw new Error(`[Puppeteer→Wayback→Axios] All tiers failed at +${elapsed()} (Live blocked, Wayback blocked, HTTP all user-agents rejected).`);
+          } else {
+            tier3Timer('success', `connector=Axios, url=${url}`);
           }
         }
     }
@@ -685,13 +729,14 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
       });
 
       // 3. CSS background-image on hero/banner/feature containers
+      // Uses addImage() so seenUrls deduplication is respected (fix: was using unshift directly)
       const bgSelectors = ['[class*="hero"]','[class*="banner"]','[class*="feature"]','[class*="cover"]','[class*="carousel"]','[class*="slide"]','[class*="masthead"]','section','main > div'];
       bgSelectors.forEach(sel => {
         document.querySelectorAll(sel).forEach(el => {
           const bg = window.getComputedStyle(el).backgroundImage;
           if (bg && bg !== 'none') {
             const match = bg.match(/url\(["']?([^"')]+)["']?\)/);
-            if (match && match[1]) addImage(match[1], 50000); // hero BGs get priority
+            if (match && match[1]) addImage(match[1], 50000); // hero BGs get priority; deduped via seenUrls
           }
         });
       });
@@ -831,15 +876,9 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
       data.ctas = Array.from(uniqueCtasMap.values()).slice(0, 15);
  
       // Scrape explicitly applied background-images (like the NAB Hero Banners)
-      document.querySelectorAll('div, section, header, figure').forEach(el => {
-        const style = window.getComputedStyle(el);
-        if (style.backgroundImage && style.backgroundImage !== 'none') {
-          const match = style.backgroundImage.match(/url\(['"]?(.*?)['"]?\)/);
-          if (match && match[1] && match[1].startsWith('http') && !match[1].includes('data:')) {
-            data.images.unshift(match[1]); // Push hero banners to the front
-          }
-        }
-      });
+      // NOTE: This second background-image scan (on div/section/header/figure) is now
+      // intentionally removed — it was duplicating images already captured via addImage() above,
+      // bypassing seenUrls deduplication. The hero/banner/feature selector block above covers this.
  
       const socials = [];
       const uniqueUrls = new Set();
@@ -959,8 +998,9 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
     // Guard against block/error pages polluting the campaign name
     const ERROR_TITLE_PATTERNS = /^(403|404|error|forbidden|access denied|blocked|just a moment|cloudflare|ddos|security check|verifying)/i;
     const rawExtractedTitle = extractedData.title || '';
+    const pageTitleHostname = (() => { try { return new URL(url).hostname; } catch(e) { return extractedData.domain || 'website'; } })();
     const sanitizedTitle = ERROR_TITLE_PATTERNS.test(rawExtractedTitle.trim())
-      ? (new URL(url).hostname.replace('www.', '').split('.')[0].charAt(0).toUpperCase() + new URL(url).hostname.replace('www.', '').split('.')[0].slice(1))
+      ? (pageTitleHostname.replace('www.', '').split('.')[0].charAt(0).toUpperCase() + pageTitleHostname.replace('www.', '').split('.')[0].slice(1))
       : rawExtractedTitle;
 
     const mappedFields = {
@@ -1048,7 +1088,8 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
  
     logStage('Capturing Hero Screenshot');
     // --- Screenshot Capture ---
-    console.log(`📸 Taking full-page screenshot...`);
+    const screenshotTimer = makeTimer('Screenshot [Puppeteer/Sharp]');
+    console.log(`📸 Taking full-page screenshot... [connector=Puppeteer, elapsed=${elapsed()}]`);
     const outputDir = path.join(__dirname, 'outputs');
     await fs.mkdir(outputDir, { recursive: true });
  
@@ -1107,19 +1148,24 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
         }, 30000))
       ]);
     } catch(screenshotErr) {
-      console.warn(`⚠️ Screenshot block error: ${screenshotErr.message}`);
+      screenshotTimer(`FAILED — ${screenshotErr.message}`, `connector=Puppeteer`);
+      console.warn(`⚠️ [connector=Puppeteer] Screenshot block error at +${elapsed()}: ${screenshotErr.message}`);
     }
  
     if (!screenshotSuccess) {
-        console.error(`❌ Screenshot sequence completely failed after retries. Generating dummy blank canvas to prevent downstream crash.`);
+        screenshotTimer('failed — using blank canvas fallback', `connector=Puppeteer/Sharp`);
+        console.error(`❌ [connector=Puppeteer] Screenshot sequence completely failed after retries at +${elapsed()}. Generating dummy blank canvas to prevent downstream crash.`);
         await require('sharp')({
           create: { width: 1280, height: 800, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } }
         }).jpeg().toFile(screenshotPath);
     }
  
+    screenshotTimer('capture done', `connector=Puppeteer/Sharp, success=${screenshotSuccess}`);
     // Upload screenshot to Supabase (gets a public URL); falls back to absolute http:// URL
+    const supabaseScreenshotTimer = makeTimer('Supabase upload [screenshot]');
     const screenshotBuffer = await fs.readFile(screenshotPath);
     const screenshotPublicUrl = await uploadToSupabase(screenshotFilename, screenshotBuffer, 'image/jpeg');
+    supabaseScreenshotTimer('upload done', `connector=Supabase Storage, url=${screenshotPublicUrl?.substring(0,60)}...`);
  
     // --- Image Resizing using Sharp ---
     console.log(`🖼️ Resizing logo and images...`);
@@ -1234,16 +1280,18 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
     const downloadedImages = [];
  
     // --- Generate Prompts via Gemini ---
-    console.log(`🤖 Requesting Gemini 1.5 Pro to write Image Prompts based on DNA...`);
+    const geminiPrompterTimer = makeTimer('Gemini prompt generation [gemini_prompter.js / gemini-3.1-pro-preview]');
+    console.log(`🤖 Requesting Gemini (model=gemini-3.1-pro-preview) to write Image Prompts based on DNA... [elapsed=${elapsed()}]`);
     const prompts = await generateHeroPrompts(extractedData);
+    geminiPrompterTimer(prompts ? 'prompts generated' : 'FAILED — using defaults', `connector=GoogleGenerativeAI/gemini-3.1-pro-preview`);
     if (!prompts) {
-      console.warn(`⚠️ Warning: Gemini failed. Check API Key. Defaulting to generic aesthetic prompts.`);
+      console.warn(`⚠️ [connector=GoogleGenerativeAI/gemini-3.1-pro-preview] Gemini failed at +${elapsed()}. Check GEMINI_API_KEY. Defaulting to generic aesthetic prompts.`);
     }
  
     const rawBrandName = mappedFields.name || 'this brand';
     // Double-guard: if name still looks like an error, fall back to domain name
     const cleanBrandName = ERROR_TITLE_PATTERNS.test(rawBrandName)
-      ? (new URL(url).hostname.replace('www.', '').split('.')[0])
+      ? pageTitleHostname.replace('www.', '').split('.')[0]
       : rawBrandName;
     const rawFirstWord = cleanBrandName.length > 18 ? cleanBrandName.split(/[\|\-\:]/)[0].trim().split(' ')[0] : cleanBrandName;
     const brandName = rawFirstWord.length >= 3 ? rawFirstWord : cleanBrandName.split(/[\|\-\:]/)[0].trim().split(' ').slice(0, 2).join(' ');
@@ -1358,10 +1406,12 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
  
     const generateVariantPair = async (prompt, tagline, prefix) => {
       if (!prompt) return null;
-      console.log(`🎨 Generating Base Image ${prefix}...`);
+      const vertexTimer = makeTimer(`Vertex AI Imagen [generateVariantPair/${prefix}]`);
+      console.log(`🎨 Generating Base Image ${prefix} via Vertex AI Imagen (connector=VertexAI/imagen-3.0-generate-001, elapsed=${elapsed()})...`);
       
       const heroTimeout = new Promise((resolve) => setTimeout(() => {
-        console.warn(`⏳ Vertex AI Image Generation timed out after 50 seconds. Force-aborting for ${prefix} to prevent UI hang.`);
+        vertexTimer(`TIMEOUT after 50s for slot ${prefix}`, `connector=VertexAI/imagen-3.0-generate-001`);
+        console.warn(`⏳ [connector=VertexAI/imagen-3.0-generate-001] Image Generation timed out after 50 seconds. Force-aborting for ${prefix} to prevent UI hang.`);
         resolve(null);
       }, 50000));
       
@@ -1369,6 +1419,8 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
           generateBrandHero(prompt),
           heroTimeout
       ]);
+      if (rawBuffer) vertexTimer(`success for slot ${prefix}`, `connector=VertexAI/imagen-3.0-generate-001`);
+      else vertexTimer(`null result for slot ${prefix}`, `connector=VertexAI/imagen-3.0-generate-001`);
       
       if (!rawBuffer) return null;
  
@@ -1513,7 +1565,8 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
     };
 
     logStage('Extracting Image Assets');
-    console.log(`📥 Processing extracted images for ${url}`);
+    const imageAssetTimer = makeTimer('Image asset processing [Axios/Sharp/Supabase]');
+    console.log(`📥 Processing extracted images for ${url} [elapsed=${elapsed()}]`);
     let scrapedSuccessA = false;
     let scrapedSuccessB = false;
 
@@ -1560,9 +1613,10 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
 
       scrapedSuccessA = scrapedResults[0]?.status === 'fulfilled' && scrapedResults[0]?.value;
       scrapedSuccessB = scrapedResults[1]?.status === 'fulfilled' && scrapedResults[1]?.value;
-      console.log(`🖼️ Scraped images: A=${scrapedSuccessA?'✅':'❌'} B=${scrapedSuccessB?'✅':'❌'} C=${scrapedResults[2]?.value?'✅':'❌'} D=${scrapedResults[3]?.value?'✅':'❌'}`);
-
+      console.log(`🖼️ Scraped images: A=${scrapedSuccessA?'✅':'❌'} B=${scrapedSuccessB?'✅':'❌'} C=${scrapedResults[2]?.value?'✅':'❌'} D=${scrapedResults[3]?.value?'✅':'❌'} [elapsed=${elapsed()}]`);
+ 
     }
+    imageAssetTimer('scraped image batch done', `connector=Axios/Sharp/Supabase-Storage`);
 
     // ----------------------------------------------------
     // VERTEX AI FALLBACK (Only run if scraped images failed)
@@ -1578,13 +1632,18 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
 
       // Per-slot gradient placeholder: if Vertex AI also failed for a slot,
       // generate a branded gradient so we always have a minimum of 2 image pairs.
-      const vertexAFailed = !scrapedSuccessA && (vertexResults[0]?.status !== 'fulfilled' || !vertexResults[0]?.value);
-      const vertexBFailed = !scrapedSuccessB && (!genTasks[!scrapedSuccessA ? 1 : 0] || vertexResults[!scrapedSuccessA && !scrapedSuccessB ? 1 : 0]?.status !== 'fulfilled');
+      // vertexResults index depends on which slots actually ran:
+      //   Both failed → genTasks = [taskA, taskB] → A=index 0, B=index 1
+      //   Only A failed → genTasks = [taskA]       → A=index 0
+      //   Only B failed → genTasks = [taskB]       → B=index 0
+      const vertexAIndex = 0; // A always runs first if it runs at all
+      const vertexBIndex = (!scrapedSuccessA && !scrapedSuccessB) ? 1 : 0; // B is at index 1 only when A also ran
+      const vertexAFailed = !scrapedSuccessA &&
+        (vertexResults[vertexAIndex]?.status !== 'fulfilled' || !vertexResults[vertexAIndex]?.value);
+      const vertexBFailed = !scrapedSuccessB &&
+        (vertexResults[vertexBIndex]?.status !== 'fulfilled' || !vertexResults[vertexBIndex]?.value);
 
-      const hexToRgb = (hex) => {
-        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-        return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : { r: 249, g: 157, b: 50 };
-      };
+      // hexToRgb is defined once at module scope (see top of this block) — no need to redefine here.
       const rawBrandRgb = hexToRgb(primaryColor);
       const brandRgb = (rawBrandRgb.r + rawBrandRgb.g + rawBrandRgb.b < 60) ? { r: 30, g: 30, b: 60 } : rawBrandRgb;
       const darkerR = Math.max(0, brandRgb.r - 60);
@@ -1612,28 +1671,24 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
     // --- FINAL SAFETY NET: If we still have 0 images, generate branded gradient placeholders ---
     if (downloadedImages.length === 0) {
       console.log(`⚠️ ZERO images available after all fallbacks. Generating branded gradient placeholders...`);
-      const hexToRgb = (hex) => {
-        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-        return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : { r: 249, g: 157, b: 50 };
-      };
-      // Ensure we always have a visible (non-black) base color
-      const rawBrandRgb = hexToRgb(primaryColor);
-      const brandRgb = (rawBrandRgb.r + rawBrandRgb.g + rawBrandRgb.b < 60)
+      // Reuse hexToRgb defined above; ensure a visible base color
+      const rawBrandRgb2 = hexToRgb(primaryColor);
+      const brandRgb2 = (rawBrandRgb2.r + rawBrandRgb2.g + rawBrandRgb2.b < 60)
         ? { r: 30, g: 30, b: 60 }   // near-black brand? use dark navy instead
-        : rawBrandRgb;
+        : rawBrandRgb2;
 
       for (const [idx, tagline] of [finalPrompts.taglineA, finalPrompts.taglineB].entries()) {
         try {
           const prefix = idx === 0 ? 'A' : 'B';
           // Create a gradient placeholder via SVG composite so it's never a flat black square
-          const darkerR = Math.max(0, brandRgb.r - 60);
-          const darkerG = Math.max(0, brandRgb.g - 60);
-          const darkerB = Math.max(0, brandRgb.b - 60);
+          const darkerR2 = Math.max(0, brandRgb2.r - 60);
+          const darkerG2 = Math.max(0, brandRgb2.g - 60);
+          const darkerB2 = Math.max(0, brandRgb2.b - 60);
           const gradientSvg = `<svg width="640" height="640" xmlns="http://www.w3.org/2000/svg">
             <defs>
               <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="rgb(${brandRgb.r},${brandRgb.g},${brandRgb.b})"/>
-                <stop offset="100%" stop-color="rgb(${darkerR},${darkerG},${darkerB})"/>
+                <stop offset="0%" stop-color="rgb(${brandRgb2.r},${brandRgb2.g},${brandRgb2.b})"/>
+                <stop offset="100%" stop-color="rgb(${darkerR2},${darkerG2},${darkerB2})"/>
               </linearGradient>
             </defs>
             <rect width="640" height="640" fill="url(#bg)"/>
@@ -1685,8 +1740,8 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
     return finalOutput;
  
   } catch (error) {
-    console.error(`❌ Puppeteer Error: ${error.message}`);
-    return { error: error.message };
+    console.error(`❌ [connector=Puppeteer/extractDNA] Fatal error at +${elapsed()}: ${error.message}`);
+    return { error: `[Puppeteer/extractDNA] Failed at +${elapsed()}: ${error.message}` };
   } finally {
     try {
       if (browser) {

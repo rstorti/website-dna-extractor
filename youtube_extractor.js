@@ -19,13 +19,19 @@ function extractVideoId(url) {
  */
 async function extractYoutubeDetails(url, _depth = 0) {
     if (!YOUTUBE_API_KEY) {
-        throw new Error('No YouTube API key configured — using scrape fallback');
+        throw new Error('No YouTube API key configured (connector=YouTubeDataAPIv3) — using scrape fallback');
     }
+    const t0 = Date.now();
+    const elapsed = () => `${Date.now() - t0}ms`;
+    console.log(`⏱️  [connector=YouTubeDataAPIv3] extractYoutubeDetails starting for: ${url}`);
     try {
         const videoId = extractVideoId(url);
         if (videoId) {
+            const apiTimer = Date.now();
             const apiUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${YOUTUBE_API_KEY}`;
-            const response = await axios.get(apiUrl);
+            console.log(`⏱️  [connector=YouTubeDataAPIv3] Fetching video snippet for videoId=${videoId}...`);
+            const response = await axios.get(apiUrl, { timeout: 15_000 });
+            console.log(`⏱️  [connector=YouTubeDataAPIv3] Video snippet API returned in ${Date.now() - apiTimer}ms`);
 
             if (!response.data.items || response.data.items.length === 0) {
                 throw new Error('Video not found or is private');
@@ -36,17 +42,21 @@ async function extractYoutubeDetails(url, _depth = 0) {
             
             let channelAvatar = null;
             try {
+                const chTimer = Date.now();
                 const channelApiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${channelId}&key=${YOUTUBE_API_KEY}`;
-                const channelResponse = await axios.get(channelApiUrl);
+                console.log(`⏱️  [connector=YouTubeDataAPIv3] Fetching channel avatar for channelId=${channelId}...`);
+                const channelResponse = await axios.get(channelApiUrl, { timeout: 15_000 });
+                console.log(`⏱️  [connector=YouTubeDataAPIv3] Channel avatar API returned in ${Date.now() - chTimer}ms`);
                 if (channelResponse.data.items && channelResponse.data.items.length > 0) {
                     const cSnippet = channelResponse.data.items[0].snippet;
                     // High is typically 240x240 or 256x256, perfect for logo dimensions
                     channelAvatar = cSnippet.thumbnails?.high?.url || cSnippet.thumbnails?.default?.url;
                 }
             } catch (e) {
-                console.error('Failed to fetch channel secondary data for logo:', e.message);
+                console.error(`[connector=YouTubeDataAPIv3] Failed to fetch channel secondary data for logo after ${elapsed()}: ${e.message}`);
             }
             
+            console.log(`✅ [connector=YouTubeDataAPIv3] Video extract succeeded in ${elapsed()}: "${item.title}"`);
             return {
                 title: item.title,
                 channel: item.channelTitle,
@@ -69,7 +79,10 @@ async function extractYoutubeDetails(url, _depth = 0) {
                 channelApiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails&id=${idMatch[1]}&key=${YOUTUBE_API_KEY}`;
             }
 
-            const channelResponse = await axios.get(channelApiUrl);
+            const chTimer = Date.now();
+            console.log(`⏱️  [connector=YouTubeDataAPIv3] Fetching channel info: ${channelApiUrl.substring(0, 80)}...`);
+            const channelResponse = await axios.get(channelApiUrl, { timeout: 15_000 });
+            console.log(`⏱️  [connector=YouTubeDataAPIv3] Channel info API returned in ${Date.now() - chTimer}ms`);
 
             if (!channelResponse.data.items || channelResponse.data.items.length === 0) {
                 throw new Error('Channel not found or is private');
@@ -83,7 +96,10 @@ async function extractYoutubeDetails(url, _depth = 0) {
             }
 
             const playlistUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=1&key=${YOUTUBE_API_KEY}`;
-            const playlistResponse = await axios.get(playlistUrl);
+            const plTimer = Date.now();
+            console.log(`⏱️  [connector=YouTubeDataAPIv3] Fetching playlist uploads...`);
+            const playlistResponse = await axios.get(playlistUrl, { timeout: 15_000 });
+            console.log(`⏱️  [connector=YouTubeDataAPIv3] Playlist API returned in ${Date.now() - plTimer}ms`);
             
             if (!playlistResponse.data.items || playlistResponse.data.items.length === 0) {
                 throw new Error('Channel has no uploaded videos.');
@@ -91,28 +107,31 @@ async function extractYoutubeDetails(url, _depth = 0) {
 
             // Extract the latest video ID and recurse to extract it just like a normal video URL.
             // Depth guard prevents infinite loops in edge cases.
-            if (_depth >= 1) throw new Error('YouTube extraction recursion depth limit reached.');
+            if (_depth >= 1) throw new Error('[connector=YouTubeDataAPIv3] YouTube extraction recursion depth limit reached.');
             const latestVideoId = playlistResponse.data.items[0].snippet.resourceId.videoId;
+            console.log(`✅ [connector=YouTubeDataAPIv3] Channel resolved to latest video ${latestVideoId} in ${elapsed()}`);
             return extractYoutubeDetails(`https://www.youtube.com/watch?v=${latestVideoId}`, _depth + 1);
         }
 
         // None matched
-        throw new Error('Invalid YouTube URL');
+        throw new Error('[connector=YouTubeDataAPIv3] Invalid YouTube URL — could not match video ID, channel handle, or channel ID.');
 
     } catch (error) {
         let errorMessage = error.message;
         if (error.response && error.response.data && error.response.data.error) {
             const apiMsg = error.response.data.error.message;
             if (apiMsg.toLowerCase().includes('quota')) {
-                errorMessage = `Quota Exceeded: Your YouTube API key has run out of requests for today. (${apiMsg})`;
+                errorMessage = `[connector=YouTubeDataAPIv3] Quota Exceeded after ${elapsed()}: Your YouTube API key has run out of requests for today. (${apiMsg})`;
             } else if (error.response.status === 403) {
-                errorMessage = `API Key Forbidden (403): Your API key is likely missing the "YouTube Data API v3" scope in Google Cloud, or has IP/website restrictions blocking it. (${apiMsg})`;
+                errorMessage = `[connector=YouTubeDataAPIv3] API Key Forbidden (403) after ${elapsed()}: Your API key is likely missing the "YouTube Data API v3" scope in Google Cloud, or has IP/website restrictions blocking it. (${apiMsg})`;
             } else {
-                errorMessage = `YouTube API Error: ${apiMsg}`;
+                errorMessage = `[connector=YouTubeDataAPIv3] YouTube API Error after ${elapsed()}: ${apiMsg}`;
             }
+        } else {
+            errorMessage = `[connector=YouTubeDataAPIv3] ${error.message} (elapsed=${elapsed()})`;
         }
         
-        console.error('Error fetching YouTube details:', errorMessage);
+        console.error('[connector=YouTubeDataAPIv3] Error fetching YouTube details:', errorMessage);
         throw new Error(errorMessage);
     }
 }

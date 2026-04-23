@@ -46,7 +46,7 @@ Website DNA:
 - Name/Brand: ${dnaData.title}
 - Description: ${dnaData.description}
 - Primary Colors (Backgrounds): ${dnaData.colors?.background ? dnaData.colors.background.join(', ') : ''}
-- Accent Colors (Buttons): ${dnaData.colors?.buttons ? dnaData.colors.buttons.map(b => b.background).join(', ') : ''}
+- Accent Colors (Buttons): ${dnaData.colors?.buttons ? dnaData.colors.buttons.join(', ') : ''}
 
 CRITICAL QUALITY INSTRUCTION (POMELLI STYLE):
 All image prompts MUST demand raw, hyper-realistic, award-winning 35mm DSLR photography. DO NOT generate illustrations, 3D renders, vector art, or video game graphics. The images must look like bright, inviting, premium commercial lifestyle photos or studio product shots directly relevant to the brand's business. DO NOT generate dark, moody, abstract, or sci-fi scenes (unless the brand is strictly a sci-fi game). The aesthetic should feel like a multi-million-dollar bright, clean Google Pomelli photo ad campaign. Use the brand colors elegantly.
@@ -72,15 +72,19 @@ Return ONLY a JSON object exactly matching this format:
 `;
 
     try {
+        const t0 = Date.now();
+        console.log(`⏱️  [gemini_prompter.js] Calling Gemini API (connector=GoogleGenerativeAI, model=gemini-3.1-pro-preview)...`);
         const result = await geminiCallWithRetry(() => model.generateContent(aiPrompt));
+        const callMs = Date.now() - t0;
         let text = result.response.text();
         if (text.startsWith("\`\`\`json")) text = text.slice(7);
         if (text.startsWith("\`\`\`")) text = text.slice(3);
         if (text.endsWith("\`\`\`")) text = text.slice(0, -3);
-
-        return JSON.parse(text.trim());
+        const parsed = JSON.parse(text.trim());
+        console.log(`✅ [GoogleGenerativeAI/gemini-3.1-pro-preview] Hero prompts generated in ${callMs}ms`);
+        return parsed;
     } catch (e) {
-        console.error("❌ Gemini failed to generate prompts:", e.message);
+        console.error(`❌ [connector=GoogleGenerativeAI, model=gemini-3.1-pro-preview] Gemini hero prompt generation FAILED: ${e.message}`);
         return null;
     }
 }
