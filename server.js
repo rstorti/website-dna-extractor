@@ -167,6 +167,13 @@ if (env.NODE_ENV !== 'production') {
   app.use('/outputs', express.static(path.join(__dirname, 'outputs')));
 }
 
+// Root route — Railway (and other PaaS) health checks hit GET / and expect a 200.
+// Without this, the server returns Express's default "Cannot GET /" 404 and
+// Railway interprets it as a crash, sending deploy-failed emails.
+app.get('/', (req, res) => {
+  res.status(200).json({ status: 'ok', service: 'website-dna-extractor', health: '/api/health' });
+});
+
 // Health Endpoint — shows uptime + env var status for quick diagnosis
 app.get('/api/health', (req, res) => {
   res.status(200).json({
