@@ -663,11 +663,19 @@ function App() {
             if (h.includes('linkedin'))             return 5;
             if (h.includes('tiktok'))               return 6;
             if (h.includes('pinterest'))            return 7;
+            // All remaining platforms map to 8 (generic/other)
+            // Listed explicitly so they are clearly intentional, not accidental fall-throughs
             if (h.includes('medium'))               return 8;
             if (h.includes('threads'))              return 8;
             if (h.includes('github'))               return 8;
             if (h.includes('snapchat'))             return 8;
             if (h.includes('whatsapp') || h.includes('t.me') || h.includes('telegram')) return 8;
+            if (h.includes('bsky') || h.includes('bluesky'))  return 8; // Bluesky
+            if (h.includes('mastodon'))             return 8;
+            if (h.includes('twitch'))               return 8;
+            if (h.includes('discord'))              return 8;
+            if (h.includes('reddit'))               return 8;
+            if (h.includes('substack'))             return 8;
             return 8; // generic/other
         };
 
