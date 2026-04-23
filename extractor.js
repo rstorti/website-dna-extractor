@@ -842,7 +842,8 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
  
       const uniqueCtasMap = new Map();
       validButtons.forEach(b => {
-        if (!/facebook|twitter|instagram|tiktok|linkedin|youtube|\bx\b/i.test(b.text)) {
+        if (!/facebook|twitter|instagram|tiktok|linkedin|youtube|medium\.com|threads\.net|pinterest|snapchat|github|telegram|whatsapp|\bx\.com\b|\bx\b/i.test(b.text) &&
+            !/facebook\.com|twitter\.com|instagram\.com|tiktok\.com|linkedin\.com|youtube\.com|medium\.com|threads\.net|pinterest\.com|snapchat\.com|github\.com|telegram\.me|whatsapp\.com|x\.com/i.test(b.url)) {
             if (b.url && b.url.startsWith('http')) {
                 const key = b.url.toLowerCase();
                 if (!uniqueCtasMap.has(key)) {
@@ -882,7 +883,23 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
  
       const socials = [];
       const uniqueUrls = new Set();
-      document.querySelectorAll('a[href*="facebook.com"], a[href*="twitter.com"], a[href*="x.com"], a[href*="instagram.com"], a[href*="linkedin.com"], a[href*="youtube.com"], a[href*="tiktok.com"]').forEach(a => {
+      document.querySelectorAll([
+        'a[href*="facebook.com"]',
+        'a[href*="twitter.com"]',
+        'a[href*="x.com"]',
+        'a[href*="instagram.com"]',
+        'a[href*="linkedin.com"]',
+        'a[href*="youtube.com"]',
+        'a[href*="tiktok.com"]',
+        'a[href*="medium.com"]',   // Medium — was previously missing
+        'a[href*="threads.net"]',  // Meta Threads
+        'a[href*="pinterest.com"]',
+        'a[href*="snapchat.com"]',
+        'a[href*="github.com"]',
+        'a[href*="telegram.me"]',
+        'a[href*="t.me"]',
+        'a[href*="whatsapp.com"]',
+      ].join(', ')).forEach(a => {
         try {
           let urlObj = new URL(a.href.trim());
           urlObj.search = ''; // Strip query parameters like ?hl=en

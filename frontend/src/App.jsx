@@ -656,15 +656,21 @@ function App() {
         // Infer the Minfo buttonCategoryId from social platform name
         const inferSocialCategoryId = (hostname = '') => {
             const h = hostname.toLowerCase();
-            if (h.includes('facebook'))  return 1;
+            if (h.includes('facebook'))             return 1;
             if (h.includes('twitter') || h.includes('x.com')) return 2;
-            if (h.includes('instagram')) return 3;
-            if (h.includes('youtube'))   return 4;
-            if (h.includes('linkedin'))  return 5;
-            if (h.includes('tiktok'))    return 6;
-            if (h.includes('pinterest')) return 7;
+            if (h.includes('instagram'))            return 3;
+            if (h.includes('youtube'))              return 4;
+            if (h.includes('linkedin'))             return 5;
+            if (h.includes('tiktok'))               return 6;
+            if (h.includes('pinterest'))            return 7;
+            if (h.includes('medium'))               return 8;
+            if (h.includes('threads'))              return 8;
+            if (h.includes('github'))               return 8;
+            if (h.includes('snapchat'))             return 8;
+            if (h.includes('whatsapp') || h.includes('t.me') || h.includes('telegram')) return 8;
             return 8; // generic/other
         };
+
 
         // Derive a real favicon URL using Google's favicon service
         const faviconUrl = (link) => {
