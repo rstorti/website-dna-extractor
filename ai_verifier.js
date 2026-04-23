@@ -1,26 +1,11 @@
 const env = require('./config/env');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const fs = require('fs/promises');
+const { geminiCallWithRetry } = require('./lib/geminiRetry');
 
 // Ensure API key is available
 const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY || "missing_gemini_key");
 
-/**
- * Wraps a Gemini generateContent call with a single 12-second retry on 429.
- */
-async function geminiCallWithRetry(fn) {
-    try {
-        return await fn();
-    } catch (e) {
-        const is429 = e?.message?.includes('429') || e?.status === 429;
-        if (is429) {
-            console.warn('⚠️  Gemini 429 quota hit — waiting 12 s then retrying...');
-            await new Promise(r => setTimeout(r, 12000));
-            return await fn();
-        }
-        throw e;
-    }
-}
 
 /**
  * Converts a local file into the format required by the Gemini API.

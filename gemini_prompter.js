@@ -1,26 +1,9 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const env = require('./config/env');
+const { geminiCallWithRetry } = require('./lib/geminiRetry');
 
 // Module-level singleton — the SDK is designed to be created once and reused.
 const _genAI = env.GEMINI_API_KEY ? new GoogleGenerativeAI(env.GEMINI_API_KEY) : null;
-
-/**
- * Wraps a Gemini generateContent call with a single 12-second retry on 429.
- * On free-tier keys, sequential Gemini calls can exhaust the RPM quota.
- */
-async function geminiCallWithRetry(fn) {
-    try {
-        return await fn();
-    } catch (e) {
-        const is429 = e?.message?.includes('429') || e?.status === 429;
-        if (is429) {
-            console.warn('⚠️  Gemini 429 quota hit — waiting 12 s then retrying once...');
-            await new Promise(r => setTimeout(r, 12000));
-            return await fn(); // second attempt — let it throw if it fails again
-        }
-        throw e;
-    }
-}
 
 async function generateHeroPrompts(dnaData) {
     if (!_genAI) {

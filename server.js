@@ -27,79 +27,78 @@ dns.setDefaultResultOrder('ipv4first');
 
 // ── Lightweight profile-page scraper (no Puppeteer) ─────────────────────────
 // Linktree, Beacon, Bento etc. embed all link data in a JSON blob in the HTML.
-// Fetching without a browser avoids launching a second RAM-hungry Chrome instance
-// when the server has already run a full website + YouTube extraction.
-async function scrapeProfileLightweight(profileUrl, _depth = 0) {
-  const https = require('https');
-  const http = require('http');
-  return new Promise((resolve) => {
-    const client = profileUrl.startsWith('https') ? https : http;
-    const req = client.get(profileUrl, {
+// Using axios instead of native http.get means gzip/brotli responses are
+// decompressed automatically, and redirect-following is built-in (maxRedirects).
+async function scrapeProfileLightweight(profileUrl) {
+  try {
+    const response = await axios.get(profileUrl, {
+      timeout: 15000,
+      maxRedirects: 5,           // axios follows up to 5 hops; throws on more
+      decompress: true,          // automatically decompresses gzip / brotli
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml',
-        'Accept-Language': 'en-US,en;q=0.9'
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
       },
-      timeout: 15000
-    }, (res) => {
-      // Follow redirects (max 5 hops to prevent infinite loops)
-      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
-        if (_depth >= 5) return resolve({ success: false, error: 'Too many redirects (max 5)' });
-        return resolve(scrapeProfileLightweight(res.headers.location, _depth + 1));
-      }
-      let raw = '';
-      res.on('data', chunk => raw += chunk);
-      res.on('end', () => {
-        try {
-          const links = [];
-          const socialLinks = [];
-          let displayName = '';
-
-          // Try Linktree's __NEXT_DATA__ JSON blob first (most reliable)
-          const nextDataMatch = raw.match(/<script id="__NEXT_DATA__"[^>]*>(.*?)<\/script>/s);
-          if (nextDataMatch) {
-            try {
-              const nextData = JSON.parse(nextDataMatch[1]);
-              const account = nextData?.props?.pageProps?.account || nextData?.props?.pageProps?.profile || {};
-              displayName = account.name || account.username || '';
-              const linktreeLinks = account.links || account.content_nodes || [];
-              linktreeLinks.forEach(l => {
-                const href = l.url || l.href || l.value;
-                const title = l.title || l.label || l.text;
-                if (href) links.push({ url: href, button_name: title || href, context: 'Profile Link' });
-              });
-            } catch(e) {}
-          }
-
-          // Fallback: scan all <a> tags for outbound links
-          if (links.length === 0) {
-            const anchorRegex = /<a\s[^>]*href=["']([^"'#][^"']*)["'][^>]*>([^<]*)</gi;
-            let m;
-            while ((m = anchorRegex.exec(raw)) !== null) {
-              const href = m[1];
-              const label = m[2].trim();
-              if (href.startsWith('http') && !href.includes(new URL(profileUrl).hostname)) {
-                links.push({ url: href, button_name: label || href, context: 'Profile Link' });
-              }
-            }
-          }
-
-          // Extract title as display name fallback
-          if (!displayName) {
-            const titleMatch = raw.match(/<title[^>]*>([^<]+)<\/title>/i);
-            if (titleMatch) displayName = titleMatch[1].replace(/\s*[|\-–].*$/, '').trim();
-          }
-
-          console.log(`[Profile Lite] Scraped ${links.length} links for ${profileUrl}`);
-          resolve({ success: true, links, socialLinks, displayName });
-        } catch(e) {
-          resolve({ success: false, error: e.message });
-        }
-      });
+      // Treat any 2xx as success; non-2xx throws automatically
+      validateStatus: (s) => s >= 200 && s < 300,
     });
-    req.on('error', (e) => resolve({ success: false, error: e.message }));
-    req.on('timeout', () => { req.destroy(); resolve({ success: false, error: 'Lightweight fetch timed out' }); });
-  });
+
+    // axios returns response.data as a string when content-type is text/html
+    const raw = typeof response.data === 'string'
+      ? response.data
+      : JSON.stringify(response.data);
+
+    const links = [];
+    const socialLinks = [];
+    let displayName = '';
+
+    // Try Linktree's __NEXT_DATA__ JSON blob first (most reliable)
+    const nextDataMatch = raw.match(/<script id="__NEXT_DATA__"[^>]*>(.*?)<\/script>/s);
+    if (nextDataMatch) {
+      try {
+        const nextData = JSON.parse(nextDataMatch[1]);
+        const account = nextData?.props?.pageProps?.account || nextData?.props?.pageProps?.profile || {};
+        displayName = account.name || account.username || '';
+        const linktreeLinks = account.links || account.content_nodes || [];
+        linktreeLinks.forEach(l => {
+          const href = l.url || l.href || l.value;
+          const title = l.title || l.label || l.text;
+          if (href) links.push({ url: href, button_name: title || href, context: 'Profile Link' });
+        });
+      } catch(e) {}
+    }
+
+    // Fallback: scan all <a> tags for outbound links
+    if (links.length === 0) {
+      let profileHost = '';
+      try { profileHost = new URL(profileUrl).hostname; } catch(e) {}
+      const anchorRegex = /<a\s[^>]*href=["']([^"'#][^"']*)["'][^>]*>([^<]*)</gi;
+      let m;
+      while ((m = anchorRegex.exec(raw)) !== null) {
+        const href = m[1];
+        const label = m[2].trim();
+        if (href.startsWith('http') && profileHost && !href.includes(profileHost)) {
+          links.push({ url: href, button_name: label || href, context: 'Profile Link' });
+        }
+      }
+    }
+
+    // Extract title as display name fallback
+    if (!displayName) {
+      const titleMatch = raw.match(/<title[^>]*>([^<]+)<\/title>/i);
+      if (titleMatch) displayName = titleMatch[1].replace(/\s*[|\-\u2013].*$/, '').trim();
+    }
+
+    console.log(`[Profile Lite] Scraped ${links.length} links for ${profileUrl}`);
+    return { success: true, links, socialLinks, displayName };
+
+  } catch (e) {
+    const msg = e.code === 'ECONNABORTED' ? 'Lightweight fetch timed out' : e.message;
+    console.warn(`[Profile Lite] Failed for ${profileUrl}: ${msg}`);
+    return { success: false, error: msg };
+  }
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -251,7 +250,11 @@ async function readLocalHistory() {
 
 async function writeLocalHistory(data) {
   await fs.mkdir(path.dirname(HISTORY_FILE), { recursive: true });
-  await fs.writeFile(HISTORY_FILE, JSON.stringify(data, null, 2));
+  // Write to a temp file first then rename — this is an atomic operation on most
+  // filesystems, preventing a corrupt HISTORY_FILE if the server crashes mid-write.
+  const tmpPath = HISTORY_FILE + '.tmp';
+  await fs.writeFile(tmpPath, JSON.stringify(data, null, 2));
+  await fs.rename(tmpPath, HISTORY_FILE);
 }
 
 async function readHistory() {
@@ -262,11 +265,13 @@ async function readHistory() {
       const queryPromise = supabase
         .from('extraction_history')
         .select('*')
-        .order('timestamp', { ascending: false });
+        .order('timestamp', { ascending: false })
+        .limit(100); // cap to 100 rows — prevents slow queries as history grows
         
       const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase query timed out')), 5000));
       
       const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+      if (error) console.warn('Supabase history read error:', error.message);
       if (!error && data) return data;
     }
   } catch (e) {
@@ -363,6 +368,7 @@ app.delete('/api/history', async (req, res) => {
 // Rate-limit extraction to 5 requests/minute per IP to prevent Puppeteer DoS on
 // constrained free-tier servers. Gracefully degrades if package is not yet installed.
 let extractRateLimit = (req, res, next) => next();
+let scanRateLimit = (req, res, next) => next();
 try {
   const rateLimit = require('express-rate-limit');
   extractRateLimit = rateLimit({
@@ -370,6 +376,13 @@ try {
     max: 5,
     standardHeaders: true,
     message: { error: 'Too many extraction requests. Please wait 1 minute before trying again.' }
+  });
+  // Scan is cheaper but can still be abused — allow 30 scans/min per IP
+  scanRateLimit = rateLimit({
+    windowMs: 60_000,
+    max: 30,
+    standardHeaders: true,
+    message: { error: 'Too many scan requests. Please wait 1 minute.' }
   });
 } catch (e) {
   console.warn('[BOOT] express-rate-limit not installed — rate limiting disabled. Run: npm install');
@@ -399,7 +412,7 @@ app.get('/api/status', (req, res) => {
 // OG/Twitter meta, inline background-image, lazy-load data-src, link[rel=icon].
 // No Puppeteer → typical response time 1-3 seconds.
 // ─────────────────────────────────────────────────────────────────────────────
-app.post('/api/scan-images', async (req, res) => {
+app.post('/api/scan-images', scanRateLimit, async (req, res) => {
   const { url } = req.body;
   if (!url) return res.status(400).json({ error: 'url is required' });
 
