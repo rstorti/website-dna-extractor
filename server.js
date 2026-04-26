@@ -360,36 +360,53 @@ async function readHistory() {
 }
 
 async function appendHistory(record, tenantId = 'default') {
-  const scopedRecord = { ...record, tenantId, tenant_id: tenantId };
+  // Map to exact DB column names (snake_case) — no camelCase fields that don't exist in Supabase
+  const dbRecord = {
+    id:             record.id,
+    tenant_id:      tenantId,
+    url:            record.url            || null,
+    target_url:     record.target_url     || null,
+    youtube_url:    record.youtube_url    || null,
+    profile_url:    record.profile_url    || null,
+    timestamp:      record.timestamp      || new Date().toISOString(),
+    success:        record.success        ?? true,
+    name:           record.name           || null,
+    screenshotUrl:  record.screenshotUrl  || null,
+    payload:        record.payload        || null,
+  };
+
   let supabaseOk = false;
-  // Try Supabase first
   try {
     const { supabase } = getSupabase();
     if (supabase) {
-      const { error } = await supabase.from('extraction_history').insert(scopedRecord);
-      if (!error) supabaseOk = true;
-      else console.warn('Supabase history write failed:', error.message);
+      const { error } = await supabase.from('extraction_history').insert(dbRecord);
+      if (!error) {
+        supabaseOk = true;
+        console.log('[HISTORY] ✅ Saved to Supabase:', dbRecord.target_url || dbRecord.url);
+      } else {
+        console.warn('[HISTORY] ⚠️ Supabase write failed:', error.message, '| code:', error.code);
+      }
     }
   } catch (e) {
-    console.warn('Supabase history write failed:', e.message);
+    console.warn('[HISTORY] ⚠️ Supabase write exception:', e.message);
   }
 
-  // Pre-production: no local file fallback
   if (!supabaseOk && env.NODE_ENV === 'production') {
-    console.error('[HISTORY] ⚠️ Production history persistence failed — no local fallback in production.');
+    console.error('[HISTORY] ❌ Production history persistence failed — no local fallback in production.');
     return;
   }
 
-  // Dev: Always write locally as backup/sync 
+  // Dev: local file fallback
   localHistoryMutex = localHistoryMutex.then(async () => {
     const history = await readLocalHistory();
-    history.unshift(scopedRecord);
+    history.unshift(dbRecord);
     await writeLocalHistory(history);
   });
   await localHistoryMutex;
 }
 
 // ============ API ROUTES ============
+
 
 /**
  * Job API authentication middleware.
