@@ -346,7 +346,7 @@ async function readHistory(tenantId = 'default') {
       const queryPromise = supabase
         .from('extraction_history')
         .select('*')
-        .eq('tenant_id', tenantId)
+        .or(	enant_id.eq.${tenantId},tenant_id.is.null)
         .order('timestamp', { ascending: false })
         .limit(100); // cap to 100 rows — prevents slow queries as history grows
         
@@ -739,6 +739,7 @@ async function runExtraction({
   linkedinUrl = null,
   website2Url = null,
   selectedImages = [],
+  tenantId = 'default',
   caller = 'web',
   abortSignal = null,
   onStage = null,
@@ -968,7 +969,7 @@ async function runExtraction({
     // 6. Save history
     setStage('saving-history');
     try {
-      await appendHistory({ id: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`, url: url||profileUrl||youtubeUrl, target_url: url||'', youtube_url: youtubeUrl||'', profile_url: profileUrl||'', timestamp: new Date().toISOString(), success: true, name: payload.data?.name||null, screenshotUrl: payload.screenshotUrl||null, payload });
+      await appendHistory({ id: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`, url: url||profileUrl||youtubeUrl, target_url: url||'', youtube_url: youtubeUrl||'', profile_url: profileUrl||'', timestamp: new Date().toISOString(), success: true, name: payload.data?.name||null, screenshotUrl: payload.screenshotUrl||null, payload }, tenantId);
     } catch(histErr) { console.warn(`${TAG} History save failed:`, histErr.message); }
 
     console.log(`${TAG} ✅ Extraction complete in ${((Date.now() - startTime)/1000).toFixed(1)}s`);
@@ -1059,6 +1060,7 @@ app.post('/api/jobs', requireAuthSession, extractRateLimit, async (req, res) => 
         linkedinUrl,
         website2Url,
         selectedImages: selectedImages || [],
+        tenantId: req.auth.tenantId || 'default',
         caller: 'web',
         abortSignal: abortController.signal,
         onStage: ({ stage, steps, elapsed }) => jobStore.updateJob(jobId, { stage, steps, elapsed }),
