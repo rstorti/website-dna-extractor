@@ -70,11 +70,15 @@ function App() {
     const [url, setUrl] = useState('');
     const [youtubeUrl, setYoutubeUrl] = useState('');
     const [profileUrl, setProfileUrl] = useState('');
+    const [linkedinUrl, setLinkedinUrl] = useState('');
+    const [website2Url, setWebsite2Url] = useState('');
     
     // Validation Overlays
     const [urlError, setUrlError] = useState(false);
     const [youtubeError, setYoutubeError] = useState(false);
     const [profileError, setProfileError] = useState(false);
+    const [linkedinError, setLinkedinError] = useState(false);
+    const [website2Error, setWebsite2Error] = useState(false);
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState(null);
     const [error, setError] = useState(null);
@@ -304,7 +308,7 @@ function App() {
     };
 
     const handleExtract = async () => {
-        if (!url && !profileUrl && !youtubeUrl) return;
+        if (!url && !profileUrl && !youtubeUrl && !linkedinUrl && !website2Url) return;
 
         // Immediate validation sequence
         let validationFailed = false;
@@ -332,6 +336,20 @@ function App() {
                 setProfileError(true); validationFailed = true; 
             } else setProfileError(false);
         } else setProfileError(false);
+        if (linkedinUrl) {
+            let isValidLinkedin = false;
+            try {
+                let testUrl = linkedinUrl;
+                if (!testUrl.startsWith('http')) testUrl = 'https://' + testUrl;
+                const hostname = new URL(testUrl).hostname.toLowerCase();
+                if (hostname === 'linkedin.com' || hostname.endsWith('.linkedin.com')) isValidLinkedin = true;
+            } catch(e) {}
+            if (!isValidLinkedin) { setLinkedinError(true); validationFailed = true; } else setLinkedinError(false);
+        } else setLinkedinError(false);
+
+        if (website2Url) {
+            if (!isValidDomain(website2Url)) { setWebsite2Error(true); validationFailed = true; } else setWebsite2Error(false);
+        } else setWebsite2Error(false);
 
         if (youtubeUrl) {
             let isValidYt = false;
@@ -367,7 +385,7 @@ function App() {
         abortControllerRef.current = controller;
         const timeoutId = setTimeout(() => controller.abort('timeout'), 300000); // 5-minute hard timeout
 
-        const targetLabel = url || youtubeUrl || profileUrl;
+        const targetLabel = url || youtubeUrl || profileUrl || linkedinUrl || website2Url;
         let lastKnownStage = 'init';
         let lastKnownSteps = [];
         let statusInterval;
@@ -386,7 +404,7 @@ function App() {
             const jobRes = await fetch(`${API_BASE_URL}/api/jobs`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getSessionToken() },
-                body: JSON.stringify({ url, youtubeUrl, profileUrl, selectedImages: dashSelectedImages }),
+                body: JSON.stringify({ url, youtubeUrl, profileUrl, linkedinUrl, website2Url, selectedImages: dashSelectedImages }),
                 signal: controller.signal
             });
             const jobDataInit = await jobRes.json();
@@ -1343,12 +1361,68 @@ function App() {
                                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
                                         </button>
                                     </div>
+                                    <div style={{ display: 'flex', gap: '1rem', height: '54px' }}>
+                                        <div style={{ position: 'relative', flex: 1, height: '100%' }}>
+                                            <div style={{ position: 'absolute', left: '1.2rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', display: 'flex', pointerEvents: 'none', zIndex: 1 }}>
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                                            </div>
+                                            <input
+                                                type="url"
+                                                className="url-input"
+                                                placeholder="LinkedIn Profile URL (Optional)"
+                                                style={{ width: '100%', height: '100%', padding: '0 1.2rem 0 3.2rem', background: 'rgba(0,0,0,0.4)', border: `1px solid ${linkedinError ? '#ff4444' : 'var(--border-color)'}`, borderRadius: 'var(--radius-sm)' }}
+                                                value={linkedinUrl}
+                                                onChange={(e) => setLinkedinUrl(e.target.value)}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleExtract()}
+                                                disabled={loading}
+                                            />
+                                        </div>
+                                        {linkedinUrl && (
+                                            <button 
+                                                onClick={(e) => { e.preventDefault(); navigator.clipboard.writeText(linkedinUrl); }}
+                                                style={{ width: '54px', height: '54px', background: 'transparent', color: 'var(--primary)', border: '1px solid var(--primary)', borderRadius: 'var(--radius-sm)', padding: 0, cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', transition: 'all 0.2s', flexShrink: 0 }}
+                                                onMouseEnter={(e)=>e.currentTarget.style.background='rgba(249, 157, 50, 0.1)'}
+                                                onMouseLeave={(e)=>e.currentTarget.style.background='transparent'}
+                                                title="Copy to Clipboard"
+                                            >
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '1rem', height: '54px' }}>
+                                        <div style={{ position: 'relative', flex: 1, height: '100%' }}>
+                                            <div style={{ position: 'absolute', left: '1.2rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', display: 'flex', pointerEvents: 'none', zIndex: 1 }}>
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                                            </div>
+                                            <input
+                                                type="url"
+                                                className="url-input"
+                                                placeholder="Website 2 URL (Optional)"
+                                                style={{ width: '100%', height: '100%', padding: '0 1.2rem 0 3.2rem', background: 'rgba(0,0,0,0.4)', border: `1px solid ${website2Error ? '#ff4444' : 'var(--border-color)'}`, borderRadius: 'var(--radius-sm)' }}
+                                                value={website2Url}
+                                                onChange={(e) => setWebsite2Url(e.target.value)}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleExtract()}
+                                                disabled={loading}
+                                            />
+                                        </div>
+                                        {website2Url && (
+                                            <button 
+                                                onClick={(e) => { e.preventDefault(); navigator.clipboard.writeText(website2Url); }}
+                                                style={{ width: '54px', height: '54px', background: 'transparent', color: 'var(--primary)', border: '1px solid var(--primary)', borderRadius: 'var(--radius-sm)', padding: 0, cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', transition: 'all 0.2s', flexShrink: 0 }}
+                                                onMouseEnter={(e)=>e.currentTarget.style.background='rgba(249, 157, 50, 0.1)'}
+                                                onMouseLeave={(e)=>e.currentTarget.style.background='transparent'}
+                                                title="Copy to Clipboard"
+                                            >
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                                 <div style={{ display: 'flex', flexShrink: 0, marginLeft: '2rem' }}>
                                     <button 
                                         className="btn-extract-custom" 
                                         onClick={handleExtract} 
-                                        disabled={loading || (!url && !profileUrl && !youtubeUrl)} 
+                                        disabled={loading || (!url && !profileUrl && !youtubeUrl && !linkedinUrl && !website2Url)} 
                                         style={{ 
                                             height: '54px', 
                                             alignSelf: 'center',
@@ -1360,8 +1434,8 @@ function App() {
                                             margin: 0, 
                                             borderRadius: '12px', 
                                             border: 'none', 
-                                            background: (url || profileUrl || youtubeUrl) ? 'var(--primary)' : 'rgba(255, 255, 255, 0.08)', 
-                                            color: (url || profileUrl || youtubeUrl) ? '#000000' : 'var(--text-secondary)',
+                                            background: (url || profileUrl || youtubeUrl || linkedinUrl || website2Url) ? 'var(--primary)' : 'rgba(255, 255, 255, 0.08)', 
+                                            color: (url || profileUrl || youtubeUrl || linkedinUrl || website2Url) ? '#000000' : 'var(--text-secondary)',
                                             fontSize: '1.2rem',
                                             cursor: (loading || (!url && !profileUrl && !youtubeUrl)) ? 'not-allowed' : 'pointer',
                                             transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',

@@ -801,6 +801,26 @@ async function runExtraction({
       console.log(`${TAG} Website extraction complete (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
     }
 
+    // 1.5 Website 2 extraction (non-fatal)
+    let website2DnaResult = null;
+    if (website2Url) {
+      setStage('website2-extraction');
+      const { extractDNA } = getExtractor();
+      try {
+        website2DnaResult = await extractDNA(website2Url, (s) => setStage(s, true, 'Website 2'), selectedImages);
+        if (website2DnaResult?.error) {
+          console.warn(`${TAG} Website 2 extraction failed (non-fatal): ${website2DnaResult.error}`);
+          website2DnaResult = null;
+        } else {
+          console.log(`${TAG} Website 2 extraction complete (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
+        }
+      } catch (err) {
+        console.warn(`${TAG} Website 2 extraction failed (non-fatal): ${err.message}`);
+      }
+    }
+
+
+
     // 2. YouTube extraction (non-fatal)
     let youtubeWarning = null;
     if (youtubeUrl) {
@@ -877,14 +897,26 @@ async function runExtraction({
     }
 
     // 4. AI verification
-    let verifiedData = dnaResult?.mappedData || {};
-    if (dnaResult || youtubeResult) {
+    let combinedMappedData = {
+        ...(website2DnaResult?.mappedData || {}),
+        ...(dnaResult?.mappedData || {})
+    };
+    for (const key in website2DnaResult?.mappedData) {
+        if (!combinedMappedData[key] && website2DnaResult.mappedData[key]) {
+            combinedMappedData[key] = website2DnaResult.mappedData[key];
+        }
+    }
+
+    let verifiedData = combinedMappedData;
+    if (dnaResult || website2DnaResult || youtubeResult) {
       setStage('ai-verification');
       try {
         const { verifyDNA } = getAiVerifier();
         checkAbort();
-        const aiResult = await verifyDNA(dnaResult?.mappedData || {}, dnaResult?.screenshotPath, dnaResult?.logoPath, youtubeResult);
-        verifiedData = { ...(dnaResult?.mappedData || {}), ...(aiResult?.verified_data || {}) };
+        const primaryScreenshot = dnaResult?.screenshotPath || website2DnaResult?.screenshotPath;
+        const primaryLogo = dnaResult?.logoPath || website2DnaResult?.logoPath;
+        const aiResult = await verifyDNA(combinedMappedData, primaryScreenshot, primaryLogo, youtubeResult);
+        verifiedData = { ...combinedMappedData, ...(aiResult?.verified_data || {}) };
       } catch (aiErr) {
         console.warn(`${TAG} AI verification failed (non-fatal): ${aiErr.message}`);
       }
@@ -893,19 +925,30 @@ async function runExtraction({
     // 5. Build payload
     setStage('building-response');
     const totalMs = Date.now() - startTime;
+
+    const mergedButtonStyles = [...(dnaResult?.buttonStyles || []), ...(website2DnaResult?.buttonStyles || [])];
+    const mergedFeaturedImages = [...(dnaResult?.featuredImages || []), ...(website2DnaResult?.featuredImages || [])];
+    const mergedCtas = [...(dnaResult?.ctas || []), ...(website2DnaResult?.ctas || [])];
+
     const payload = {
       success: true, isVerified: true,
-      isWaybackFallback: dnaResult?.isWaybackFallback || false,
+      isWaybackFallback: dnaResult?.isWaybackFallback || website2DnaResult?.isWaybackFallback || false,
       youtubeWarning: youtubeWarning || null,
       totalMs, stageTimings,
-      data: { ...verifiedData, buttonStyles: dnaResult?.buttonStyles || [], featuredImages: dnaResult?.featuredImages || [], isWaybackFallback: dnaResult?.isWaybackFallback || false },
-      mappedData: dnaResult?.mappedData,
+      data: { ...verifiedData, buttonStyles: mergedButtonStyles, featuredImages: mergedFeaturedImages, isWaybackFallback: dnaResult?.isWaybackFallback || website2DnaResult?.isWaybackFallback || false },
+      mappedData: combinedMappedData,
       youtubeData: youtubeResult || null,
-      screenshotUrl: dnaResult?.screenshotUrl || null,
-      buttonStyles: dnaResult?.buttonStyles || [],
-      ctas: dnaResult?.ctas || [],
-      socialMediaLinks: dnaResult?.socialMediaLinks || [],
-      featuredImages: dnaResult?.featuredImages || [],
+      screenshotUrl: dnaResult?.screenshotUrl || website2DnaResult?.screenshotUrl || null,
+      buttonStyles: mergedButtonStyles,
+      ctas: mergedCtas,
+      socialMediaLinks: [...new Set([
+        ...(dnaResult?.socialMediaLinks || []),
+        ...(website2DnaResult?.socialMediaLinks || []),
+        ...(linkedinUrl ? [linkedinUrl] : []),
+        ...(url ? [url] : []),
+        ...(website2Url ? [website2Url] : [])
+      ])].filter(link => link !== profileUrl),
+      featuredImages: mergedFeaturedImages,
       profilePayload: profileResult || null,
     };
 
@@ -943,9 +986,9 @@ app.post('/api/jobs', requireAuthSession, extractRateLimit, async (req, res) => 
   }
   activeExtractions++;  // Atomic: increment now, before any await
 
-  let { url, youtubeUrl, profileUrl, selectedImages } = req.body;
+  let { url, youtubeUrl, profileUrl, linkedinUrl, website2Url, selectedImages } = req.body;
 
-  if (!url && !youtubeUrl && !profileUrl) {
+  if (!url && !youtubeUrl && !profileUrl && !linkedinUrl && !website2Url) {
     return res.status(400).json({ error: 'At least one URL is required', stage: 'init' });
   }
 
@@ -954,7 +997,7 @@ app.post('/api/jobs', requireAuthSession, extractRateLimit, async (req, res) => 
   const MAX_URL_LEN = 2048;
   const ALLOWED_BIO_DOMAINS = ['linktr.ee','beacon.ai','bio.site','bento.me','lnk.bio','bit.ly','solo.to','tap.bio','milkshake.app','hoo.be','campsite.bio','later.com','linkin.bio'];
 
-  for (const item of [{key:'url',val:url}, {key:'youtubeUrl',val:youtubeUrl}, {key:'profileUrl',val:profileUrl}]) {
+  for (const item of [{key:'url',val:url}, {key:'youtubeUrl',val:youtubeUrl}, {key:'profileUrl',val:profileUrl}, {key:'linkedinUrl',val:linkedinUrl}, {key:'website2Url',val:website2Url}]) {
     if (!item.val) continue;
     if (typeof item.val !== 'string' || item.val.length > MAX_URL_LEN) {
       return res.status(400).json({ error: `${item.key} must be a string under ${MAX_URL_LEN} chars`, stage: 'init' });
@@ -968,6 +1011,13 @@ app.post('/api/jobs', requireAuthSession, extractRateLimit, async (req, res) => 
     const host = parsedUrl.hostname.toLowerCase();
 
     if (item.key === 'url') url = validation.url;
+    if (item.key === 'linkedinUrl') {
+      if (host !== 'linkedin.com' && !host.endsWith('.linkedin.com')) {
+         return res.status(400).json({ error: 'LinkedIn URL must be a valid linkedin.com domain', stage: 'init' });
+      }
+      linkedinUrl = validation.url;
+    }
+    if (item.key === 'website2Url') website2Url = validation.url;
     if (item.key === 'youtubeUrl') {
       if (host !== 'youtu.be' && !host.endsWith('.youtu.be') && host !== 'youtube.com' && !host.endsWith('.youtube.com')) {
          return res.status(400).json({ error: 'YouTube URL must be a valid youtube.com or youtu.be domain', stage: 'init' });
@@ -997,7 +1047,7 @@ app.post('/api/jobs', requireAuthSession, extractRateLimit, async (req, res) => 
 
   // ── Delegate to shared engine asynchronously ──────────────────────────────
   (async () => {
-    console.log(`\n[EXTRACT/WEB-ASYNC] Starting Job ${jobId}: url=${url}, yt=${youtubeUrl}, profile=${profileUrl}. Active: ${activeExtractions}`);
+    console.log(`\n[EXTRACT/WEB-ASYNC] Starting Job ${jobId}: url=${url}, yt=${youtubeUrl}, profile=${profileUrl}, linkedin=${linkedinUrl}, website2=${website2Url}. Active: ${activeExtractions}`);
 
     try {
       const payload = await runExtraction({
