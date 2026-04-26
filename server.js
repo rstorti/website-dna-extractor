@@ -338,20 +338,17 @@ async function writeLocalHistory(data) {
   await fs.rename(tmpPath, HISTORY_FILE);
 }
 
-async function readHistory(tenantId = 'default') {
+async function readHistory() {
   try {
     const { supabase } = getSupabase();
     if (supabase) {
-      // Implement a 5-second timeout for Supabase query to prevent infinite hanging
+      // Single-tenant: return ALL records, no tenant_id filtering
       const queryPromise = supabase
         .from('extraction_history')
         .select('*')
-        .or(`tenant_id.eq.${tenantId},tenant_id.is.null`)
         .order('timestamp', { ascending: false })
-        .limit(100); // cap to 100 rows — prevents slow queries as history grows
-        
+        .limit(100);
       const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase query timed out')), 5000));
-      
       const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
       if (error) console.warn('Supabase history read error:', error.message);
       if (!error && data) return data;
@@ -359,8 +356,7 @@ async function readHistory(tenantId = 'default') {
   } catch (e) {
     console.warn('Supabase history read failed, falling back to local:', e.message);
   }
-  const localHist = await readLocalHistory();
-  return localHist.filter(h => (h.tenantId || h.tenant_id || 'default') === tenantId);
+  return await readLocalHistory();
 }
 
 async function appendHistory(record, tenantId = 'default') {
