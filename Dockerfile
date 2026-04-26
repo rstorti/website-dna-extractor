@@ -52,11 +52,11 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 COPY frontend/package*.json ./frontend/
 
-# Install backend deps (postinstall script downloads Chrome)
-RUN npm install && npm cache clean --force
+# Install backend deps with npm ci (deterministic — fails if lockfile is out of sync)
+RUN npm ci && npm cache clean --force
 
 # Install frontend deps
-RUN cd frontend && npm install && npm cache clean --force
+RUN cd frontend && npm ci && npm cache clean --force
 
 # Copy source code
 COPY . .

@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import * as XLSX from 'xlsx';
+import * as XLSX from '@e965/xlsx';
+import SettingsTab from './components/SettingsTab';
+import ScannerTab from './components/ScannerTab';
+import HistoryTab from './components/HistoryTab';
 import './index.css';
 import './loading.css';
 
@@ -9,9 +12,48 @@ import './loading.css';
 //   which kills long-running extractions (60-300s) with HTTP 504. Bypassing it with a
 //   direct Railway URL is safe because Railway already has CORS configured for netlify.app.
 const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const API_BASE_URL = IS_LOCAL ? '' : 'https://website-dna-extractor-production.up.railway.app';
+const API_BASE_URL = IS_LOCAL ? '' : (import.meta.env.VITE_API_BASE_URL || '');
+
+// Session token for all backend requests (Jobs, History, Scan)
+let _sessionToken = localStorage.getItem('dna_session_token') || null;
+
+export function getSessionToken() {
+  return _sessionToken;
+}
+
+export function setSessionToken(token) {
+  if (token) {
+    localStorage.setItem('dna_session_token', token);
+    _sessionToken = token;
+  } else {
+    localStorage.removeItem('dna_session_token');
+    _sessionToken = null;
+  }
+}
+
+export async function login(password, tenantId) {
+  try {
+    const r = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password, tenantId: tenantId || 'default' })
+    });
+    if (!r.ok) return false;
+    const { token } = await r.json();
+    setSessionToken(token);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function App() {
+    const [hasToken, setHasToken] = useState(!!getSessionToken());
+    const [loginKey, setLoginKey] = useState('');
+    const [tenantId, setTenantId] = useState('');
+    const [loginError, setLoginError] = useState('');
+    const [isLoggingIn, setIsLoggingIn] = useState(false);
+
     const [url, setUrl] = useState('');
     const [youtubeUrl, setYoutubeUrl] = useState('');
     const [profileUrl, setProfileUrl] = useState('');
@@ -33,6 +75,7 @@ function App() {
     // useRef ensures the AbortController reference persists across re-renders.
     // A plain object { current: null } is recreated each render, making Cancel a no-op.
     const abortControllerRef = useRef(null);
+    const activeJobIdRef = useRef(null);
     
     // Interactive Selection States
     const [selectedSummaryType, setSelectedSummaryType] = useState('website'); // website, youtube, combined
@@ -52,15 +95,6 @@ function App() {
     const [stageTimings, setStageTimings] = useState([]);   // per-stage timing from last extraction
     const [totalMs, setTotalMs] = useState(null);           // total extraction ms
     const [lastExtractionUrls, setLastExtractionUrls] = useState(null); // URLs used in last extraction
-    // Image Scanner state (Imageye-clone)
-    const [scanUrl, setScanUrl] = useState('');
-    const [scanResults, setScanResults] = useState(null);   // { images, total, host }
-    const [isScanning, setIsScanning] = useState(false);
-    const [scanError, setScanError] = useState(null);
-    const [scanFilter, setScanFilter] = useState('all');    // 'all' | 'jpg' | 'png' | 'gif' | 'webp' | 'svg'
-    const [scanMinWidth, setScanMinWidth] = useState(0);    // min natural width filter (px)
-    const [scanSelected, setScanSelected] = useState([]);   // selected image urls
-    const [scanDims, setScanDims] = useState({});           // { url: { w, h } } populated on image load
     // Dashboard pre-scan state
     const [dashScanResults, setDashScanResults] = useState(null);
     const [isDashScanning, setIsDashScanning] = useState(false);
@@ -75,10 +109,21 @@ function App() {
         setTimeout(() => setToast(null), duration);
     };
 
-    const handleCancelExtract = () => {
+    const handleCancelExtract = async () => {
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
             abortControllerRef.current = null;
+        }
+        if (activeJobIdRef.current) {
+            try {
+                await fetch(`${API_BASE_URL}/api/jobs/${activeJobIdRef.current}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + getSessionToken() }
+                });
+            } catch (err) {
+                console.warn('Failed to send cancel signal to server:', err);
+            }
+            activeJobIdRef.current = null;
         }
     };
 
@@ -132,13 +177,18 @@ function App() {
             setDashSelectedImages([]);
             return;
         }
+        
+        // Clear previous scans and selections when a new valid URL is being typed
+        setDashScanResults(null);
+        setDashSelectedImages([]);
+        
         const timer = setTimeout(async () => {
             setIsDashScanning(true);
             setDashScanError(null);
             try {
                 const r = await fetch(`${API_BASE_URL}/api/scan-images`, { 
                     method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' }, 
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getSessionToken() }, 
                     body: JSON.stringify({ url: url.trim() }) 
                 });
                 const d = await r.json();
@@ -162,33 +212,35 @@ function App() {
         // Ping the server first to wake it up (fire-and-forget, no await)
         fetch(`${API_BASE_URL}/api/health`).catch(() => {});
         
-        // Give the server up to 45s — enough to cover a full Render cold-start
+        // Give the server up to 45s — enough to cover a full Railway cold-start
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 45000);
         
         try {
             const res = await fetch(`${API_BASE_URL}/api/history`, {
-                headers: { 'x-api-key': import.meta.env.VITE_ADMIN_API_KEY || import.meta.env.VITE_GEMINI_API_KEY || '' },
-                signal: controller.signal
+                headers: { 'Authorization': 'Bearer ' + getSessionToken() },
+                signal: controller.signal,
             });
             clearTimeout(timeoutId);
+            if (res.status === 401) {
+                localStorage.removeItem('auth_session');
+                setHasToken(false);
+                throw new Error('Session expired');
+            }
             if (!res.ok) throw new Error(`Server returned ${res.status}`);
             const data = await res.json();
             setHistoryData(data || []);
             setHistoryError(null);
-            setIsHistoryLoading(false); // ✅ Always clear spinner on success
+            setIsHistoryLoading(false);
         } catch (e) {
             clearTimeout(timeoutId);
             console.error('Failed to fetch history', e);
             if (!isRetry) {
-                // First failure — server was likely cold-starting. Auto-retry once after 5s.
                 console.log('[History] Retrying after cold-start delay...');
                 setTimeout(() => fetchHistory(true), 5000);
-                // Keep spinner showing while retrying — do NOT clear yet
             } else {
-                // Second failure — show an actionable error, NOT "No history"
                 setHistoryError('Could not reach the server. It may still be waking up — wait 30 seconds and try again.');
-                setIsHistoryLoading(false); // ✅ Clear spinner on final failure
+                setIsHistoryLoading(false);
             }
         }
     };
@@ -248,21 +300,37 @@ function App() {
         } else setUrlError(false);
         
         if (profileUrl) {
-            const lcProfile = profileUrl.toLowerCase();
-            const ALLOWED_BIO_DOMAINS = [
-                'linktr.ee', 'beacon.ai', 'bio.site', 'bento.me', 'lnk.bio',
-                'bit.ly', 'solo.to', 'tap.bio', 'milkshake.app', 'hoo.be',
-                'campsite.bio', 'later.com/p/', 'linkin.bio'
-            ];
-            const isBioDomain = ALLOWED_BIO_DOMAINS.some(d => lcProfile.includes(d));
-            if (!isValidDomain(lcProfile) || !isBioDomain) {
+            let isValidBio = false;
+            try {
+                let testUrl = profileUrl;
+                if (!testUrl.startsWith('http')) testUrl = 'https://' + testUrl;
+                const urlObj = new URL(testUrl);
+                const hostname = urlObj.hostname.toLowerCase();
+                const ALLOWED_BIO_DOMAINS = [
+                    'linktr.ee', 'beacon.ai', 'bio.site', 'bento.me', 'lnk.bio',
+                    'bit.ly', 'solo.to', 'tap.bio', 'milkshake.app', 'hoo.be',
+                    'campsite.bio', 'linkin.bio'
+                ];
+                isValidBio = ALLOWED_BIO_DOMAINS.some(d => hostname === d || hostname.endsWith('.' + d));
+                if (!isValidBio && (hostname === 'later.com' || hostname.endsWith('.later.com')) && urlObj.pathname.startsWith('/p/')) isValidBio = true;
+            } catch(e) {}
+            
+            if (!isValidBio) {
                 setProfileError(true); validationFailed = true; 
             } else setProfileError(false);
         } else setProfileError(false);
 
         if (youtubeUrl) {
-            const lcYoutube = youtubeUrl.toLowerCase();
-            if (!lcYoutube.includes('youtu.be') && !lcYoutube.includes('youtube.com')) { 
+            let isValidYt = false;
+            try {
+                let testUrl = youtubeUrl;
+                if (!testUrl.startsWith('http')) testUrl = 'https://' + testUrl;
+                const hostname = new URL(testUrl).hostname.toLowerCase();
+                if (hostname === 'youtu.be' || hostname.endsWith('.youtu.be') || hostname === 'youtube.com' || hostname.endsWith('.youtube.com')) {
+                    isValidYt = true;
+                }
+            } catch(e) {}
+            if (!isValidYt) { 
                 setYoutubeError(true); validationFailed = true; 
             } else setYoutubeError(false);
         } else setYoutubeError(false);
@@ -275,6 +343,11 @@ function App() {
         setLoading(true);
         setError(null);
         setResult(null);
+        setSelectedImages([]);
+        setSelectedCtas([]);
+        setSelectedColors([]);
+        setSelectedButtonStyle(null);
+        setSummaryText({ website: '', youtube: '', combined: '' });
 
         // AbortController: stores ref so cancel button can abort early
         const controller = new AbortController();
@@ -296,59 +369,83 @@ function App() {
                 } catch(e) {}
             }, 3000);
 
-            const response = await fetch(`${API_BASE_URL}/api/extract`, {
+            // Step 1: Start Job
+            const jobRes = await fetch(`${API_BASE_URL}/api/jobs`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getSessionToken() },
                 body: JSON.stringify({ url, youtubeUrl, profileUrl, selectedImages: dashSelectedImages }),
                 signal: controller.signal
             });
+            const jobDataInit = await jobRes.json();
+            if (!jobRes.ok) {
+                // Surface rate limit or validation error immediately
+                if (jobRes.status === 429) {
+                    throw new Error(`🚦 Rate Limited: ${jobDataInit.error || 'Too many requests. Please wait 1 minute before trying again.'}`);
+                }
+                throw new Error(jobDataInit.error || 'Failed to start extraction job.');
+            }
+
+            const jobId = jobDataInit.jobId;
+            activeJobIdRef.current = jobId;
+
+            // Step 2: Poll Job Result
+            let data = null;
+            let isDone = false;
+            let finalError = null;
+
+            while (!isDone && !controller.signal.aborted) {
+                await new Promise(r => setTimeout(r, 2000));
+                try {
+                    const stRes = await fetch(`${API_BASE_URL}/api/jobs/${jobId}`, { 
+                        headers: { 'Authorization': 'Bearer ' + getSessionToken() },
+                        signal: controller.signal 
+                    });
+                    if (stRes.status === 200) {
+                        const parsed = await stRes.json();
+                        data = parsed.data;
+                        isDone = true;
+                    } else if (stRes.status === 422) {
+                        const errData = await stRes.json();
+                        finalError = errData;
+                        isDone = true;
+                    } else if (stRes.status >= 500) {
+                        const rawText = await stRes.text();
+                        finalError = { error: `Server error: ${stRes.status}`, raw: rawText };
+                        isDone = true;
+                    } else if (stRes.status === 404) {
+                        finalError = { error: 'Job not found or expired.' };
+                        isDone = true;
+                    }
+                } catch(e) {
+                    if (e.name === 'AbortError') break;
+                }
+            }
+
+            if (controller.signal.aborted) {
+                clearTimeout(timeoutId);
+                clearInterval(statusInterval);
+                abortControllerRef.current = null;
+                throw new Error('Extraction cancelled.');
+            }
+
             clearTimeout(timeoutId);
+            clearInterval(statusInterval);
             abortControllerRef.current = null;
 
-            const rawText = await response.text();
-            let data;
-            try {
-                data = JSON.parse(rawText);
-            } catch (err) {
-                if (response.status >= 500) {
-                    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-                    const contextMsg = isLocalhost
-                        ? `💥 Local backend crashed (HTTP ${response.status}). Check your terminal for the Node.js stack trace.\n\nRaw output: ${rawText.substring(0, 300)}`
-                        : `💥 Server Error (HTTP ${response.status}): The backend crashed mid-request. Railway is restarting it — wait 20 seconds and try again.\n\nRaw: ${rawText.substring(0, 80)}`;
-                    throw new Error(contextMsg);
-                }
-                throw new Error(`❌ Invalid response (HTTP ${response.status}): Backend returned non-JSON.\n\n${rawText.substring(0, 150)}`);
-            }
-
-            if (response.status === 429) {
-                // Rate limit — surface the server message verbatim as it is already friendly
-                throw new Error(`🚦 Rate Limited: ${data.error || 'Too many requests. Please wait 1 minute before trying again.'}`);
-            }
-
-            if (!response.ok) {
-                // Build a multi-line diagnostic from the structured server error
+            if (finalError) {
                 const parts = [];
-                const rawMsg = (data.error || 'Extraction failed').replace(/^Extraction Failed:\s*/i, '');
+                const rawMsg = (finalError.error || 'Extraction failed').replace(/^Extraction Failed:\s*/i, '');
                 
-                const stepList = data.steps || lastKnownSteps || [];
+                const stepList = finalError.steps || lastKnownSteps || [];
                 if (stepList.length > 0) {
                     parts.push('--- DIAGNOSTIC CHECKLIST ---');
                     parts.push(stepList.map(s => `✅ ${s}`).join('\n'));
                 }
                 
-                // Per-stage timing breakdown (only shown on errors so it aids debugging)
-                const timings = data.stageTimings || [];
-                if (timings.length > 0) {
-                    parts.push('\n--- STAGE TIMINGS (connector/AI → ms taken) ---');
-                    timings.forEach(t => {
-                        const sec = (t.durationMs / 1000).toFixed(1);
-                        parts.push(`⏱️  ${t.stage.padEnd(40)} ${sec}s  (total: ${(t.elapsedMs/1000).toFixed(1)}s)`);
-                    });
-                }
-                
-                parts.push(`\n❌ FAILED AT: ${data.stage || lastKnownStage || 'Unknown'} (Total elapsed: ${data.elapsed || 0}s)\n`);
+                parts.push(`\n❌ FAILED AT: ${finalError.stage || lastKnownStage || 'Unknown'} (Total elapsed: ${finalError.elapsed || 0}s)\n`);
                 parts.push(`Message: ${rawMsg}`);
-                if (data.hint) parts.push(`\n💡 Hint: ${data.hint}`);
+                if (finalError.hint) parts.push(`\n💡 Hint: ${finalError.hint}`);
+                if (finalError.raw) parts.push(`\nRaw details: ${finalError.raw.substring(0, 100)}`);
                 
                 throw new Error(parts.join('\n'));
             }
@@ -366,6 +463,7 @@ function App() {
             setSelectedSummaryType('website');
             setSelectedCtas([
                 ...(verified.youtube_ctas || []),
+                ...(data.profilePayload?.ctas || []),
                 ...(data.ctas || [])
             ]);
             setCtaEdits({}); // Reset CTA edits on new extraction
@@ -373,7 +471,10 @@ function App() {
             // Auto-select featured 640×640 images only (min 2 pairs = 4 images: cleanA, taggedA, cleanB, taggedB).
             // Logo is NOT included here — it lives in campaign.image / brand.logo fields separately.
             // featuredImages ordering: [cleanA, taggedA, cleanB, taggedB, ...]
-            const featured = data.featuredImages || [];
+            const featured = [
+                ...(data.featuredImages || []),
+                ...(data.profilePayload?.featuredImages || [])
+            ];
             const autoImages = featured
                 .filter(Boolean)
                 .filter((v, i, a) => a.indexOf(v) === i) // dedupe
@@ -454,8 +555,7 @@ function App() {
                 } else {
                     setError(
                         '🔌 Cannot reach the extraction server\n\n' +
-                        'The Railway backend may have crashed or is restarting.' +
-                        ' This can happen after a heavy extraction request.\n\n' +
+                        'The backend may have crashed, restarted, or redeployed during extraction.\n\n' +
                         '💡 What to do:\n' +
                         '  1. Wait 20 seconds, then click Extract Info again\n' +
                         '  2. If it still fails, click "Check backend health" below\n' +
@@ -476,6 +576,9 @@ function App() {
                 setError(`🚨 Extraction Terminated\n\n${finalMsg}`);
             }
         } finally {
+            if (statusInterval) clearInterval(statusInterval);
+            if (abortControllerRef.current) abortControllerRef.current = null;
+            activeJobIdRef.current = null;
             setLoading(false);
         }
     };
@@ -485,7 +588,7 @@ function App() {
         try {
             await fetch(`${API_BASE_URL}/api/history`, {
                 method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getSessionToken() },
                 body: JSON.stringify({ domain })
             });
             setHistoryData(prev => prev.filter(item => {
@@ -503,7 +606,7 @@ function App() {
         try {
             await fetch(`${API_BASE_URL}/api/history`, {
                 method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getSessionToken() },
                 body: JSON.stringify({ timestamp })
             });
             setHistoryData(prev => prev.filter(item => item.timestamp !== timestamp));
@@ -575,7 +678,16 @@ function App() {
         const rawName = result.data?.name || result.name || "Target Campaign";
         const baseName = shortBrandName(rawName);
         const descText = summaryText[selectedSummaryType] || '';
-        const htmlDesc = descText ? `<p>${descText.replace(/\n/g, '<br>')}</p>` : '';
+        const escapeHtml = (unsafe) => {
+            return unsafe
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
+        };
+        const safeDesc = escapeHtml(descText);
+        const htmlDesc = safeDesc ? `<p>${safeDesc.replace(/\n/g, '<br>')}</p>` : '';
         
         const bgColor    = customPalettes['Background Color']   || result.data?.background_color         || '#FFFFFF';
         const fgColor    = customPalettes['Foreground Color']   || result.data?.foreground_color          || '#000000';
@@ -588,12 +700,12 @@ function App() {
         const btnShape = selectedButtonStyle?.shape              || 'Rounded';
 
         // Map CSS textAlign string → Minfo integer enum
-        // 1 = Center (default), 2 = Left, 3 = Right
+        // 1 = Left, 2 = Center (default), 3 = Right
         const cssToAlignEnum = (cssVal = '') => {
             const v = cssVal.toLowerCase().trim();
-            if (v === 'left' || v === 'start')  return 2;
+            if (v === 'left' || v === 'start')  return 1;
             if (v === 'right' || v === 'end')   return 3;
-            return 1; // center / anything else defaults to center
+            return 2; // center / anything else defaults to center
         };
         const btnTextAlignEnum = cssToAlignEnum(selectedButtonStyle?.textAlign);
 
@@ -623,8 +735,8 @@ function App() {
         };
 
         const campaignItemButtons = selectedCtas.map((cta, idx) => {
-            let ctaUrl = "";
-            let ctaName = "";
+            let ctaUrl;
+            let ctaName;
             if (typeof cta === 'object' && cta.url) {
                 ctaUrl  = cleanUrl(cta.url);
                 ctaName = ctaEdits[cta.url] !== undefined ? ctaEdits[cta.url] : cta.button_name;
@@ -634,7 +746,15 @@ function App() {
             }
             const btnType = inferButtonType(ctaUrl);
 
-            // Per Minfo schema: shape/buttonAlign/textAlign are integers (1=default/center)
+            // Per Minfo schema: shape/buttonAlign/textAlign are integers
+            // shape: 1=Square, 2=Rounded, 3=Pill
+            // buttonAlign/textAlign: 1=Left, 2=Center, 3=Right
+            const inferShapeEnum = (shapeStr = '') => {
+                const s = shapeStr.toLowerCase();
+                if (s === 'square') return 1;
+                if (s === 'pill' || s.includes('pill') || s.includes('9999')) return 3;
+                return 2; // Rounded (default)
+            };
             return {
                 name: ctaName,
                 buttonType: btnType,
@@ -646,8 +766,8 @@ function App() {
                     propertyValue: ctaUrl,
                     propertyName: inferPropertyName(btnType)
                 }],
-                shape: 1,       // integer enum: 1 = default rounded
-                buttonAlign: 1, // integer enum: 1 = center
+                shape: inferShapeEnum(btnShape),  // 1=Square, 2=Rounded, 3=Pill
+                buttonAlign: 2, // integer enum: 2 = center
                 textAlign: btnTextAlignEnum, // mapped from extracted CSS textAlign value
                 enabled: true
             };
@@ -688,7 +808,23 @@ function App() {
             } catch { return ""; }
         };
 
-        const medialinks = (result.socialMediaLinks || []).map((link, idx) => {
+        // Build medialinks: start with the website URL as the first entry (if present)
+        const websiteUrl = cleanUrl(url || result.data?.website || '');
+        const websiteEntry = websiteUrl ? [{
+            name: 'Website',
+            icon: faviconUrl(websiteUrl),
+            link_url: websiteUrl,
+            buttonCategoryId: 8, // generic/other — website is not a specific social platform
+            modelorder: 1
+        }] : [];
+
+        const allSocialLinks = [
+            ...(result.socialMediaLinks || []),
+            ...(result.data?.youtube_social_links || []),
+            ...(result.profilePayload?.socialMediaLinks || [])
+        ];
+
+        const socialEntries = allSocialLinks.map((link, idx) => {
             const realLink = cleanUrl(link);
             let name = "Social";
             let hostname = "";
@@ -702,9 +838,11 @@ function App() {
                 icon: faviconUrl(realLink),
                 link_url: realLink,
                 buttonCategoryId: inferSocialCategoryId(hostname),
-                modelorder: idx + 1
+                modelorder: websiteEntry.length + idx + 1
             };
         });
+
+        const medialinks = [...websiteEntry, ...socialEntries];
 
         const processImage = (imgSrc) => imgSrc || "";
 
@@ -969,6 +1107,50 @@ function App() {
         XLSX.writeFile(wb, `WebsiteDNA_${safeName}.xlsx`);
     };
 
+    if (!hasToken) {
+        return (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg-color)', color: 'var(--text-primary)' }}>
+                <div style={{ background: 'var(--surface-color)', padding: '2.5rem', borderRadius: '12px', maxWidth: '400px', width: '100%', textAlign: 'center', border: '1px solid var(--border-color)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
+                    <h2 style={{ marginBottom: '1rem', color: 'var(--primary)' }}>Admin Login</h2>
+                    <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>Enter the valid API Key to access the Website DNA Extractor.</p>
+                    <input 
+                        type="password" 
+                        value={loginKey} 
+                        onChange={e => setLoginKey(e.target.value)} 
+                        onKeyDown={e => e.key === 'Enter' && document.getElementById('login-btn').click()}
+                        placeholder="Admin API Key" 
+                        style={{ width: '100%', padding: '0.8rem', marginBottom: '1rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(0,0,0,0.2)', color: 'white', outline: 'none' }} 
+                    />
+                    <input 
+                        type="text" 
+                        value={tenantId} 
+                        onChange={e => setTenantId(e.target.value)} 
+                        onKeyDown={e => e.key === 'Enter' && document.getElementById('login-btn').click()}
+                        placeholder="Tenant ID (Optional)" 
+                        style={{ width: '100%', padding: '0.8rem', marginBottom: '1rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(0,0,0,0.2)', color: 'white', outline: 'none' }} 
+                    />
+                    {loginError && <p style={{ color: '#ff4b4b', marginBottom: '1rem', fontSize: '0.85rem' }}>{loginError}</p>}
+                    <button 
+                        id="login-btn"
+                        onClick={async () => {
+                            if (!loginKey) return;
+                            setIsLoggingIn(true);
+                            setLoginError('');
+                            const ok = await login(loginKey, tenantId);
+                            if (ok) setHasToken(true);
+                            else setLoginError('Invalid API Key or Tenant');
+                            setIsLoggingIn(false);
+                        }} 
+                        disabled={isLoggingIn}
+                        style={{ width: '100%', padding: '0.8rem', background: 'var(--primary)', color: 'black', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', opacity: isLoggingIn ? 0.7 : 1 }}
+                    >
+                        {isLoggingIn ? 'Verifying...' : 'Login'}
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="layout-wrapper">
             {/* Global toast notification */}
@@ -1226,6 +1408,9 @@ function App() {
                                         </span>
                                         {dashSelectedImages.length > 0 && <button onClick={() => setDashSelectedImages([])} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.7)', borderRadius: '4px', padding: '0.2rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer' }}>Clear Selection</button>}
                                     </div>
+                                    <div style={{ marginTop: '0.6rem', fontSize: '0.86rem', color: 'rgba(255,255,255,0.72)' }}>
+                                        Keep the extraction tab open until completion. If the server restarts or redeploys during extraction, the job may be lost and must be restarted.
+                                    </div>
                                 </div>
                             )}
                             
@@ -1233,7 +1418,7 @@ function App() {
                                 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
                                 const healthUrl = isLocalhost
                                     ? 'http://localhost:3001/api/health'
-                                    : 'https://website-dna-extractor-production.up.railway.app/api/health';
+                                    : `${API_BASE_URL}/api/health`;
                                 const isNetworkError = error.includes('Cannot reach') || error.includes('Failed to fetch') || error.includes('NetworkError');
                                 const isTimeout = error.includes('timed out') || error.includes('Timed Out') || error.includes('timed out after') || error.includes('Process timed out');
                                 const errorTitle = isNetworkError ? 'Server Unreachable' : isTimeout ? 'Request Timed Out' : 'Extraction Failed';
@@ -1954,7 +2139,7 @@ function App() {
                                             style={{ padding: '0.8rem 1.5rem', fontSize: '1rem', flex: 1,  maxWidth: '220px', display: 'flex', justifyContent: 'center' }}
                                             disabled={isGeneratingJson}
                                         >
-                                            {isGeneratingJson ? <div className="loader" style={{width: '20px', height: '20px'}}></div> : 'Export to JSON'}
+                                            {isGeneratingJson ? <div className="loader" style={{width: '20px', height: '20px'}}></div> : 'Create Json'}
                                         </button>
                                         <button 
                                             onClick={exportToExcel}
@@ -2084,450 +2269,40 @@ function App() {
                     </>)}
 
                 {activeTab === 'History' && (
-                    <div className="input-card" style={{ marginBottom: 0 }}>
-                        <h1 className="brand-font">Extraction History</h1>
-                        <p>Previously extracted DNA profiles grouped by domain.</p>
-                        
-                        {isHistoryLoading ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '4rem 0', gap: '1rem' }}>
-                                <div className="loader" style={{ width: '40px', height: '40px', borderWidth: '4px' }}></div>
-                                <p style={{ color: 'var(--text-secondary)' }}>Loading history... (server may be waking up, please wait)</p>
-                            </div>
-                        ) : historyError ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '4rem 0', gap: '1.5rem', textAlign: 'center' }}>
-                                <span style={{ fontSize: '2.5rem' }}>⚠️</span>
-                                <p style={{ color: 'var(--text-secondary)', maxWidth: '500px' }}>{historyError}</p>
-                                <button onClick={() => fetchHistory()} style={{ background: 'var(--primary)', color: '#000', border: 'none', padding: '0.75rem 2rem', borderRadius: 'var(--radius-sm)', fontWeight: 700, cursor: 'pointer', fontSize: '1rem' }}>↺ Retry</button>
-                            </div>
-                        ) : (
-                            <div className="history-grid" style={{
-                                display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem', marginTop: '2rem'
-                            }}>
-                                {(() => {
-                                    if (!historyData || !Array.isArray(historyData) || historyData.length === 0) return <p style={{ color: 'var(--text-secondary)' }}>No extractions found. Run an extraction on the Dashboard first.</p>;
-                                    const grouped = historyData.reduce((acc, curr) => {
-                                    let domain = curr.target_url || curr.url;
-                                    try { domain = new URL(curr.target_url || curr.url).hostname; } catch (e) { }
-                                    if (!acc[domain]) acc[domain] = [];
-                                    acc[domain].push(curr);
-                                    return acc;
-                                }, {});
-                                return Object.entries(grouped).map(([domain, entries], idx) => {
-                                    const latest = entries[0];
-                                    const extractCount = entries.length;
-
-                                    const formatDate = (dateString) => {
-                                        const d = new Date(dateString);
-                                        const day = String(d.getDate()).padStart(2, '0');
-                                        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                                        const month = months[d.getMonth()];
-                                        const year = d.getFullYear();
-                                        const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                                        return `${day} ${month} ${year} ${time}`;
-                                    };
-
-                                    const isExpanded = expandedDomains[domain] === true; // Default to collapsed
-
-                                    return (
-                                        <div key={idx} className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                            <div 
-                                                style={{ display: 'flex', alignItems: 'center', gap: '1rem', borderBottom: isExpanded ? '1px solid var(--border-color)' : 'none', paddingBottom: isExpanded ? '1rem' : '0', cursor: 'pointer' }}
-                                                onClick={() => setExpandedDomains(prev => ({ ...prev, [domain]: !isExpanded }))}
-                                            >
-                                                <div style={{ width: '60px', height: '60px', borderRadius: 'var(--radius-sm)', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
-                                                    {latest.payload?.data?.image || latest.payload?.mappedData?.image ? <img src={latest.payload.data?.image || latest.payload.mappedData?.image} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : '🌐'}
-                                                </div>
-                                                <div style={{ width: 'calc(100% - 150px)', overflow: 'hidden' }}>
-                                                    <h3 style={{ fontSize: '1.2rem', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                        <a href={latest.target_url || latest.url} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }} onClick={(e) => e.stopPropagation()}>
-                                                            {domain.replace(/^www\./i, '')}
-                                                        </a>
-                                                    </h3>
-                                                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                        {extractCount} extraction{extractCount !== 1 ? 's' : ''}
-                                                        <span style={{ fontSize: '1rem', color: 'var(--primary)' }}>
-                                                            {isExpanded ? '▲' : '▼'}
-                                                        </span>
-                                                    </p>
-                                                </div>
-                                                <div style={{ marginLeft: 'auto', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                                                    <button title="Delete All" onClick={(e) => { e.stopPropagation(); handleDeleteDomain(domain); }} className="btn-secondary" style={{ background: 'transparent', color: 'var(--primary)', border: 'none', padding: '0.4rem', cursor: 'pointer' }}>
-                                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            {isExpanded && (
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                                {entries.map((entry, eIdx) => {
-                                                    const urlPills = [
-                                                        entry.target_url  && { key: `w-${eIdx}`, url: entry.target_url,  icon: '🌐', bg: 'rgba(255,255,255,0.06)', color: 'var(--text-secondary)' },
-                                                        entry.youtube_url && { key: `y-${eIdx}`, url: entry.youtube_url, icon: '▶',  bg: 'rgba(255,0,0,0.12)',       color: '#ff7070' },
-                                                        entry.profile_url && { key: `p-${eIdx}`, url: entry.profile_url, icon: '👤', bg: 'rgba(100,149,237,0.15)',   color: '#7aabff' },
-                                                    ].filter(Boolean);
-                                                    return (
-                                                    <div key={eIdx} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: 'var(--surface-color)', padding: '0.8rem 1rem', borderRadius: 'var(--radius-sm)' }}>
-                                                        {/* URL labels row */}
-                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', fontSize: '0.78rem' }}>
-                                                            {urlPills.map(({ key, url, icon, bg, color }) => (
-                                                                <span key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: bg, color, padding: '0.15rem 0.35rem 0.15rem 0.5rem', borderRadius: '4px', maxWidth: '100%', minWidth: 0 }}>
-                                                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{icon} {url}</span>
-                                                                    <button
-                                                                        title="Copy URL"
-                                                                        onClick={() => {
-                                                                            navigator.clipboard.writeText(url).then(() => showToast(`✅ Copied: ${url}`, 'success', 2500));
-                                                                        }}
-                                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 0.1rem', color: 'inherit', opacity: 0.6, display: 'flex', alignItems: 'center', flexShrink: 0, lineHeight: 1 }}
-                                                                        onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-                                                                        onMouseLeave={e => e.currentTarget.style.opacity = '0.6'}
-                                                                    >
-                                                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                                                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                                                                        </svg>
-                                                                    </button>
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                        {/* Actions row */}
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                                                                {formatDate(entry.timestamp)}
-                                                            </div>
-                                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                                <button title="Delete record" onClick={() => handleDeleteExtraction(entry.timestamp)} style={{background: 'transparent', color: 'var(--primary)', border: 'none', padding: '0.4rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                                                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                                                                </button>
-                                                                <button
-                                                                onClick={() => {
-                                                                    if (!entry.payload) {
-                                                                        showToast('⚠️ This record was saved before Review was supported. Please re-extract to use Review.', 'warning', 6000);
-                                                                        return;
-                                                                    }
-                                                                    const verified = entry.payload.data || {};
-                                                                    setSummaryText({
-                                                                        website: verified.website_summary || '',
-                                                                        youtube: verified.youtube_summary || '',
-                                                                        combined: verified.combined_summary || '',
-                                                                        raw_youtube: entry.payload.youtubeData?.description || ''
-                                                                    });
-                                                                    setSelectedSummaryType('website');
-                                                                    setSelectedCtas([
-                                                                        ...(verified.youtube_ctas || []),
-                                                                        ...(entry.payload.ctas || [])
-                                                                    ]);
-                                                                    setCtaEdits({});
-                                                                    const heroes = entry.payload.featuredImages || [];
-                                                                    if (heroes.length > 0) {
-                                                                        setSelectedImages(heroes);
-                                                                    } else if (verified.image || entry.payload.mappedData?.image) {
-                                                                        setSelectedImages([verified.image || entry.payload.mappedData?.image].filter(Boolean));
-                                                                    } else {
-                                                                        setSelectedImages([]);
-                                                                    }
-                                                                    const histBtnStyles = entry.payload.data?.buttonStyles || entry.payload.buttonStyles || [];
-                                                                    setSelectedButtonStyle(histBtnStyles.length > 0 ? histBtnStyles[0] : null);
-                                                                    const histColorsToSelect = [
-                                                                        { label: 'Background Color', hex: entry.payload.data?.background_color },
-                                                                        { label: 'Foreground Color', hex: entry.payload.data?.foreground_color },
-                                                                        { label: 'App Bar Background', hex: entry.payload.data?.background_app_bar_color },
-                                                                        { label: 'App Bar Text', hex: entry.payload.data?.foreground_app_bar_color },
-                                                                        { label: 'Button Accent', hex: entry.payload.data?.icon_background_color_left }
-                                                                    ];
-                                                                    setSelectedColors(histColorsToSelect.filter(c => c.hex).map(c => c.label));
-                                                                    setUrl(entry.target_url || entry.url || '');
-                                                                    setYoutubeUrl(entry.youtube_url || '');
-                                                                    setProfileUrl(entry.profile_url || '');
-                                                                    setResult(entry.payload);
-                                                                    setShowJsonPreview(false);
-                                                                    setActiveTab('Dashboard');
-                                                                }}
-                                                                style={{
-                                                                    background: entry.payload ? 'var(--primary)' : 'rgba(255,255,255,0.15)',
-                                                                    color: entry.payload ? 'black' : 'var(--text-secondary)',
-                                                                    border: 'none',
-                                                                    padding: '0.4rem 0.8rem',
-                                                                    borderRadius: 'var(--radius-sm)',
-                                                                    cursor: 'pointer',
-                                                                    fontWeight: 'bold',
-                                                                    fontSize: '0.85rem'
-                                                                }}
-                                                            >
-                                                                    Review
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    );
-                                                })}
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                });
-                            })()}
-                        </div>
-                        )}
-                    </div>
+                    <HistoryTab
+                        isHistoryLoading={isHistoryLoading}
+                        historyError={historyError}
+                        historyData={historyData}
+                        fetchHistory={fetchHistory}
+                        expandedDomains={expandedDomains}
+                        setExpandedDomains={setExpandedDomains}
+                        handleDeleteDomain={handleDeleteDomain}
+                        handleDeleteExtraction={handleDeleteExtraction}
+                        showToast={showToast}
+                        setSummaryText={setSummaryText}
+                        setSelectedSummaryType={setSelectedSummaryType}
+                        setSelectedCtas={setSelectedCtas}
+                        setCtaEdits={setCtaEdits}
+                        setSelectedImages={setSelectedImages}
+                        setSelectedButtonStyle={setSelectedButtonStyle}
+                        setSelectedColors={setSelectedColors}
+                        setUrl={setUrl}
+                        setYoutubeUrl={setYoutubeUrl}
+                        setProfileUrl={setProfileUrl}
+                        setResult={setResult}
+                        setShowJsonPreview={setShowJsonPreview}
+                        setActiveTab={setActiveTab}
+                    />
                 )}
 
-                {activeTab === 'Scanner' && (() => {
-                    const API_BASE = import.meta.env.VITE_API_URL || '';
-                    const typeMap = { jpg: ['jpg','jpeg'], png: ['png'], gif: ['gif'], webp: ['webp'], svg: ['svg'], avif: ['avif'] };
-                    const getExt = (u) => { try { return new URL(u).pathname.split('.').pop().toLowerCase().split('?')[0]; } catch { return ''; } };
-                    const passesType = (u) => {
-                        if (scanFilter === 'all') return true;
-                        return (typeMap[scanFilter] || []).includes(getExt(u));
-                    };
-                    const passesSize = (u) => {
-                        if (scanMinWidth === 0) return true;
-                        const d = scanDims[u];
-                        return d ? d.w >= scanMinWidth : true; // keep unresolved images until we know
-                    };
-                    const filtered = scanResults ? scanResults.images.filter(img => passesType(img.url) && passesSize(img.url)) : [];
-                    const filterSelected = filtered.filter(img => scanSelected.includes(img.url));
-
-                    const handleScan = async () => {
-                        if (!scanUrl.trim()) return;
-                        setIsScanning(true); setScanError(null); setScanResults(null); setScanSelected([]); setScanDims({});
-                        try {
-                            const r = await fetch(`${API_BASE}/api/scan-images`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: scanUrl.trim() }) });
-                            const d = await r.json();
-                            if (!r.ok) throw new Error(d.error || 'Scan failed');
-                            setScanResults(d);
-                        } catch(e) { setScanError(e.message); }
-                        setIsScanning(false);
-                    };
-
-                    const downloadSelected = () => {
-                        scanSelected.forEach((url, i) => {
-                            setTimeout(() => {
-                                const a = document.createElement('a');
-                                a.href = url; a.download = `image_${i+1}.${getExt(url) || 'jpg'}`;
-                                a.target = '_blank'; document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                            }, i * 200);
-                        });
-                    };
-
-                    return (
-                    <div className="input-card">
-                        <h1 className="brand-font">🔍 Image Scanner</h1>
-                        <p style={{ color: 'rgba(255,255,255,0.5)', marginBottom: '1.5rem' }}>Scan any website and instantly see every image. Filter by type and size, then select to download or add to your campaign.</p>
-
-                        {/* URL Input Row */}
-                        <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem' }}>
-                            <div style={{ flex: 1, position: 'relative' }}>
-                                <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', fontSize: '1rem', opacity: 0.5 }}>🌐</span>
-                                <input
-                                    type="url"
-                                    value={scanUrl}
-                                    onChange={e => setScanUrl(e.target.value)}
-                                    onKeyDown={e => e.key === 'Enter' && !isScanning && handleScan()}
-                                    placeholder="https://example.com — paste any URL and press Scan"
-                                    style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 2.8rem', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 'var(--radius-sm)', color: '#fff', fontSize: '0.95rem', boxSizing: 'border-box' }}
-                                />
-                            </div>
-                            <button
-                                onClick={handleScan}
-                                disabled={isScanning || !scanUrl.trim()}
-                                style={{ padding: '0.85rem 2rem', background: isScanning ? 'rgba(249,157,50,0.4)' : 'var(--primary)', color: '#000', border: 'none', borderRadius: 'var(--radius-sm)', fontWeight: '700', fontSize: '1rem', cursor: isScanning ? 'wait' : 'pointer', whiteSpace: 'nowrap', opacity: (!scanUrl.trim() && !isScanning) ? 0.5 : 1 }}
-                            >
-                                {isScanning ? '⏳ Scanning…' : '🔍 Scan'}
-                            </button>
-                        </div>
-
-                        {scanError && <div style={{ background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.4)', color: '#f87171', padding: '0.75rem 1rem', borderRadius: 'var(--radius-sm)', marginBottom: '1rem' }}>❌ {scanError}</div>}
-
-                        {scanResults && (
-                        <div className="glass-panel">
-                            {/* Results header */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-                                <div style={{ flex: 1 }}>
-                                    <span style={{ fontWeight: '700', color: 'var(--primary)', fontSize: '1.05rem' }}>{filtered.length}</span>
-                                    <span style={{ color: 'rgba(255,255,255,0.5)', marginLeft: '0.4rem' }}>images from</span>
-                                    <span style={{ color: 'rgba(255,255,255,0.8)', marginLeft: '0.4rem', fontFamily: 'monospace', fontSize: '0.85rem' }}>{scanResults.host}</span>
-                                    {filterSelected.length > 0 && <span style={{ marginLeft: '1rem', background: 'rgba(249,157,50,0.15)', color: 'var(--primary)', padding: '0.1rem 0.6rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '700' }}>{filterSelected.length} selected</span>}
-                                </div>
-                                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                    <button onClick={() => setScanSelected(filtered.map(i=>i.url))} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.8)', padding: '0.3rem 0.8rem', borderRadius: '20px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '600' }}>☑ All</button>
-                                    <button onClick={() => setScanSelected([])} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.8)', padding: '0.3rem 0.8rem', borderRadius: '20px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '600' }}>✕ Clear</button>
-                                    {filterSelected.length > 0 && <>
-                                        <button onClick={downloadSelected} style={{ background: 'var(--primary)', color: '#000', border: 'none', padding: '0.3rem 0.9rem', borderRadius: '20px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '700' }}>⬇ Download ({filterSelected.length})</button>
-                                        <button onClick={() => navigator.clipboard.writeText(filterSelected.join('\n')).then(() => showToast('✅ URLs copied!'))} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.8)', padding: '0.3rem 0.8rem', borderRadius: '20px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '600' }}>⎘ Copy URLs</button>
-                                    </>}
-                                </div>
-                            </div>
-
-                            {/* Filter controls */}
-                            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                                    {['all','jpg','png','gif','webp','svg','avif'].map(t => (
-                                        <button key={t} onClick={() => setScanFilter(t)} style={{ padding: '0.25rem 0.7rem', borderRadius: '20px', border: '1px solid', borderColor: scanFilter === t ? 'var(--primary)' : 'rgba(255,255,255,0.15)', background: scanFilter === t ? 'rgba(249,157,50,0.15)' : 'rgba(255,255,255,0.05)', color: scanFilter === t ? 'var(--primary)' : 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: '0.78rem', fontWeight: scanFilter === t ? '700' : '400', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                            {t === 'all' ? 'All types' : t.toUpperCase()}
-                                        </button>
-                                    ))}
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: 'auto', fontSize: '0.82rem', color: 'rgba(255,255,255,0.5)' }}>
-                                    <span>Min width:</span>
-                                    {[0,100,200,400,800].map(w => (
-                                        <button key={w} onClick={() => setScanMinWidth(w)} style={{ padding: '0.2rem 0.5rem', borderRadius: '12px', border: '1px solid', borderColor: scanMinWidth === w ? 'var(--primary)' : 'rgba(255,255,255,0.12)', background: scanMinWidth === w ? 'rgba(249,157,50,0.12)' : 'transparent', color: scanMinWidth === w ? 'var(--primary)' : 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: scanMinWidth === w ? '700' : '400' }}>
-                                            {w === 0 ? 'Any' : `${w}px`}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Image Grid */}
-                            {filtered.length === 0 ? (
-                                <p style={{ color: 'rgba(255,255,255,0.35)', textAlign: 'center', padding: '2rem', fontStyle: 'italic' }}>No images match your current filters.</p>
-                            ) : (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '0.5rem' }}>
-                                {filtered.map((img, idx) => {
-                                    const isSel = scanSelected.includes(img.url);
-                                    const dim = scanDims[img.url];
-                                    const ext = getExt(img.url).toUpperCase() || '?';
-                                    return (
-                                        <div key={img.url} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                            <div
-                                                onClick={() => setScanSelected(prev => isSel ? prev.filter(s => s !== img.url) : [...prev, img.url])}
-                                                title={img.url}
-                                                style={{ position: 'relative', aspectRatio: '1', borderRadius: '8px', overflow: 'hidden', cursor: 'pointer', border: isSel ? '2px solid var(--primary)' : '2px solid rgba(255,255,255,0.07)', transition: 'all 0.15s', boxShadow: isSel ? '0 0 0 1px var(--primary), 0 4px 16px rgba(0,0,0,0.5)' : '0 2px 6px rgba(0,0,0,0.3)', transform: isSel ? 'scale(0.97)' : 'scale(1)', background: '#111' }}
-                                            >
-                                                <img
-                                                    src={img.url}
-                                                    alt=""
-                                                    loading="lazy"
-                                                    style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}
-                                                    onLoad={e => { const el = e.target; setScanDims(prev => ({ ...prev, [img.url]: { w: el.naturalWidth, h: el.naturalHeight } })); }}
-                                                    onError={e => { e.target.closest('div[style]').style.display = 'none'; }}
-                                                />
-                                                {/* Selection overlay */}
-                                                <div style={{ position:'absolute', inset:0, background: isSel ? 'rgba(249,157,50,0.15)' : 'transparent', transition:'background 0.15s', pointerEvents:'none' }} />
-                                                {/* Checkbox */}
-                                                <div style={{ position:'absolute', top:'5px', left:'5px', width:'18px', height:'18px', borderRadius:'4px', background: isSel ? 'var(--primary)' : 'rgba(0,0,0,0.6)', border: isSel ? '2px solid var(--primary)' : '2px solid rgba(255,255,255,0.35)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px', fontWeight:'900', color:'#000', pointerEvents:'none' }}>
-                                                    {isSel && '✓'}
-                                                </div>
-                                                {/* Source badge */}
-                                                {img.context === 'og' && <div style={{ position:'absolute', top:'5px', right:'5px', background:'rgba(74,222,128,0.8)', borderRadius:'3px', fontSize:'0.55rem', padding:'1px 3px', color:'#000', fontWeight:'700', pointerEvents:'none' }}>OG</div>}
-                                            </div>
-                                            {/* Dimension badge moved below image */}
-                                            {dim && <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.7rem', color:'rgba(255,255,255,0.6)', fontFamily:'monospace', padding: '0 2px' }}>
-                                                <span>{ext.length > 4 ? ext.substring(0,4) : ext}</span>
-                                                <span>{dim.w}×{dim.h}</span>
-                                            </div>}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                            )}
-                        </div>
-                        )}
-                    </div>
-                    );
-                })()}
+                {activeTab === 'Scanner' && <ScannerTab showToast={showToast} />}
 
                 {activeTab === 'Settings' && (
-                    <div className="input-card">
-                        <h1 className="brand-font">Settings & Logs</h1>
-                        <p>Admin diagnostics and extraction performance report.</p>
-                        <div className="dashboard-grid">
-                            {/* Extraction Timing Log */}
-                            <div className="glass-panel" style={{ gridColumn: '1 / -1' }}>
-                                <h3 style={{ marginBottom: '0.5rem', color: 'var(--primary)' }}>⏱ Last Extraction Timing Report</h3>
-
-                                {/* Input URLs panel */}
-                                {lastExtractionUrls && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '1.2rem', padding: '0.8rem 1rem', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
-                                        <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.35)', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Extraction Inputs</div>
-                                        {[
-                                            { label: 'Website', url: lastExtractionUrls.website, icon: '🌐' },
-                                            { label: 'YouTube', url: lastExtractionUrls.youtube, icon: '▶️' },
-                                            { label: 'Profile', url: lastExtractionUrls.profile, icon: '👤' },
-                                        ].filter(r => r.url).map(r => (
-                                            <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.82rem' }}>
-                                                <span style={{ width: '20px', textAlign: 'center' }}>{r.icon}</span>
-                                                <span style={{ color: 'rgba(255,255,255,0.4)', minWidth: '55px' }}>{r.label}</span>
-                                                <a href={r.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}
-                                                    onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
-                                                    onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
-                                                >{r.url}</a>
-                                                <button onClick={() => navigator.clipboard.writeText(r.url)} title="Copy URL" style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.25)', cursor: 'pointer', padding: '0 2px', fontSize: '0.75rem' }}>⎘</button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {stageTimings.length === 0 ? (
-                                    <p style={{ color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>No extraction run yet this session. Run an extraction to see stage timings.</p>
-                                ) : (
-                                    <>
-                                        <div style={{ display: 'flex', gap: '2rem', marginBottom: '1rem', fontSize: '0.9rem', color: 'rgba(255,255,255,0.6)' }}>
-                                            <span>Total: <strong style={{ color: '#4ade80' }}>{totalMs ? (totalMs / 1000).toFixed(1) + 's' : '—'}</strong></span>
-                                            <span>Stages: <strong style={{ color: 'var(--primary)' }}>{stageTimings.length}</strong></span>
-                                            <span>Slowest: <strong style={{ color: '#f87171' }}>{stageTimings.length > 0 ? stageTimings.reduce((a,b) => b.durationMs > a.durationMs ? b : a).stage.substring(0,40) : '—'}</strong></span>
-                                        </div>
-                                        <div style={{ overflowX: 'auto' }}>
-                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
-                                                <thead>
-                                                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.5)' }}>
-                                                        <th style={{ textAlign: 'left', padding: '6px 8px' }}>#</th>
-                                                        <th style={{ textAlign: 'left', padding: '6px 8px' }}>Stage</th>
-                                                        <th style={{ textAlign: 'right', padding: '6px 8px' }}>Duration</th>
-                                                        <th style={{ textAlign: 'right', padding: '6px 8px' }}>Cumulative</th>
-                                                        <th style={{ textAlign: 'right', padding: '6px 8px' }}>% of Total</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {stageTimings.map((t, i) => {
-                                                        const pct = totalMs ? ((t.durationMs / totalMs) * 100).toFixed(1) : 0;
-                                                        const isSlowest = t === stageTimings.reduce((a,b) => b.durationMs > a.durationMs ? b : a);
-                                                        return (
-                                                            <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: isSlowest ? 'rgba(248,113,113,0.08)' : 'transparent' }}>
-                                                                <td style={{ padding: '5px 8px', color: 'rgba(255,255,255,0.3)' }}>{i + 1}</td>
-                                                                <td style={{ padding: '5px 8px', color: isSlowest ? '#f87171' : 'rgba(255,255,255,0.85)', fontWeight: isSlowest ? '600' : 'normal' }}>
-                                                                    {isSlowest ? '🐌 ' : ''}{t.stage}
-                                                                </td>
-                                                                <td style={{ textAlign: 'right', padding: '5px 8px', color: t.durationMs > 5000 ? '#fbbf24' : '#4ade80', fontFamily: 'monospace' }}>
-                                                                    {t.durationMs >= 1000 ? (t.durationMs / 1000).toFixed(2) + 's' : t.durationMs + 'ms'}
-                                                                </td>
-                                                                <td style={{ textAlign: 'right', padding: '5px 8px', color: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' }}>
-                                                                    {(t.elapsedMs / 1000).toFixed(2)}s
-                                                                </td>
-                                                                <td style={{ textAlign: 'right', padding: '5px 8px' }}>
-                                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                                                                        <div style={{ width: '60px', height: '6px', borderRadius: '3px', background: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
-                                                                            <div style={{ width: `${Math.min(100, pct)}%`, height: '100%', background: pct > 30 ? '#f87171' : pct > 10 ? '#fbbf24' : '#4ade80', borderRadius: '3px', transition: 'width 0.3s' }} />
-                                                                        </div>
-                                                                        <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem', minWidth: '38px', textAlign: 'right' }}>{pct}%</span>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        );
-                                                    })}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-
-                            {/* Engine Settings */}
-                            <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                <h3 style={{ marginBottom: '0.25rem', color: 'var(--primary)' }}>Engine Settings</h3>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer', fontSize: '1.1rem' }}>
-                                    <input type="checkbox" defaultChecked style={{ width: '20px', height: '20px', accentColor: 'var(--primary)' }} />
-                                    Enable Vertex AI Outpainting (1:1 strict)
-                                </label>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer', fontSize: '1.1rem' }}>
-                                    <input type="checkbox" defaultChecked style={{ width: '20px', height: '20px', accentColor: 'var(--primary)' }} />
-                                    Auto-scroll lazy loaded elements
-                                </label>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer', fontSize: '1.1rem' }}>
-                                    <input type="checkbox" defaultChecked style={{ width: '20px', height: '20px', accentColor: 'var(--primary)' }} />
-                                    Save Raw HTML Snapshot
-                                </label>
-                            </div>
-                        </div>
-                    </div>
+                    <SettingsTab 
+                        lastExtractionUrls={lastExtractionUrls} 
+                        stageTimings={stageTimings} 
+                        totalMs={totalMs} 
+                    />
                 )}
             </main>
         </div>

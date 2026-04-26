@@ -1,15 +1,18 @@
 {
   "name": "website-dna-extractor",
-  "version": "1.0.0",
+  "version": "1.2.5",
   "description": "",
   "main": "server.js",
   "scripts": {
     "postinstall": "npx puppeteer browsers install chrome",
-    "start": "node server.js",
-    "build": "cd frontend && npm install && npm run build",
-    "server": "npx nodemon --ignore outputs/ --ignore frontend/ server.js",
+    "start": "node start.js",
+    "build": "cd frontend && npm run build",
+    "server": "npx nodemon --ignore outputs/ --ignore frontend/ start.js",
     "client": "cd frontend && npm run dev",
-    "dev": "concurrently \"npm run server\" \"npm run client\""
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "test": "node tests/smoke.js && node tests/unit.js && node tests/routes.js",
+    "qa": "node full_qa_test.js",
+    "lint": "npx eslint ."
   },
   "keywords": [],
   "author": "",
@@ -20,24 +23,36 @@
     "@google-cloud/vertexai": "^1.10.0",
     "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.97.0",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "axios": "^1.13.5",
-    "express-rate-limit": "^7.5.0",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "express-rate-limit": "^7.5.0",
     "google-auth-library": "^10.5.0",
     "https-proxy-agent": "^7.0.6",
+    "ipaddr.js": "^2.3.0",
     "pdf-parse": "^2.4.5",
     "pdf2json": "^4.0.2",
     "pg": "^8.19.0",
     "puppeteer": "^24.37.5",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "sanitize-html": "^2.17.3",
     "sharp": "^0.34.5",
-    "wrap-text": "^1.0.10"
+    "uuid": "^14.0.0",
+    "wrap-text": "^1.0.10",
+    "wtfnode": "^0.10.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "concurrently": "^9.2.1",
-    "nodemon": "^3.1.7"
+    "eslint": "^10.2.1",
+    "nodemon": "^3.1.7",
+    "supertest": "^7.1.4"
+  },
+  "overrides": {
+    "uuid": "^14.0.0"
   }
 }

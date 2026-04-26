@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { safeHttpAgent, safeHttpsAgent } = require('./lib/validateUrl.js');
 const env = require('./config/env');
 
 const YOUTUBE_API_KEY = env.YOUTUBE_API_KEY;
@@ -30,7 +31,7 @@ async function extractYoutubeDetails(url, _depth = 0) {
             const apiTimer = Date.now();
             const apiUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${YOUTUBE_API_KEY}`;
             console.log(`⏱️  [connector=YouTubeDataAPIv3] Fetching video snippet for videoId=${videoId}...`);
-            const response = await axios.get(apiUrl, { timeout: 15_000 });
+            const response = await axios.get(apiUrl, { httpAgent: safeHttpAgent, httpsAgent: safeHttpsAgent, timeout: 15_000 });
             console.log(`⏱️  [connector=YouTubeDataAPIv3] Video snippet API returned in ${Date.now() - apiTimer}ms`);
 
             if (!response.data.items || response.data.items.length === 0) {
@@ -45,7 +46,7 @@ async function extractYoutubeDetails(url, _depth = 0) {
                 const chTimer = Date.now();
                 const channelApiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${channelId}&key=${YOUTUBE_API_KEY}`;
                 console.log(`⏱️  [connector=YouTubeDataAPIv3] Fetching channel avatar for channelId=${channelId}...`);
-                const channelResponse = await axios.get(channelApiUrl, { timeout: 15_000 });
+                const channelResponse = await axios.get(channelApiUrl, { httpAgent: safeHttpAgent, httpsAgent: safeHttpsAgent, timeout: 15_000 });
                 console.log(`⏱️  [connector=YouTubeDataAPIv3] Channel avatar API returned in ${Date.now() - chTimer}ms`);
                 if (channelResponse.data.items && channelResponse.data.items.length > 0) {
                     const cSnippet = channelResponse.data.items[0].snippet;
@@ -81,7 +82,7 @@ async function extractYoutubeDetails(url, _depth = 0) {
 
             const chTimer = Date.now();
             console.log(`⏱️  [connector=YouTubeDataAPIv3] Fetching channel info: ${channelApiUrl.substring(0, 80)}...`);
-            const channelResponse = await axios.get(channelApiUrl, { timeout: 15_000 });
+            const channelResponse = await axios.get(channelApiUrl, { httpAgent: safeHttpAgent, httpsAgent: safeHttpsAgent, timeout: 15_000 });
             console.log(`⏱️  [connector=YouTubeDataAPIv3] Channel info API returned in ${Date.now() - chTimer}ms`);
 
             if (!channelResponse.data.items || channelResponse.data.items.length === 0) {
@@ -98,7 +99,7 @@ async function extractYoutubeDetails(url, _depth = 0) {
             const playlistUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=1&key=${YOUTUBE_API_KEY}`;
             const plTimer = Date.now();
             console.log(`⏱️  [connector=YouTubeDataAPIv3] Fetching playlist uploads...`);
-            const playlistResponse = await axios.get(playlistUrl, { timeout: 15_000 });
+            const playlistResponse = await axios.get(playlistUrl, { httpAgent: safeHttpAgent, httpsAgent: safeHttpsAgent, timeout: 15_000 });
             console.log(`⏱️  [connector=YouTubeDataAPIv3] Playlist API returned in ${Date.now() - plTimer}ms`);
             
             if (!playlistResponse.data.items || playlistResponse.data.items.length === 0) {
@@ -117,7 +118,7 @@ async function extractYoutubeDetails(url, _depth = 0) {
         throw new Error('[connector=YouTubeDataAPIv3] Invalid YouTube URL — could not match video ID, channel handle, or channel ID.');
 
     } catch (error) {
-        let errorMessage = error.message;
+        let errorMessage;
         if (error.response && error.response.data && error.response.data.error) {
             const apiMsg = error.response.data.error.message;
             if (apiMsg.toLowerCase().includes('quota')) {
@@ -132,7 +133,7 @@ async function extractYoutubeDetails(url, _depth = 0) {
         }
         
         console.error('[connector=YouTubeDataAPIv3] Error fetching YouTube details:', errorMessage);
-        throw new Error(errorMessage);
+        throw new Error(errorMessage, { cause: error });
     }
 }
 

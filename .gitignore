@@ -9,3 +9,41 @@ outputs/*
 .DS_Store
 *.log
 western-verve-*.json
+
+# ── Debug / temp / old code ─────────────────────────────────────
+debug_*.png
+debug_*.jpg
+padded.png
+old_app*.jsx
+old_app_temp*.jsx
+temp_app*.jsx
+temp_db_setup.js
+
+# ── Generated campaign / test output files ──────────────────────
+Final_Campaign_*.json
+qa_output_*.json
+full_qa_report.json
+test_output*.json
+test_scaramucci_output.json
+test_youtube_output.json
+current_mapped_output.json
+missing_keys.json
+
+# ── Additional log / trace files ────────────────────────────────
+extract_test_log.txt
+out.log
+out.txt
+outRes.txt
+output.txt
+err.txt
+git_history.txt
+git_status_debug.txt
+eslint_output.txt
+debug_res.txt
+
+# ── Release ZIPs (built by zip_code.ps1, not committed) ─────────
+*.zip
+
+# ── Supabase local temp / project metadata ──────────────────────
+.data/
+supabase/.temp/

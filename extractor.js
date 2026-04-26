@@ -4,6 +4,8 @@ puppeteer.use(StealthPlugin());
 const fs = require('fs/promises');
 const path = require('path');
 const axios = require('axios');
+const { safeHttpAgent, safeHttpsAgent, isIpAllowed } = require('./lib/validateUrl.js');
+const dns = require('dns').promises;
 const sharp = require('sharp');
 const { generateBrandHero } = require('./vertex_imagen');
 const { generateHeroPrompts, analyzeImageForTextPlacement } = require('./gemini_prompter');
@@ -71,6 +73,61 @@ const PUPPETEER_ARGS = [
   '--memory-pressure-off',
   '--window-size=1280,800'
 ];
+
+/**
+ * makeSsrfSafeHandler — Puppeteer request interception factory.
+ *
+ * Returns an async handler that:
+ *   1. Aborts font and media requests (performance: not needed for scraping).
+ *   2. For every http/https request, does a DNS lookup on the hostname and aborts
+ *      any request that resolves to a loopback, private, or link-local IP range.
+ *      This synchronously blocks hostile pages from using the headless browser as an SSRF proxy
+ *      to reach internal services (e.g. 169.254.169.254, 10.x.x.x, 127.0.0.1).
+ *   3. Allows all other requests to continue normally.
+ */
+function makeSsrfSafeHandler() {
+  return async function ssrfSafeRequestHandler(req) {
+    if (req.isInterceptResolutionHandled()) return; // Already handled
+
+    const resourceType = req.resourceType();
+    // Always abort fonts and media (performance)
+    if (['font', 'media'].includes(resourceType)) {
+      return req.abort('aborted');
+    }
+
+    const rawUrl = req.url();
+    let hostname;
+    try {
+      hostname = new URL(rawUrl).hostname;
+    } catch {
+      // Malformed URL — abort
+      return req.abort('failed');
+    }
+
+    // Non-http(s) schemes (data:, blob:, about:) are safe to continue immediately
+    if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
+      return req.continue();
+    }
+
+    // Perform async DNS check BEFORE allowing the request to continue.
+    try {
+      const records = await dns.promises.lookup(hostname, { all: true });
+      const blocked = records.some(r => !isIpAllowed(r.address));
+      if (blocked) {
+        console.warn(`[SSRF] 🛑 Blocked internal subrequest to ${rawUrl}`);
+        return req.abort('accessdenied');
+      }
+    } catch (e) {
+      // DNS lookup failed (e.g., domain doesn't exist). 
+      // It's safe to continue because an unresolvable domain can't cause SSRF.
+    }
+
+    // If we reach here, it's safe.
+    if (!req.isInterceptResolutionHandled()) {
+      return req.continue();
+    }
+  };
+}
 
 async function launchBrowser() {
   return puppeteer.launch({
@@ -287,7 +344,7 @@ async function scrapeYoutubeFallback(url) {
   }
 }
  
-async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
+async function extractDNA(url, progressCb = null, presetSelectedImages = [], abortSignal = null) {
   const stageTimer = makeTimer('extractDNA');
   const logStage = (msg) => { if (progressCb) progressCb(msg); };
   const dnaStart = Date.now();
@@ -313,16 +370,12 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
   page.setDefaultNavigationTimeout(90000);
   page.setDefaultTimeout(90000);
  
-  // Block heavy resources (fonts, media, large images) to speed up navigation on constrained servers
+  // Block heavy resources AND enforce SSRF protection on every Puppeteer subrequest.
+  // A hostile page could embed <img src="http://169.254.169.254/..."> or similar to probe
+  // internal services via the headless browser. We abort any request whose resolved IP
+  // falls outside the unicast public range.
   await page.setRequestInterception(true);
-  page.on('request', (req) => {
-    const resourceType = req.resourceType();
-    if (['font', 'media'].includes(resourceType)) {
-      req.abort();
-    } else {
-      req.continue();
-    }
-  });
+  page.on('request', makeSsrfSafeHandler());
  
   // Override default Puppeteer timeouts to prevent the 60000ms default from hitting first
   page.setDefaultNavigationTimeout(90_000); // synchronous setter — no await needed
@@ -344,14 +397,7 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
     page.setDefaultNavigationTimeout(90000);
     page.setDefaultTimeout(90000);
     await page.setRequestInterception(true);
-    page.on('request', (req) => {
-      const resourceType = req.resourceType();
-      if (['font', 'media'].includes(resourceType)) {
-        req.abort();
-      } else {
-        req.continue();
-      }
-    });
+    page.on('request', makeSsrfSafeHandler());
     page.setDefaultNavigationTimeout(90000);
     page.setDefaultTimeout(90000);
     await page.setViewport({ width: 1280, height: 800 });
@@ -550,6 +596,8 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
             try {
               console.log(`🔄 Trying HTTP fetch with: ${ua.substring(0, 40)}...`);
               const httpResponse = await axios.get(url, {
+                httpAgent: safeHttpAgent,
+                httpsAgent: safeHttpsAgent,
                 timeout: 15000,
                 headers: {
                   'User-Agent': ua,
@@ -584,7 +632,7 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
           if (!htmlFetched) {
             tier3Timer('ALL UAs FAILED', `connector=Axios, url=${url}`);
             console.error(`❌ [connector=Axios] All Tier 3 user-agents failed at +${elapsed()}.`);
-            throw new Error(`[Puppeteer→Wayback→Axios] All tiers failed at +${elapsed()} (Live blocked, Wayback blocked, HTTP all user-agents rejected).`);
+            throw new Error(`[Puppeteer→Wayback→Axios] All tiers failed at +${elapsed()} (Live blocked, Wayback blocked, HTTP all user-agents rejected).`, { cause: archiveErr });
           } else {
             tier3Timer('success', `connector=Axios, url=${url}`);
           }
@@ -1052,7 +1100,12 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
       display_as_list: true,
       display_in_search: false,
       qr_code_color: foregroundColor,
-      campaign_description: `<h2 id="titleObj"><strong><span>${extractedData.title}</span></strong></h2><p>${extractedData.description}</p>`,
+      campaign_description: (() => {
+        const sanitizeHtml = require('sanitize-html');
+        const cleanTitle = sanitizeHtml(extractedData.title || '', { allowedTags: [], allowedAttributes: {} });
+        const cleanDesc = sanitizeHtml(extractedData.description || '', { allowedTags: [], allowedAttributes: {} });
+        return `<h2 id="titleObj"><strong><span>${cleanTitle}</span></strong></h2><p>${cleanDesc}</p>`;
+      })(),
       multipleItems: false,
       image: extractedData.logo || (extractedData.images.length > 0 ? extractedData.images[0] : null),
       background_image: null,
@@ -1225,7 +1278,7 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
  
       try {
         console.log(`🔍 Trying logo source: ${logoUrl}`);
-        const response = await axios.get(logoUrl, { responseType: 'arraybuffer', timeout: 8000 });
+        const response = await axios.get(logoUrl, { httpAgent: safeHttpAgent, httpsAgent: safeHttpsAgent, responseType: 'arraybuffer', timeout: 8000 });
  
         // Validate it's actually an image and not a tiny placeholder
         if (!response.data || response.data.length < 100) {
@@ -1483,6 +1536,8 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
 
         try {
           const response = await axios.get(imgUrl, {
+            httpAgent: safeHttpAgent,
+            httpsAgent: safeHttpsAgent,
             responseType: 'arraybuffer',
             timeout: 10000,
             maxContentLength: 15 * 1024 * 1024,
@@ -1604,7 +1659,7 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = []) {
 
       const probeResults = await Promise.allSettled(
         candidatePool.map(async (src) => {
-          const probe = await axios.get(src, { responseType: 'arraybuffer', timeout: 8000, maxContentLength: 5 * 1024 * 1024, headers: { 'User-Agent': 'Mozilla/5.0' } });
+          const probe = await axios.get(src, { httpAgent: safeHttpAgent, httpsAgent: safeHttpsAgent, responseType: 'arraybuffer', timeout: 8000, maxContentLength: 5 * 1024 * 1024, headers: { 'User-Agent': 'Mozilla/5.0' } });
           const probeBuf = Buffer.from(probe.data);
           const stats = await sharp(probeBuf).resize(32, 32).raw().toBuffer({ resolveWithObject: true });
           const avg = stats.data.reduce((s, v) => s + v, 0) / (stats.info.width * stats.info.height * stats.info.channels);

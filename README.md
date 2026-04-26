@@ -48,5 +48,13 @@ Alternatively, run them separately:
 - This codebase runs an Express server interacting heavily with Puppeteer headless chrome. It is highly recommended to host on standard unmetered nodes (Render.com or standard VPS) to avoid arbitrary timeouts on Edge Serverless infrastructures.
 - Build/Start Commands: `npm install` && `npm run start`
 
+## Release Posture
+
+Cleared for controlled beta with trusted clients. Not cleared for public production or unattended enterprise onboarding.
+
+Keep the extraction tab open until completion. If the server restarts or redeploys during extraction, the job may be lost and must be restarted.
+
+Closing the browser does not necessarily stop the backend job, but without durable execution recovery the user experience can still break. A human should review every generated campaign page before publishing.
+
 ## Migration Specifics
 For detailed integration into Lovable.dev, please review [`docs/migration-to-lovable.md`](./docs/migration-to-lovable.md) located inside the repo.

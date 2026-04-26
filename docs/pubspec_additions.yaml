@@ -1,0 +1,13 @@
+## Add to your pubspec.yaml under `dependencies:`
+
+```yaml
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Required by minfo_extractor_client.dart
+  http: ^1.2.0
+```
+
+Then run:
+  flutter pub get

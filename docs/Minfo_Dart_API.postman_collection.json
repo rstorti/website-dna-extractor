@@ -1,0 +1,166 @@
+{
+  "info": {
+    "_postman_id": "minfo-dart-api-v1",
+    "name": "Minfo Website DNA Extractor — Dart API",
+    "description": "Two-step async API for the Minfo Dart mobile app.\n\n**Step 1** — POST /api/dart/extract  → returns job_id\n**Step 2** — GET  /api/dart/result/:jobId  → poll until status=complete\n\nSet the collection variable `baseUrl` to your Railway (or local) server URL before running.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3001",
+      "description": "Change to your Railway URL, e.g. https://website-dna-extractor-production.up.railway.app"
+    },
+    {
+      "key": "dartApiKey",
+      "value": "minfo-dart-secret-change-me-in-production",
+      "description": "Value of DART_API_KEY in your .env / Railway env vars"
+    },
+    {
+      "key": "jobId",
+      "value": "",
+      "description": "Auto-populated by the Extract request's test script"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{dartApiKey}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "1. Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/dart/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "dart", "health"]
+        },
+        "description": "Verify the Dart API is mounted and your key is accepted."
+      },
+      "response": []
+    },
+    {
+      "name": "2. Start Extraction",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// Auto-save the returned job_id so Step 3 can use it",
+              "const json = pm.response.json();",
+              "if (json.job_id) {",
+              "    pm.collectionVariables.set('jobId', json.job_id);",
+              "    console.log('job_id saved:', json.job_id);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"url\": \"https://www.scaramucci.net\",\n  \"youtube_url\": \"https://www.youtube.com/watch?v=qHMEWxMMpiE\",\n  \"profile_url\": \"https://linktr.ee/anthonyscaramucci\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/dart/extract",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "dart", "extract"]
+        },
+        "description": "**Required**: `url` (website URL)\n**Optional**: `youtube_url`, `profile_url` (bio-link URL)\n\nReturns immediately with a `job_id`. Extraction runs in the background. Poll Step 3 every 5 seconds."
+      },
+      "response": []
+    },
+    {
+      "name": "3. Poll for Result",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/dart/result/{{jobId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "dart", "result", "{{jobId}}"]
+        },
+        "description": "**202** → still running, poll again in 5s\n**200** → complete, `data` contains the full Dart payload\n**422** → failed, `error` and `hint` describe the problem\n\nThe `job_id` is auto-filled from Step 2's test script."
+      },
+      "response": []
+    },
+    {
+      "name": "2a. Extract — Website Only",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"url\": \"https://www.apple.com\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/dart/extract",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "dart", "extract"]
+        },
+        "description": "Minimal extraction — website URL only."
+      },
+      "response": []
+    },
+    {
+      "name": "2b. Extract — Website + YouTube",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"url\": \"https://www.scaramucci.net\",\n  \"youtube_url\": \"https://www.youtube.com/watch?v=qHMEWxMMpiE\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/dart/extract",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "dart", "extract"]
+        },
+        "description": "Website + YouTube video extraction."
+      },
+      "response": []
+    },
+    {
+      "name": "2c. Extract — Website + Profile",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"url\": \"https://www.scaramucci.net\",\n  \"profile_url\": \"https://linktr.ee/anthonyscaramucci\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/dart/extract",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "dart", "extract"]
+        },
+        "description": "Website + Linktree bio-link extraction."
+      },
+      "response": []
+    }
+  ]
+}

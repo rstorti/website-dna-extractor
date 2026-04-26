@@ -18,7 +18,8 @@ async function generateBrandHero(prompt) {
     }
 
     try {
-        console.log(`🎨 Requesting Vertex AI Imagen (1:1 Native Generation): ${prompt.substring(0, 60)}...`);
+        const t0 = Date.now();
+        console.log(`🎨 Requesting Vertex AI Imagen (connector=VertexAI, model=${MODEL_ID}, location=${LOCATION}): ${prompt.substring(0, 60)}...`);
 
         // The PredictionServiceClient automatically uses GOOGLE_APPLICATION_CREDENTIALS
         const clientOptions = {
@@ -52,22 +53,23 @@ async function generateBrandHero(prompt) {
         };
 
         const [response] = await predictionServiceClient.predict(request);
+        const callMs = Date.now() - t0;
 
         if (response.predictions && response.predictions.length > 0) {
             // Unpack the struct value
             const prediction = response.predictions[0].structValue.fields;
             if (prediction.bytesBase64Encoded && prediction.bytesBase64Encoded.stringValue) {
                 const outputBase64 = prediction.bytesBase64Encoded.stringValue;
-                console.log("✅ Vertex AI Imagen Generation successful!");
+                console.log(`✅ [connector=VertexAI, model=${MODEL_ID}] Imagen Generation successful in ${callMs}ms!`);
                 return Buffer.from(outputBase64, 'base64');
             }
         }
 
-        console.error("❌ Unexpected response structure from Vertex AI:", JSON.stringify(response));
+        console.error(`❌ [connector=VertexAI, model=${MODEL_ID}] Unexpected response structure from Vertex AI after ${callMs}ms:`, JSON.stringify(response));
         return null;
 
     } catch (error) {
-        console.error("❌ Vertex AI Generation Error:", error.message);
+        console.error(`❌ [connector=VertexAI, model=${MODEL_ID}, location=${LOCATION}] Generation Error: ${error.message}`);
         return null;
     }
 }
