@@ -837,12 +837,12 @@ async function runExtraction({
         console.warn(`${TAG} YouTube API failed, trying oEmbed: ${ytErr.message}`);
         try {
           const oEmbedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(youtubeUrl)}&format=json`;
-          const oEmbedRes = await axios.get(oEmbedUrl, { httpAgent: safeHttpAgent, httpsAgent: safeHttpsAgent, timeout: 10_000 });
+          const oEmbedRes = await axios.get(oEmbedUrl, { timeout: 10_000 }); // youtube.com is trusted — no SSRF risk, skip safeAgent
           if (oEmbedRes.data?.title) {
             youtubeResult = { title: oEmbedRes.data.title, channel: oEmbedRes.data.author_name, description: '', thumbnail: oEmbedRes.data.thumbnail_url || null, channelLogo: null };
             // Tier 2.5: HTML scrape for description
             try {
-              const pageRes = await axios.get(youtubeUrl, { httpAgent: safeHttpAgent, httpsAgent: safeHttpsAgent, timeout: 12_000, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36', 'Accept-Language': 'en-US,en;q=0.9' } });
+              const pageRes = await axios.get(youtubeUrl, { timeout: 12_000, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36', 'Accept-Language': 'en-US,en;q=0.9' } }); // trusted domain
               const html = pageRes.data || '';
               const playerMatch = html.match(/ytInitialPlayerResponse\s*=\s*(\{.{0,5000}?\});/s);
               if (playerMatch) { try { const d = JSON.parse(playerMatch[1]); const desc = d?.videoDetails?.shortDescription; if (desc?.length > 20) youtubeResult.description = desc; } catch(e){} }
