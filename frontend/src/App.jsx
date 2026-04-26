@@ -112,12 +112,18 @@ function App() {
     const [stageTimings, setStageTimings] = useState([]);   // per-stage timing from last extraction
     const [totalMs, setTotalMs] = useState(null);           // total extraction ms
     const [lastExtractionUrls, setLastExtractionUrls] = useState(null); // URLs used in last extraction
-    // Dashboard pre-scan state
+    // Dashboard pre-scan state (primary URL)
     const [dashScanResults, setDashScanResults] = useState(null);
     const [isDashScanning, setIsDashScanning] = useState(false);
     const [dashScanError, setDashScanError] = useState(null);
     const [dashSelectedImages, setDashSelectedImages] = useState([]);
     const [dashScanDims, setDashScanDims] = useState({});
+    // Dashboard pre-scan state (Website 2 URL)
+    const [dash2ScanResults, setDash2ScanResults] = useState(null);
+    const [isDash2Scanning, setIsDash2Scanning] = useState(false);
+    const [dash2ScanError, setDash2ScanError] = useState(null);
+    const [dash2SelectedImages, setDash2SelectedImages] = useState([]);
+    const [dash2ScanDims, setDash2ScanDims] = useState({});
     
     const timerRef = useRef(null);
 
@@ -219,6 +225,36 @@ function App() {
         }, 800); // 800ms debounce
         return () => clearTimeout(timer);
     }, [url]);
+
+    // Auto-scan Website 2 URL for Dashboard Images
+    useEffect(() => {
+        if (!website2Url || !isValidDomain(website2Url)) {
+            setDash2ScanResults(null);
+            setDash2SelectedImages([]);
+            return;
+        }
+        setDash2ScanResults(null);
+        setDash2SelectedImages([]);
+        const timer = setTimeout(async () => {
+            setIsDash2Scanning(true);
+            setDash2ScanError(null);
+            try {
+                const r = await fetch(`${API_BASE_URL}/api/scan-images`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getSessionToken() },
+                    body: JSON.stringify({ url: website2Url.trim() })
+                });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.error || 'Autoscan failed');
+                if (d.images) d.images = d.images.slice(0, 100);
+                setDash2ScanResults(d);
+            } catch(e) {
+                setDash2ScanError(e.message);
+            }
+            setIsDash2Scanning(false);
+        }, 800);
+        return () => clearTimeout(timer);
+    }, [website2Url]);
 
     const fetchHistory = async (isRetry = false) => {
         if (!isRetry) {
@@ -379,6 +415,7 @@ function App() {
         setSelectedColors([]);
         setSelectedButtonStyle(null);
         setSummaryText({ website: '', youtube: '', combined: '' });
+        setDash2SelectedImages([]);
 
         // AbortController: stores ref so cancel button can abort early
         const controller = new AbortController();
@@ -404,7 +441,7 @@ function App() {
             const jobRes = await fetch(`${API_BASE_URL}/api/jobs`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getSessionToken() },
-                body: JSON.stringify({ url, youtubeUrl, profileUrl, linkedinUrl, website2Url, selectedImages: dashSelectedImages }),
+                body: JSON.stringify({ url, youtubeUrl, profileUrl, linkedinUrl, website2Url, selectedImages: [...dashSelectedImages, ...dash2SelectedImages] }),
                 signal: controller.signal
             });
             const jobDataInit = await jobRes.json();
@@ -1534,7 +1571,69 @@ function App() {
                                     </div>
                                 </div>
                             )}
-                            
+
+                            {/* Website 2 Image Auto-Scanner */}
+                            {isDash2Scanning && (
+                                <div style={{ marginTop: '1rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'rgba(255,255,255,0.5)', fontSize: '0.9rem' }}>
+                                    <div className="loader" style={{ width: '16px', height: '16px', borderWidth: '2px', borderColor: 'var(--primary)', borderBottomColor: 'transparent' }} />
+                                    Scanning Website 2 for images…
+                                </div>
+                            )}
+                            {dash2ScanError && (
+                                <div style={{ marginTop: '0.5rem', color: '#f87171', fontSize: '0.85rem' }}>❌ Website 2 scan error: {dash2ScanError}</div>
+                            )}
+                            {dash2ScanResults && dash2ScanResults.images.length > 0 && (
+                                <div style={{ marginTop: '1.5rem', marginBottom: '2.5rem', background: 'rgba(0,0,0,0.2)', padding: '1.5rem', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                        <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--primary)' }}>Select Images from Website 2 (Optional)</h3>
+                                        <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' }}>{website2Url}</span>
+                                    </div>
+                                    <div style={{ marginBottom: '1rem', fontSize: '0.82rem', color: 'rgba(255,255,255,0.45)' }}>
+                                        {dash2ScanResults.images.length} images found • Select preferred images to include in the extraction
+                                    </div>
+                                    <div className="scanner-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '1rem', maxHeight: '400px', overflowY: 'auto', paddingRight: '0.5rem' }}>
+                                        {dash2ScanResults.images.map((img) => {
+                                            const isSel = dash2SelectedImages.includes(img.url);
+                                            const dim = dash2ScanDims[img.url];
+                                            const ext = (img.url.split('.').pop().split('?')[0] || '?').toUpperCase();
+                                            return (
+                                                <div key={img.url} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                    <div
+                                                        onClick={() => setDash2SelectedImages(prev => isSel ? prev.filter(s => s !== img.url) : [...prev, img.url])}
+                                                        title={img.url}
+                                                        style={{ position: 'relative', aspectRatio: '1', borderRadius: '8px', overflow: 'hidden', cursor: 'pointer', border: isSel ? '2px solid var(--primary)' : '2px solid rgba(255,255,255,0.07)', transition: 'all 0.15s', boxShadow: isSel ? '0 0 0 1px var(--primary), 0 4px 16px rgba(0,0,0,0.5)' : '0 2px 6px rgba(0,0,0,0.3)', transform: isSel ? 'scale(0.97)' : 'scale(1)', background: '#111' }}
+                                                    >
+                                                        <img
+                                                            src={img.url}
+                                                            alt=""
+                                                            loading="lazy"
+                                                            style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }}
+                                                            onLoad={e => { const el = e.target; setDash2ScanDims(prev => ({ ...prev, [img.url]: { w: el.naturalWidth, h: el.naturalHeight } })); }}
+                                                            onError={e => { e.target.closest('div[style]').style.display = 'none'; }}
+                                                        />
+                                                        <div style={{ position:'absolute', inset:0, background: isSel ? 'rgba(249,157,50,0.15)' : 'transparent', transition:'background 0.15s', pointerEvents:'none' }} />
+                                                        <div style={{ position:'absolute', top:'5px', left:'5px', width:'18px', height:'18px', borderRadius:'4px', background: isSel ? 'var(--primary)' : 'rgba(0,0,0,0.6)', border: isSel ? '2px solid var(--primary)' : '2px solid rgba(255,255,255,0.35)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px', fontWeight:'900', color:'#000', pointerEvents:'none' }}>
+                                                            {isSel && '✓'}
+                                                        </div>
+                                                        {img.context === 'og' && <div style={{ position:'absolute', top:'5px', right:'5px', background:'rgba(74,222,128,0.8)', borderRadius:'3px', fontSize:'0.55rem', padding:'1px 3px', color:'#000', fontWeight:'700', pointerEvents:'none' }}>OG</div>}
+                                                    </div>
+                                                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.7rem', color:'rgba(255,255,255,0.6)', fontFamily:'monospace', padding: '0 2px' }}>
+                                                        <span>{ext.length > 4 ? ext.substring(0,4) : ext}</span>
+                                                        <span>{dim ? `${dim.w}×${dim.h}` : 'Loading...'}</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                                        <span style={{ fontSize: '0.85rem', color: dash2SelectedImages.length > 0 ? 'var(--primary)' : 'rgba(255,255,255,0.4)', fontWeight: dash2SelectedImages.length > 0 ? '600' : 'normal' }}>
+                                            {dash2SelectedImages.length > 0 ? `${dash2SelectedImages.length} images selected from Website 2.` : 'No images selected.'}
+                                        </span>
+                                        {dash2SelectedImages.length > 0 && <button onClick={() => setDash2SelectedImages([])} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.7)', borderRadius: '4px', padding: '0.2rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer' }}>Clear Selection</button>}
+                                    </div>
+                                </div>
+                            )}
+
                             {error && (() => {
                                 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
                                 const healthUrl = isLocalhost
