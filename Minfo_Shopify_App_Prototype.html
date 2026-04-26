@@ -1,0 +1,1501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="prototype-version" content="2.3">
+<meta name="prd-alignment" content="v2.2">
+<meta name="last-updated" content="2026-04-26">
+<title>Minfo for Shopify - Interactive Prototype v2.3</title>
+<style>
+:root {
+  --minfo-orange: #f99d32;
+  --minfo-orange-hover: #e88a1f;
+  --polaris-text: #202223;
+  --polaris-text-secondary: #6D7175;
+  --polaris-border: #E1E3E5;
+  --polaris-border-strong: #C9CCCF;
+  --polaris-success: #008060;
+  --polaris-success-bg: #E8F5EE;
+  --polaris-critical: #BF0711;
+  --polaris-critical-bg: #FFEAE9;
+  --polaris-warning: #FFC453;
+  --polaris-warning-bg: #FFF5EA;
+  --polaris-info: #2C6ECB;
+  --polaris-info-bg: #EAF1FB;
+  --polaris-bg: #F6F6F7;
+  --polaris-bg-subdued: #FAFBFB;
+  --white: #FFFFFF;
+  --shadow-sm: 0 1px 0 rgba(22,29,37,0.05);
+  --shadow-md: 0 1px 3px rgba(22,29,37,0.10), 0 1px 2px rgba(22,29,37,0.06);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--polaris-text);
+  background: var(--polaris-bg);
+}
+button { font-family: inherit; font-size: inherit; cursor: pointer; border: none; background: none; }
+a { color: var(--polaris-info); text-decoration: none; }
+input, select, textarea {
+  font-family: inherit;
+  font-size: 14px;
+  border: 1px solid var(--polaris-border-strong);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  width: 100%;
+  background: var(--white);
+}
+input[type="checkbox"], input[type="radio"] {
+  width: 16px; height: 16px;
+  accent-color: var(--polaris-success);
+  margin: 0;
+  cursor: pointer;
+}
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid var(--polaris-info);
+  outline-offset: -1px;
+  border-color: var(--polaris-info);
+}
+.btn-primary {
+  background: var(--minfo-orange);
+  color: var(--white);
+  font-weight: 600;
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s;
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+  font-size: 14px;
+}
+.btn-primary:hover { background: var(--minfo-orange-hover); }
+.btn-primary:disabled { background: #D4D5D8; color: #6D7175; cursor: not-allowed; }
+.btn-secondary { cursor: pointer; }
+
+/* Flutter blue button - for SDK developer affordances */
+.btn-flutter {
+  background: #027DFD;
+  color: #FFFFFF;
+  font-weight: 600;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  transition: background 0.15s;
+}
+.btn-flutter:hover { background: #0265CB; }
+.btn-flutter svg { width: 14px; height: 14px; fill: currentColor; }
+
+/* Minfo logo (PRD v2.2 §15 - logo only top-left of admin) */
+.minfo-logo { display: inline-block; flex-shrink: 0; }
+.minfo-logo-sm { width: 32px; height: 32px; }
+.minfo-logo-md { width: 56px; height: 56px; }
+.minfo-logo-lg { width: 200px; height: 200px; }
+.btn-secondary {
+  background: var(--white);
+  color: var(--polaris-text);
+  border: 1px solid var(--polaris-border-strong);
+  font-weight: 500;
+  padding: 9px 19px;
+  border-radius: var(--radius-sm);
+}
+.btn-secondary:hover { background: var(--polaris-bg-subdued); }
+.btn-link { color: var(--polaris-info); font-weight: 500; padding: 6px 8px; }
+.card { background: var(--white); border: 1px solid var(--polaris-border); border-radius: var(--radius-md); padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow-sm); }
+.badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+.badge-success { background: var(--polaris-success-bg); color: var(--polaris-success); }
+.badge-critical { background: var(--polaris-critical-bg); color: var(--polaris-critical); }
+.badge-warning { background: var(--polaris-warning-bg); color: #714C00; }
+.badge-info { background: var(--polaris-info-bg); color: var(--polaris-info); }
+.badge-tier { background: #F4F1EE; color: #54485B; font-weight: 600; }
+.banner { padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+.banner-info { background: var(--polaris-info-bg); border-left: 3px solid var(--polaris-info); color: #1A4F8F; }
+.banner-warning { background: var(--polaris-warning-bg); border-left: 3px solid #B68000; color: #714C00; }
+.banner-success { background: var(--polaris-success-bg); border-left: 3px solid var(--polaris-success); color: #006B53; }
+
+/* Top nav */
+.top-nav {
+  background: var(--white);
+  border-bottom: 1px solid var(--polaris-border);
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.logo {
+  width: 32px;
+  height: 32px;
+  background: var(--minfo-orange);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--white);
+  font-weight: 700;
+  font-size: 18px;
+}
+.top-nav-spacer { flex: 1; }
+.role-toggle {
+  display: inline-flex;
+  background: var(--polaris-bg);
+  border-radius: 6px;
+  padding: 3px;
+}
+.role-toggle button {
+  padding: 5px 14px;
+  border-radius: 4px;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--polaris-text-secondary);
+}
+.role-toggle button.active { background: var(--white); color: var(--polaris-text); box-shadow: var(--shadow-sm); }
+.icon-btn {
+  width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+  color: var(--polaris-text-secondary);
+}
+.icon-btn:hover { background: var(--polaris-bg); }
+.icon-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+/* Layout */
+.app-shell { display: flex; min-height: calc(100vh - 56px); }
+.left-nav {
+  width: 220px;
+  background: var(--white);
+  border-right: 1px solid var(--polaris-border);
+  padding: 16px 12px;
+  flex-shrink: 0;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--polaris-text);
+  font-weight: 500;
+  margin-bottom: 2px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  margin-left: -3px;
+}
+.nav-item:hover { background: var(--polaris-bg); }
+.nav-item.active { background: var(--polaris-bg); border-left-color: var(--polaris-success); font-weight: 600; }
+.nav-item svg { width: 18px; height: 18px; stroke: var(--minfo-orange); fill: none; stroke-width: 2; }
+.nav-section { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--polaris-text-secondary); padding: 12px 12px 6px; font-weight: 600; }
+.main-content { flex: 1; padding: 24px 32px; overflow-x: hidden; }
+
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.page-title { font-size: 22px; font-weight: 700; }
+.page-subtitle { color: var(--polaris-text-secondary); margin-top: 4px; font-size: 13px; }
+
+.screen { display: none; }
+.screen.active { display: block; }
+
+/* Onboarding */
+.onboarding-shell {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #FFF5E8 0%, var(--polaris-bg) 50%, var(--polaris-bg) 100%);
+  display: flex;
+  flex-direction: column;
+}
+.onboarding-top {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  justify-content: space-between;
+}
+.onboarding-top .logo-row { display: flex; align-items: center; gap: 12px; }
+.onboarding-top .wordmark { font-weight: 700; font-size: 18px; letter-spacing: 1px; color: var(--minfo-orange); }
+.progress-bar { width: 280px; height: 6px; background: var(--polaris-bg-subdued); border: 1px solid var(--polaris-border); border-radius: 99px; overflow: hidden; }
+.progress-fill { height: 100%; background: var(--minfo-orange); transition: width 0.3s ease; }
+.onboarding-content {
+  flex: 1;
+  max-width: 720px;
+  margin: 40px auto;
+  padding: 0 24px;
+  width: 100%;
+}
+.onboarding-step-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--polaris-text-secondary); font-weight: 600; margin-bottom: 8px; }
+.onboarding-headline { font-size: 32px; font-weight: 700; line-height: 1.2; margin-bottom: 12px; }
+.onboarding-subhead { font-size: 16px; color: var(--polaris-text-secondary); margin-bottom: 32px; }
+.onboarding-actions { display: flex; gap: 12px; align-items: center; margin-top: 32px; }
+.onboarding-actions .spacer { flex: 1; }
+.welcome-illustration {
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 32px;
+}
+.welcome-illustration svg { width: 200px; height: 200px; filter: drop-shadow(0 8px 24px rgba(249, 157, 50, 0.25)); }
+.goal-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+.goal-card {
+  border: 2px solid var(--polaris-border);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  background: var(--white);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.goal-card:hover { border-color: var(--minfo-orange); }
+.goal-card.selected { border-color: var(--minfo-orange); background: #FFF8EE; }
+.goal-card-icon {
+  width: 40px; height: 40px;
+  border-radius: var(--radius-sm);
+  background: #FFF5E8;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 12px;
+}
+.goal-card-icon svg { width: 22px; height: 22px; stroke: var(--minfo-orange); fill: none; stroke-width: 2; }
+.goal-card-title { font-weight: 600; margin-bottom: 4px; }
+.goal-card-desc { font-size: 13px; color: var(--polaris-text-secondary); }
+.product-list { background: var(--white); border: 1px solid var(--polaris-border); border-radius: var(--radius-md); }
+.product-list-search { padding: 12px; border-bottom: 1px solid var(--polaris-border); }
+.product-row { display: flex; align-items: center; gap: 12px; padding: 12px; border-bottom: 1px solid var(--polaris-border); cursor: pointer; }
+.product-row:last-child { border-bottom: none; }
+.product-row:hover { background: var(--polaris-bg-subdued); }
+.product-row.selected { background: #FFF8EE; }
+.product-thumb { width: 40px; height: 40px; border-radius: var(--radius-sm); background: var(--polaris-bg); flex-shrink: 0; }
+.product-meta { flex: 1; }
+.product-title { font-weight: 500; }
+.product-detail { font-size: 12px; color: var(--polaris-text-secondary); }
+.media-options { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.media-option { padding: 20px; border: 1px solid var(--polaris-border); border-radius: var(--radius-md); background: var(--white); cursor: pointer; }
+.media-option:hover { border-color: var(--minfo-orange); }
+.media-option-title { font-weight: 600; margin-bottom: 4px; }
+.media-option-desc { font-size: 13px; color: var(--polaris-text-secondary); }
+.skip-link { text-align: center; margin-top: 16px; }
+
+/* Page editor */
+.editor-grid { display: grid; grid-template-columns: 320px 1fr; gap: 20px; }
+.block-list { background: var(--white); border: 1px solid var(--polaris-border); border-radius: var(--radius-md); padding: 12px; }
+.block-list-title { font-weight: 600; padding: 8px 4px 12px; font-size: 13px; }
+.block-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 4px;
+  background: var(--polaris-bg-subdued);
+  border: 1px solid var(--polaris-border);
+}
+.block-grip { color: var(--polaris-text-secondary); cursor: grab; }
+.block-grip svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+.block-row-name { flex: 1; font-weight: 500; }
+.block-toggle { font-size: 12px; color: var(--polaris-text-secondary); }
+.toggle {
+  position: relative; width: 32px; height: 18px;
+  background: var(--polaris-border-strong);
+  border-radius: 99px; cursor: pointer; flex-shrink: 0;
+  transition: background 0.2s;
+}
+.toggle::after {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 14px; height: 14px;
+  background: var(--white);
+  border-radius: 50%;
+  transition: left 0.2s;
+}
+.toggle.on { background: var(--polaris-success); }
+.toggle.on::after { left: 16px; }
+.preview-pane { background: var(--white); border: 1px solid var(--polaris-border); border-radius: var(--radius-md); padding: 24px; min-height: 400px; }
+.preview-header { font-size: 11px; text-transform: uppercase; color: var(--polaris-text-secondary); letter-spacing: 0.6px; font-weight: 600; margin-bottom: 12px; }
+.preview-page { background: var(--polaris-bg); border-radius: var(--radius-md); padding: 24px; }
+.preview-hero { background: linear-gradient(135deg, #54485B, #AB5A75); border-radius: var(--radius-sm); padding: 32px; color: var(--white); margin-bottom: 16px; }
+.preview-hero h2 { font-size: 24px; margin-bottom: 8px; }
+.preview-hero p { font-size: 14px; opacity: 0.9; }
+.preview-cta-row { background: var(--white); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 12px; text-align: center; }
+.preview-cta-row .btn-primary { padding: 8px 16px; font-size: 13px; }
+.preview-media-block { background: #1F1F22; border-radius: var(--radius-sm); padding: 56px; color: rgba(255,255,255,0.6); text-align: center; margin-bottom: 12px; font-size: 13px; }
+.preview-block-disabled { background: var(--polaris-bg-subdued); border: 1px dashed var(--polaris-border-strong); border-radius: var(--radius-sm); padding: 14px; text-align: center; font-size: 12px; color: var(--polaris-text-secondary); margin-bottom: 8px; }
+
+/* Smartlinks display */
+.smartlink-row { background: var(--white); border: 1px solid var(--polaris-border); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; }
+.smartlink-tag { display: inline-block; padding: 2px 8px; border-radius: 12px; background: var(--polaris-bg); color: var(--polaris-text-secondary); font-size: 12px; font-weight: 600; flex-shrink: 0; min-width: 100px; text-align: center; }
+.smartlink-url { flex: 1; font-family: ui-monospace, "SF Mono", monospace; font-size: 13px; color: var(--polaris-text); overflow: hidden; text-overflow: ellipsis; }
+.copy-btn { padding: 6px 12px; font-size: 12px; }
+
+/* Settings */
+.tab-bar { display: flex; gap: 24px; border-bottom: 1px solid var(--polaris-border); margin-bottom: 24px; }
+.tab-bar button { padding: 10px 0; font-weight: 500; color: var(--polaris-text-secondary); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab-bar button.active { color: var(--polaris-text); border-bottom-color: var(--polaris-success); font-weight: 600; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+.tier-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; align-items: stretch; }
+.tier-card {
+  background: var(--white); border: 1px solid var(--polaris-border); border-radius: var(--radius-md);
+  padding: 20px; display: flex; flex-direction: column; min-height: 360px;
+}
+.tier-card.current { border-color: var(--polaris-success); border-width: 2px; padding: 19px; }
+.tier-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.tier-name { font-weight: 700; font-size: 17px; }
+.tier-price { font-size: 30px; font-weight: 700; margin: 4px 0 12px; line-height: 1.1; color: var(--polaris-text); }
+.tier-period { font-size: 13px; color: var(--polaris-text-secondary); font-weight: 400; }
+.tier-features { font-size: 13px; color: var(--polaris-text); margin: 0 0 16px; line-height: 1.6; flex: 1; }
+.tier-features li { list-style: none; margin-bottom: 6px; padding-left: 20px; position: relative; }
+.tier-features li::before { content: "✓"; position: absolute; left: 0; color: var(--polaris-success); font-weight: 700; }
+.tier-extra { background: var(--polaris-bg-subdued); padding: 10px; border-radius: var(--radius-sm); font-size: 11px; line-height: 1.5; color: var(--polaris-text-secondary); margin-bottom: 12px; }
+.tier-cta { margin-top: auto; }
+.tier-cta button { width: 100%; }
+
+.consent-mode {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--polaris-border);
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
+  cursor: pointer;
+  background: var(--white);
+}
+.consent-mode.selected { border-color: var(--polaris-success); background: var(--polaris-success-bg); }
+.consent-mode input[type="radio"] { width: 18px; height: 18px; margin-top: 2px; flex-shrink: 0; accent-color: var(--polaris-success); }
+.consent-mode-label { font-weight: 600; margin-bottom: 4px; }
+.consent-mode-desc { font-size: 13px; color: var(--polaris-text-secondary); line-height: 1.5; }
+
+/* Tables */
+.data-table { width: 100%; background: var(--white); border-collapse: collapse; border: 1px solid var(--polaris-border); border-radius: var(--radius-md); overflow: hidden; }
+.data-table th { text-align: left; padding: 10px 14px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--polaris-text-secondary); background: var(--polaris-bg-subdued); border-bottom: 1px solid var(--polaris-border); font-weight: 600; }
+.data-table td { padding: 12px 14px; border-bottom: 1px solid var(--polaris-border); font-size: 14px; }
+.data-table tr:last-child td { border-bottom: none; }
+
+/* Stat cards */
+.stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: var(--white); border: 1px solid var(--polaris-border); border-radius: var(--radius-md); padding: 18px; }
+.stat-label { font-size: 12px; color: var(--polaris-text-secondary); text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600; }
+.stat-value { font-size: 28px; font-weight: 700; margin-top: 6px; line-height: 1.1; }
+.stat-trend { font-size: 12px; color: var(--polaris-success); margin-top: 4px; font-weight: 500; }
+
+/* Specific widgets */
+.connection-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: var(--polaris-success-bg); color: var(--polaris-success); border-radius: 99px; font-size: 12px; font-weight: 500; }
+.connection-pill::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--polaris-success); }
+.locked-feature { background: var(--polaris-bg-subdued); border: 1px dashed var(--polaris-border-strong); border-radius: var(--radius-sm); padding: 12px; color: var(--polaris-text-secondary); font-size: 13px; }
+.muted-pet { background: var(--polaris-bg-subdued); border: 1px solid var(--polaris-border); border-radius: var(--radius-md); padding: 24px; opacity: 0.7; }
+
+.partner-link { background: var(--white); border: 1px solid var(--polaris-border); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 8px; }
+.partner-link-url { font-family: ui-monospace, monospace; font-size: 13px; margin-bottom: 8px; }
+.partner-link-actions { display: flex; gap: 6px; }
+.modal-backdrop { position: fixed; inset: 0; background: rgba(22,29,37,0.5); display: none; align-items: center; justify-content: center; z-index: 200; }
+.modal-backdrop.show { display: flex; }
+.modal { background: var(--white); border-radius: var(--radius-md); padding: 24px; max-width: 480px; width: 90%; }
+.modal.modal-wide { max-width: 720px; max-height: 80vh; overflow-y: auto; }
+.modal pre { background: #1F1F22; color: #E8E8EC; padding: 14px; border-radius: var(--radius-sm); font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 12px; line-height: 1.55; overflow-x: auto; margin: 8px 0 12px; }
+.modal pre code { color: inherit; font-family: inherit; }
+.modal .sdk-section { margin-bottom: 20px; }
+.modal .sdk-section h4 { font-size: 14px; margin-bottom: 6px; color: var(--minfo-orange); font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.modal .sdk-section p { font-size: 13px; line-height: 1.6; color: var(--polaris-text); margin-bottom: 8px; }
+.modal h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+.modal p { color: var(--polaris-text-secondary); margin-bottom: 16px; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+label { font-weight: 500; font-size: 13px; }
+.field-group { margin-bottom: 14px; }
+.field-help { font-size: 12px; color: var(--polaris-text-secondary); margin-top: 4px; }
+.governance-rules { background: var(--polaris-bg-subdued); border-left: 3px solid var(--polaris-info); padding: 10px 12px; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 12px; color: var(--polaris-text-secondary); margin-top: 8px; line-height: 1.6; }
+
+.welcome-banner { background: linear-gradient(135deg, var(--minfo-orange) 0%, #F07B53 100%); color: var(--white); padding: 20px 24px; border-radius: var(--radius-md); margin-bottom: 20px; display: flex; align-items: center; gap: 16px; }
+.welcome-banner-icon { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+.welcome-banner.celebratory { background: linear-gradient(135deg, var(--polaris-success) 0%, #00A878 100%); }
+
+.section-row { display: flex; gap: 24px; }
+.section-row > * { flex: 1; }
+.toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--polaris-border); }
+.toggle-row:last-child { border-bottom: none; }
+.toggle-row-label { font-weight: 500; }
+.toggle-row-desc { font-size: 12px; color: var(--polaris-text-secondary); }
+
+.dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+.dot.minfo { background: var(--minfo-orange); animation: pulse 1.4s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+</style>
+</head>
+<body>
+
+<!-- ============ ONBOARDING SHELL ============ -->
+<div id="onboarding" class="onboarding-shell">
+  <div class="onboarding-top">
+    <div class="logo-row">
+      <svg class="minfo-logo minfo-logo-sm" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="Minfo">
+        <rect x="2" y="2" width="96" height="96" rx="14" ry="14" fill="#3a3a3c"/>
+        <text x="50" y="62" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="64" fill="#f99d32">m</text>
+        <text x="50" y="86" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700" font-size="14" letter-spacing="1.4" fill="#f99d32">INFO</text>
+        <text x="80" y="22" font-family="Arial, sans-serif" font-size="8" fill="#f99d32">®</text>
+      </svg>
+    </div>
+    <div class="progress-bar"><div id="onboardingProgress" class="progress-fill" style="width: 11%;"></div></div>
+    <div style="font-size: 12px; color: var(--polaris-text-secondary);"><span id="stepLabel">Step 1 of 9</span></div>
+  </div>
+
+  <div id="onboardingContent" class="onboarding-content">
+    <!-- Step 1: Welcome -->
+    <div class="onboarding-step" data-step="1">
+      <div class="welcome-illustration">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="Minfo">
+          <rect x="2" y="2" width="96" height="96" rx="14" ry="14" fill="#3a3a3c"/>
+          <text x="50" y="62" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="64" fill="#f99d32">m</text>
+          <text x="50" y="86" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700" font-size="14" letter-spacing="1.4" fill="#f99d32">INFO</text>
+          <text x="80" y="22" font-family="Arial, sans-serif" font-size="8" fill="#f99d32">®</text>
+        </svg>
+      </div>
+      <div class="onboarding-headline">Connect your videos to verified Shopify orders.</div>
+      <div class="onboarding-subhead">Build a campaign, publish a Minfo Page, share a tracked link, and watch the first attributed visit land in your dashboard.</div>
+      <div class="onboarding-actions">
+        <div class="spacer"></div>
+        <button class="btn-primary" onclick="nextStep()">Build your first campaign</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Choose goal -->
+    <div class="onboarding-step" data-step="2" style="display:none;">
+      <div class="onboarding-step-label">Step 2</div>
+      <div class="onboarding-headline">What's your goal for this campaign?</div>
+      <div class="onboarding-subhead">Pick one. We'll tune the rest of the flow to match.</div>
+      <div class="goal-grid">
+        <div class="goal-card" onclick="selectGoal(this, 'tv-ctv')">
+          <div class="goal-card-icon"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+          <div class="goal-card-title">Activate YouTube and CTV viewers</div>
+          <div class="goal-card-desc">SmartLinks cover the screens platforms can track. AudioQR reaches the screens they can't. Capture verified Connects, emails, and Shopify orders from both.</div>
+        </div>
+        <div class="goal-card" onclick="selectGoal(this, 'partner')">
+          <div class="goal-card-icon"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><circle cx="17" cy="7" r="3"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/></svg></div>
+          <div class="goal-card-title">Co-launch with creators or partners</div>
+          <div class="goal-card-desc">Per-partner attribution across videos and SmartLinks that survives cookie loss, cross-device viewing, and platform reporting drift.</div>
+        </div>
+        <div class="goal-card" onclick="selectGoal(this, 'broadcast')">
+          <div class="goal-card-icon"><svg viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1"/></svg></div>
+          <div class="goal-card-title">AudioQR-enable existing media</div>
+          <div class="goal-card-desc">Add AudioQR to a TV spot, podcast, OTT placement, radio read, or video you've already published. Any viewer or listener within ten metres of a phone becomes reachable, attributable, and yours.</div>
+        </div>
+      </div>
+      <div class="onboarding-actions">
+        <button class="btn-secondary" onclick="prevStep()">Back</button>
+        <div class="spacer"></div>
+        <button id="goalContinue" class="btn-primary" onclick="nextStep()" disabled>Continue</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Select product -->
+    <div class="onboarding-step" data-step="3" style="display:none;">
+      <div class="onboarding-step-label">Step 3</div>
+      <div class="onboarding-headline">Select a product or collection.</div>
+      <div class="onboarding-subhead">Pick one or more. We'll attach them to the campaign and use them as the AI chat knowledge source.</div>
+      <div class="product-list">
+        <div class="product-list-search"><input type="text" placeholder="Search your products and collections..."></div>
+        <div class="product-row" onclick="selectProduct(this)"><div class="product-thumb" style="background: linear-gradient(135deg, #f99d32, #F07B53);"></div><div class="product-meta"><div class="product-title">Cotton Tee 2026</div><div class="product-detail">Product · £24 · 32 in stock</div></div></div>
+        <div class="product-row" onclick="selectProduct(this)"><div class="product-thumb" style="background: linear-gradient(135deg, #54485B, #AB5A75);"></div><div class="product-meta"><div class="product-title">Limited Edition Hoodie</div><div class="product-detail">Product · £79 · 14 in stock</div></div></div>
+        <div class="product-row" onclick="selectProduct(this)"><div class="product-thumb" style="background: linear-gradient(135deg, #008060, #00A878);"></div><div class="product-meta"><div class="product-title">Membership Subscription</div><div class="product-detail">Subscription · £9/month</div></div></div>
+        <div class="product-row" onclick="selectProduct(this)"><div class="product-thumb" style="background: linear-gradient(135deg, #2C6ECB, #54485B);"></div><div class="product-meta"><div class="product-title">Sample Box</div><div class="product-detail">Product · £15 · 120 in stock</div></div></div>
+        <div class="product-row" onclick="selectProduct(this)"><div class="product-thumb" style="background: linear-gradient(135deg, #AB5A75, #D4656A);"></div><div class="product-meta"><div class="product-title">Summer Collection 2026</div><div class="product-detail">Collection · 18 products</div></div></div>
+      </div>
+      <div style="text-align:center;margin-top:16px;font-size:13px;">
+        <a href="https://admin.shopify.com" target="_blank" rel="noopener">+ Create a new product or collection in Shopify</a>
+      </div>
+      <div class="onboarding-actions">
+        <button class="btn-secondary" onclick="prevStep()">Back</button>
+        <div class="spacer"></div>
+        <button id="productContinue" class="btn-primary" onclick="nextStep()" disabled>Continue</button>
+      </div>
+    </div>
+
+    <!-- Step 4: Add media -->
+    <div class="onboarding-step" data-step="4" style="display:none;">
+      <div class="onboarding-step-label">Step 4</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:240px;">
+          <div class="onboarding-headline">Add your video or audio.</div>
+          <div class="onboarding-subhead">Or skip and run the campaign with text and CTAs only. You can add media later.</div>
+        </div>
+        <button class="btn-flutter" style="margin-top:6px;" onclick="showSdkModal('encoding')">&lt;/&gt; SDK tips for developers</button>
+      </div>
+      <div class="card" style="background: linear-gradient(135deg, #FFF8EE 0%, #FFFFFF 100%); border: 1px solid var(--minfo-orange); margin-bottom: 16px;">
+        <div style="font-weight:700;font-size:15px;margin-bottom:8px;">Why upload to Minfo first?</div>
+        <ul style="font-size:13px;line-height:1.8;padding-left:20px;color:var(--polaris-text);">
+          <li><strong>AudioQR embedded server-side.</strong> We watermark your video with the Minfo protocol before you publish anywhere.</li>
+          <li><strong>One-click publish to YouTube.</strong> Minfo can post the AudioQR-enabled video to your connected YouTube channel for you.</li>
+          <li><strong>Listed on the Minfo Program Guide.</strong> Members discover your video through Minfo's owned distribution surface.</li>
+        </ul>
+      </div>
+      <div class="media-options">
+        <label class="media-option" style="cursor:pointer;">
+          <div class="media-option-title">Upload video</div>
+          <div class="media-option-desc">MP4, MOV up to 500MB. AudioQR embedded server-side before publish.</div>
+          <input type="file" accept="video/mp4,video/quicktime,video/*" style="display:none;" onchange="handleMediaUpload(this, 'video')">
+          <div id="videoFileChosen" style="margin-top:10px;font-size:12px;color:var(--polaris-text-secondary);"></div>
+          <button type="button" class="btn-secondary" style="margin-top:10px;font-size:13px;" onclick="this.previousElementSibling.previousElementSibling.click();">Choose video file</button>
+        </label>
+        <label class="media-option" style="cursor:pointer;">
+          <div class="media-option-title">Upload audio</div>
+          <div class="media-option-desc">MP3, WAV up to 100MB. AudioQR embedded server-side before publish.</div>
+          <input type="file" accept="audio/mp3,audio/mpeg,audio/wav,audio/*" style="display:none;" onchange="handleMediaUpload(this, 'audio')">
+          <div id="audioFileChosen" style="margin-top:10px;font-size:12px;color:var(--polaris-text-secondary);"></div>
+          <button type="button" class="btn-secondary" style="margin-top:10px;font-size:13px;" onclick="this.previousElementSibling.previousElementSibling.click();">Choose audio file</button>
+        </label>
+      </div>
+      <div class="skip-link"><a href="#" onclick="event.preventDefault(); nextStep();">Skip for now - add media later</a></div>
+
+      <div class="onboarding-actions">
+        <button class="btn-secondary" onclick="prevStep()">Back</button>
+        <div class="spacer"></div>
+        <button class="btn-primary" onclick="nextStep()">Continue</button>
+      </div>
+    </div>
+
+    <!-- Step 5: Create Minfo Page -->
+    <div class="onboarding-step" data-step="5" style="display:none;">
+      <div class="onboarding-step-label">Step 5</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:240px;">
+          <div class="onboarding-headline">Create your Minfo Page.</div>
+          <div class="onboarding-subhead">Drag blocks to reorder. Toggle blocks on or off. Preview updates live.</div>
+        </div>
+        <button class="btn-flutter" style="margin-top:6px;" onclick="showSdkModal('page')">&lt;/&gt; SDK tips for developers</button>
+      </div>
+      <div class="editor-grid">
+        <div class="block-list">
+          <div class="block-list-title">Page elements</div>
+          <div class="block-row"><div class="block-grip"><svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg></div><div class="block-row-name">Brand logo</div><div class="toggle on"></div></div>
+          <div class="block-row"><div class="block-grip"><svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg></div><div class="block-row-name">Hero image</div><div class="toggle on"></div></div>
+          <div class="block-row"><div class="block-grip"><svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg></div><div class="block-row-name">Social media row</div><div class="toggle on"></div></div>
+          <div class="block-row"><div class="block-grip"><svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg></div><div class="block-row-name">CTA buttons</div><div class="toggle on"></div></div>
+          <div class="block-row"><div class="block-grip"><svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg></div><div class="block-row-name">Description</div><div class="toggle on"></div></div>
+          <div class="block-row"><div class="block-grip"><svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg></div><div class="block-row-name">AI Chat</div><div class="toggle" onclick="this.classList.toggle('on');"></div></div>
+          <div class="block-row"><div class="block-grip"><svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg></div><div class="block-row-name">Email capture</div><div class="toggle" onclick="this.classList.toggle('on');"></div></div>
+          <div style="margin-top:12px;font-size:12px;color:var(--polaris-text-secondary);background:var(--polaris-bg-subdued);padding:8px;border-radius:var(--radius-sm);line-height:1.5;">Hover any element in the preview to edit. Click to change copy, image, or links.</div>
+        </div>
+        <div class="preview-pane" style="padding: 0; overflow: hidden;">
+          <div class="preview-header" style="padding: 12px 16px; border-bottom: 1px solid var(--polaris-border);">Live preview · app.minfo.com/p/summer-sale</div>
+          <div style="background: #F6F6F7; padding: 16px;">
+            <div style="background: var(--white); border-radius: 12px; overflow: hidden; max-width: 380px; margin: 0 auto; box-shadow: 0 4px 16px rgba(0,0,0,0.08);">
+              <div style="background: var(--white); padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--polaris-border); position: relative;" class="editable-hover" title="Edit brand logo">
+                <button style="background: none; border: none; cursor: pointer; padding: 4px; color: var(--polaris-text-secondary);" aria-label="Back">‹</button>
+                <div style="font-weight: 700; font-size: 14px; letter-spacing: 1px;">ACME COTTON</div>
+                <div style="display: flex; gap: 8px;">
+                  <span style="font-size: 14px; cursor: pointer;" title="AI Chat">💬</span>
+                  <span style="font-size: 14px; cursor: pointer;" title="Share">↗</span>
+                </div>
+              </div>
+              <div style="height: 220px; background: linear-gradient(135deg, #f99d32 0%, #F07B53 50%, #54485B 100%); position: relative; cursor: pointer;" class="editable-hover" title="Edit hero image">
+                <div style="position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.5); color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px;">Hero image</div>
+              </div>
+              <div style="display: flex; justify-content: center; gap: 6px; padding: 12px; background: var(--white); cursor: pointer;" class="editable-hover" title="Edit social media links">
+                <div style="width: 30px; height: 30px; background: #1F1F22; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-size: 14px; font-weight: 700;">f</div>
+                <div style="width: 30px; height: 30px; background: #1F1F22; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-size: 14px; font-weight: 700;">X</div>
+                <div style="width: 30px; height: 30px; background: #1F1F22; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px;">▶</div>
+                <div style="width: 30px; height: 30px; background: #1F1F22; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-size: 14px;">◯</div>
+                <div style="width: 30px; height: 30px; background: #1F1F22; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px;">♪</div>
+              </div>
+              <div style="padding: 12px 16px; cursor: pointer;" class="editable-hover" title="Edit CTAs">
+                <button style="width: 100%; padding: 12px; background: #1F1F22; color: white; border: none; border-radius: 6px; font-weight: 600; margin-bottom: 8px; cursor: pointer;">Shop the Cotton Tee 2026</button>
+                <button style="width: 100%; padding: 12px; background: #1F1F22; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">View the full collection</button>
+              </div>
+              <div style="padding: 4px 16px 16px; font-size: 13px; color: var(--polaris-text); line-height: 1.5; cursor: pointer;" class="editable-hover" title="Edit description">
+                <p style="margin-bottom: 8px;">Meet the Cotton Tee 2026, where comfort meets a smaller carbon footprint.</p>
+                <p>Designed for everyday wear, ethically sourced, and shipped from our UK hub. Each tee carries a unique Minfo AudioQR so we can prove who watched, who clicked, and who bought.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <style>.editable-hover { transition: outline 0.15s; } .editable-hover:hover { outline: 2px solid var(--minfo-orange); outline-offset: -2px; }</style>
+      <div class="onboarding-actions">
+        <button class="btn-secondary" onclick="prevStep()">Back</button>
+        <div class="spacer"></div>
+        <button class="btn-primary" onclick="nextStep()">Continue</button>
+      </div>
+    </div>
+
+    <!-- Step 6: Configure AI chat + email capture -->
+    <div class="onboarding-step" data-step="6" style="display:none;">
+      <div class="onboarding-step-label">Step 6</div>
+      <div class="onboarding-headline">Configure AI chat and email capture.</div>
+      <div class="onboarding-subhead">Both features are optional. You can ship without them and turn them on later.</div>
+      <div class="card">
+        <div class="toggle-row"><div><div class="toggle-row-label">Enable AI chat for this campaign</div><div class="toggle-row-desc">Visitors can ask questions about the product on the Minfo Page.</div></div><div class="toggle on" onclick="this.classList.toggle('on');"></div></div>
+        <div class="field-group" style="margin-top: 16px;">
+          <label>Knowledge sources</label>
+          <div style="margin-top: 8px;">
+            <label style="font-weight:400;display:flex;align-items:center;gap:8px;margin-bottom:8px;"><input type="checkbox" checked disabled> Shopify product info auto-imported <span class="badge badge-success">Always on</span></label>
+
+            <label style="font-weight:400;display:flex;align-items:center;gap:8px;margin-bottom:6px;"><input type="checkbox" id="ks-text" onchange="toggleKsField(this, 'ks-text-field')"> Uploaded text or markdown <span class="badge badge-info">MVP-B</span></label>
+            <div id="ks-text-field" style="display:none;margin:0 0 12px 26px;">
+              <input type="file" accept=".txt,.md,.markdown" style="display:none;" id="ks-text-input" onchange="addKnowledgeFile(this, 'ks-text-list')">
+              <button type="button" class="btn-secondary" style="font-size:13px;" onclick="document.getElementById('ks-text-input').click();">Choose .txt or .md file</button>
+              <div id="ks-text-list" style="margin-top:8px;font-size:12px;color:var(--polaris-text-secondary);"></div>
+            </div>
+
+            <label style="font-weight:400;display:flex;align-items:center;gap:8px;margin-bottom:6px;"><input type="checkbox" id="ks-faq" onchange="toggleKsField(this, 'ks-faq-field')"> FAQ list <span class="badge badge-info">MVP-B</span></label>
+            <div id="ks-faq-field" style="display:none;margin:0 0 12px 26px;">
+              <textarea rows="3" placeholder="Q: What's your shipping policy?&#10;A: Free UK shipping over &pound;30." style="font-size:13px;"></textarea>
+              <button type="button" class="btn-secondary" style="font-size:13px;margin-top:6px;">Add FAQ entry</button>
+            </div>
+
+            <label style="font-weight:400;display:flex;align-items:center;gap:8px;margin-bottom:6px;"><input type="checkbox" id="ks-url" onchange="toggleKsField(this, 'ks-url-field')"> Scraped URLs <span class="badge badge-info">MVP-B</span></label>
+            <div id="ks-url-field" style="display:none;margin:0 0 0 26px;">
+              <input type="text" placeholder="https://merchant.com/about" style="font-size:13px;">
+              <button type="button" class="btn-secondary" style="font-size:13px;margin-top:6px;">Add URL</button>
+              <div style="margin-top:8px;font-size:12px;color:var(--polaris-text-secondary);">URLs are scraped on activation. We respect robots.txt.</div>
+            </div>
+          </div>
+        </div>
+        <div class="toggle-row"><div><div class="toggle-row-label">Email gate before chat <span class="badge badge-tier">Brand+ only</span></div><div class="toggle-row-desc">Require email before the chat agent responds. Locked on Creator tier.</div></div><div class="toggle" style="opacity:0.5;"></div></div>
+        <div class="field-group"><label>Consent text</label><textarea rows="2">By chatting, you agree to our privacy policy.</textarea></div>
+      </div>
+
+      <div class="card">
+        <div class="toggle-row" style="padding-bottom:14px;border-bottom:1px solid var(--polaris-border);">
+          <div>
+            <div class="toggle-row-label">Enable email capture</div>
+            <div class="toggle-row-desc">Add an email capture block to the Minfo Page.</div>
+          </div>
+          <div class="toggle" onclick="this.classList.toggle('on');"></div>
+        </div>
+        <div class="field-group" style="margin-top:14px;">
+          <label style="display:block;margin-bottom:8px;">Required fields</label>
+          <div style="display:flex;flex-wrap:wrap;gap:8px 20px;">
+            <label style="font-weight:400;display:inline-flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" checked> Email</label>
+            <label style="font-weight:400;display:inline-flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox"> Phone</label>
+            <label style="font-weight:400;display:inline-flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox"> Name</label>
+            <label style="font-weight:400;display:inline-flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox"> Custom field</label>
+          </div>
+        </div>
+        <div class="field-group">
+          <label style="display:block;margin-bottom:8px;">Lead destinations <span style="font-weight:400;color:var(--polaris-text-secondary);font-size:12px;">(pick one or more)</span></label>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <label style="font-weight:400;display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:default;padding:10px 12px;border:1px solid var(--polaris-success);border-radius:var(--radius-sm);background:var(--polaris-success-bg);">
+              <span style="display:flex;align-items:center;gap:10px;"><input type="checkbox" checked disabled> <strong>Minfo</strong> - your data, kept by you</span>
+              <span class="badge badge-success">Always on</span>
+            </label>
+            <div style="font-size:12px;color:var(--polaris-text-secondary);margin:-4px 0 8px 26px;line-height:1.5;">Captured emails stay with Minfo so you keep them if you ever leave Shopify. Export emails plus per-Member engagement history (Connects, clicks, attributed orders) any time.</div>
+
+            <label style="font-weight:400;display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;padding:10px 12px;border:1px solid var(--polaris-border);border-radius:var(--radius-sm);background:var(--white);">
+              <span style="display:flex;align-items:center;gap:10px;"><input type="checkbox" checked> Shopify Customer record</span>
+              <span class="badge badge-success">MVP-A</span>
+            </label>
+            <label style="font-weight:400;display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:not-allowed;padding:10px 12px;border:1px solid var(--polaris-border);border-radius:var(--radius-sm);background:var(--polaris-bg-subdued);color:var(--polaris-text-secondary);">
+              <span style="display:flex;align-items:center;gap:10px;"><input type="checkbox" disabled> Shopify Metaobject</span>
+              <span class="badge badge-info">MVP-B</span>
+            </label>
+            <label style="font-weight:400;display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:not-allowed;padding:10px 12px;border:1px solid var(--polaris-border);border-radius:var(--radius-sm);background:var(--polaris-bg-subdued);color:var(--polaris-text-secondary);">
+              <span style="display:flex;align-items:center;gap:10px;"><input type="checkbox" disabled> Outbound webhook (your CRM or ESP)</span>
+              <span class="badge badge-info">MVP-B</span>
+            </label>
+          </div>
+        </div>
+        <div class="banner banner-info" style="font-size: 13px; margin-top: 12px;">Plaintext emails are encrypted at rest. A hashed normalised email is stored separately for DSAR lookup using this merchant's unique salt.</div>
+      </div>
+
+      <div class="onboarding-actions">
+        <button class="btn-secondary" onclick="prevStep()">Back</button>
+        <div class="spacer"></div>
+        <button class="btn-primary" onclick="nextStep()">Continue</button>
+      </div>
+    </div>
+
+    <!-- Step 7: Generate Smartlinks -->
+    <div class="onboarding-step" data-step="7" style="display:none;">
+      <div class="onboarding-step-label">Step 7</div>
+      <div class="onboarding-headline">SmartLinks.</div>
+      <div class="onboarding-subhead">All Minfo SmartLinks connect to this Minfo Page. Track any SmartLink back to this page in your analysis charts. Use SmartLinks for online campaigns to help spot fraud. Compare reports per channel with engagement from real Minfo Members.</div>
+      <div class="card">
+        <div style="font-weight:600;margin-bottom:10px;font-size:13px;text-transform:uppercase;letter-spacing:0.4px;color:var(--polaris-text-secondary);">Master Smartlink</div>
+        <div class="smartlink-row"><div class="smartlink-tag" style="background: var(--minfo-orange); color: white;">master</div><div class="smartlink-url">https://m.minfo.com/s/summer-sale</div><button class="btn-secondary copy-btn">Copy</button></div>
+      </div>
+      <div class="card">
+        <div style="font-weight:600;margin-bottom:10px;font-size:13px;text-transform:uppercase;letter-spacing:0.4px;color:var(--polaris-text-secondary);">Tagged Smartlinks (auto-generated)</div>
+        <div class="smartlink-row"><div class="smartlink-tag">youtube</div><div class="smartlink-url">https://m.minfo.com/s/summer-sale?s=youtube</div><button class="btn-secondary copy-btn">Copy</button></div>
+        <div class="smartlink-row"><div class="smartlink-tag">instagram</div><div class="smartlink-url">https://m.minfo.com/s/summer-sale?s=instagram</div><button class="btn-secondary copy-btn">Copy</button></div>
+        <div class="smartlink-row"><div class="smartlink-tag">tiktok</div><div class="smartlink-url">https://m.minfo.com/s/summer-sale?s=tiktok</div><button class="btn-secondary copy-btn">Copy</button></div>
+      </div>
+      <div class="card">
+        <div style="font-weight:600;margin-bottom:10px;font-size:13px;text-transform:uppercase;letter-spacing:0.4px;color:var(--polaris-text-secondary);">Add a custom Tagged Smartlink</div>
+        <div class="field-group"><label>Source tag</label><input type="text" placeholder="e.g., paid-meta" id="customTag"><div class="governance-rules"><strong>Source tag rules:</strong> lowercase, ASCII letters/digits/hyphens/underscores only, length 2-64 chars, no spaces. Reserved tags blocked: share, direct, audioqr, web, app, organic.</div></div>
+        <button class="btn-primary">Generate Tagged Smartlink</button>
+      </div>
+      <div class="onboarding-actions">
+        <button class="btn-secondary" onclick="prevStep()">Back</button>
+        <div class="spacer"></div>
+        <button class="btn-primary" onclick="nextStep()">Continue</button>
+      </div>
+    </div>
+
+    <!-- Step 8: Share with creator/audience/channel -->
+    <div class="onboarding-step" data-step="8" style="display:none;">
+      <div class="onboarding-step-label">Step 8</div>
+      <div class="onboarding-headline">Share with a creator, audience, or channel.</div>
+      <div class="onboarding-subhead">Generate per-partner Tagged Smartlinks. Source tag captures the partner identity automatically.</div>
+      <div class="card">
+        <div class="field-group">
+          <label>Partner name or handle</label>
+          <input type="text" placeholder="charlotte-banks" value="charlotte-banks">
+          <div class="field-help">We'll generate a Tagged Smartlink with source tag <strong>share-charlotte-banks</strong>.</div>
+        </div>
+        <button class="btn-primary">Generate partner link</button>
+      </div>
+      <div class="card">
+        <div style="font-weight:600;margin-bottom:10px;font-size:13px;text-transform:uppercase;letter-spacing:0.4px;color:var(--polaris-text-secondary);">Active partner links</div>
+        <div class="partner-link"><div class="partner-link-url">https://m.minfo.com/s/summer-sale?s=share-charlotte-banks</div><div class="partner-link-actions"><button class="btn-secondary copy-btn">Copy URL</button><button class="btn-secondary copy-btn">Copy share copy</button></div></div>
+        <div class="partner-link"><div class="partner-link-url">https://m.minfo.com/s/summer-sale?s=share-thatcreator</div><div class="partner-link-actions"><button class="btn-secondary copy-btn">Copy URL</button><button class="btn-secondary copy-btn">Copy share copy</button></div></div>
+      </div>
+      <div class="onboarding-actions">
+        <button class="btn-secondary" onclick="prevStep()">Back</button>
+        <div class="spacer"></div>
+        <button class="btn-primary" onclick="nextStep()">Publish and start tracking</button>
+      </div>
+    </div>
+
+    <!-- Step 9: First attributed visit -->
+    <div class="onboarding-step" data-step="9" style="display:none;">
+      <div class="onboarding-step-label">Step 9</div>
+      <div class="onboarding-headline">Your campaign is live.</div>
+      <div class="onboarding-subhead">Watching for your first attributed visit. Share a Smartlink to start.</div>
+      <div id="awaitingBanner" class="welcome-banner"><div class="welcome-banner-icon">👀</div><div><div style="font-weight:600;font-size:16px;"><span class="dot minfo"></span>Watching for your first attributed visit</div><div style="font-size:13px;opacity:0.95;">Share any Smartlink. Verified Connects appear here within 60 seconds of the click.</div></div></div>
+      <div id="celebratoryBanner" class="welcome-banner celebratory" style="display:none;"><div class="welcome-banner-icon">✓</div><div><div style="font-weight:600;font-size:16px;">First attributed visit just landed</div><div style="font-size:13px;opacity:0.95;">Source tag: <strong>instagram</strong> · 2 minutes ago · Verified Connect</div></div></div>
+      <div class="card" style="margin-top: 16px;">
+        <div style="font-weight:600;margin-bottom:8px;">Share your Master Smartlink</div>
+        <div class="smartlink-row" style="margin-bottom:12px;"><div class="smartlink-tag" style="background: var(--minfo-orange); color: white;">master</div><div class="smartlink-url">https://m.minfo.com/s/summer-sale</div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn-primary" onclick="copySmartlink(this)">Copy link</button>
+          <button class="btn-secondary" onclick="shareSmartlink()">Share</button>
+          <button class="btn-secondary">Email a partner</button>
+          <button class="btn-secondary">Generate share-layer link</button>
+        </div>
+      </div>
+      <div class="card" style="margin-top: 12px;">
+        <div style="font-weight:600;margin-bottom:8px;">What happens next</div>
+        <div style="font-size:13px;color:var(--polaris-text-secondary);line-height:1.7;">When verified Connects accumulate, the dashboard surfaces top sources, click-through rate, conversion rate, and clean sales attribution. Orders matched to your Smartlinks appear within 60 seconds of the order webhook firing.</div>
+      </div>
+      <div class="onboarding-actions">
+        <div class="spacer"></div>
+        <button class="btn-primary" onclick="finishOnboarding()">Go to dashboard</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ADMIN SHELL ============ -->
+<div id="admin" style="display:none;">
+  <div class="top-nav">
+    <svg class="minfo-logo minfo-logo-sm" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="Minfo">
+      <rect x="2" y="2" width="96" height="96" rx="14" ry="14" fill="#3a3a3c"/>
+      <text x="50" y="62" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="64" fill="#f99d32">m</text>
+      <text x="50" y="86" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700" font-size="14" letter-spacing="1.4" fill="#f99d32">INFO</text>
+      <text x="80" y="22" font-family="Arial, sans-serif" font-size="8" fill="#f99d32">®</text>
+    </svg>
+    <div style="margin-left: 16px; font-weight: 500; color: var(--polaris-text-secondary);">Acme Cotton · UK</div>
+    <div class="top-nav-spacer"></div>
+    <div class="connection-pill">Connected to Minfo Protocol</div>
+    <div class="role-toggle" style="margin: 0 16px;">
+      <button id="roleCreator" class="active" onclick="setRole('creator')">Creator</button>
+      <button id="roleBrand" onclick="setRole('brand')">Brand</button>
+    </div>
+    <button class="btn-link" onclick="restartOnboarding()">Restart onboarding</button>
+    <button class="icon-btn" title="Notifications"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></button>
+  </div>
+
+  <div class="app-shell">
+    <div class="left-nav">
+      <div class="nav-item active" data-screen="dashboard"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>Dashboard</div>
+      <div class="nav-item" data-screen="campaigns"><svg viewBox="0 0 24 24"><polygon points="12 2 15 8.5 22 9.3 17 14 18.2 21 12 17.8 5.8 21 7 14 2 9.3 9 8.5 12 2"/></svg>Campaigns</div>
+      <div class="nav-item" data-screen="smartlinks"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>Smartlinks</div>
+      <div class="nav-item" data-screen="attribution"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-5"/></svg>Analytics</div>
+      <div class="nav-item" data-screen="aichat"><svg viewBox="0 0 24 24"><path d="M21 11a8 8 0 0 1-12 7l-5 1 1-5a8 8 0 1 1 16-3"/></svg>AI Chat</div>
+      <div class="nav-section">Account</div>
+      <div class="nav-item" data-screen="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a2 2 0 0 0 .4 2.2l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a2 2 0 0 0-2.2-.4 2 2 0 0 0-1.2 1.8V22a2 2 0 1 1-4 0v-.1a2 2 0 0 0-1.3-1.8 2 2 0 0 0-2.2.4l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a2 2 0 0 0 .4-2.2 2 2 0 0 0-1.8-1.2H2a2 2 0 1 1 0-4h.1a2 2 0 0 0 1.8-1.3 2 2 0 0 0-.4-2.2l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a2 2 0 0 0 2.2.4h0a2 2 0 0 0 1.2-1.8V2a2 2 0 1 1 4 0v.1a2 2 0 0 0 1.2 1.8 2 2 0 0 0 2.2-.4l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a2 2 0 0 0-.4 2.2v0a2 2 0 0 0 1.8 1.2H22a2 2 0 1 1 0 4h-.1a2 2 0 0 0-1.8 1.2"/></svg>Settings</div>
+      <div style="position: absolute; bottom: 16px; left: 24px; font-size: 11px; color: var(--polaris-text-secondary);">v2.2 BETA</div>
+    </div>
+
+    <div class="main-content">
+      <!-- Dashboard -->
+      <div class="screen active" data-screen="dashboard">
+        <div class="page-header">
+          <div><div class="page-title">Dashboard</div><div class="page-subtitle">Last 7 days · <span id="roleLabel">Creator view</span></div></div>
+          <button class="btn-primary">+ New campaign</button>
+        </div>
+        <div class="stat-grid">
+          <div class="stat-card"><div class="stat-label">Verified traffic</div><div class="stat-value" id="statVerified">847</div><div class="stat-trend">↑ 18% vs prior week</div></div>
+          <div class="stat-card"><div class="stat-label">Filtered attribution</div><div class="stat-value" id="statFiltered">792</div><div class="stat-trend">↑ 16% vs prior week</div></div>
+          <div class="stat-card"><div class="stat-label">Clean sales attribution</div><div class="stat-value" id="statRevenue">£3,420</div><div class="stat-trend">↑ 22% vs prior week</div></div>
+          <div class="stat-card"><div class="stat-label">Conversion rate</div><div class="stat-value">4.2%</div><div class="stat-trend">↑ 0.4 pts vs prior week</div></div>
+        </div>
+        <div class="section-row" style="margin-bottom: 16px;">
+          <div class="card">
+            <div style="font-weight:600;margin-bottom:12px;">Top sources <span id="topSourcesLabel" style="font-weight:400;color:var(--polaris-text-secondary);font-size:13px;">(per video)</span></div>
+            <table class="data-table" style="border:none;">
+              <tbody id="topSourcesBody">
+                <tr><td><span class="smartlink-tag">instagram</span></td><td>280</td><td>£1,160</td></tr>
+                <tr><td><span class="smartlink-tag">youtube</span></td><td>320</td><td>£980</td></tr>
+                <tr><td><span class="smartlink-tag">share-charlotte-banks</span></td><td>142</td><td>£640</td></tr>
+                <tr><td><span class="smartlink-tag">tiktok</span></td><td>105</td><td>£420</td></tr>
+                <tr><td><span class="smartlink-tag">organic</span></td><td>0</td><td>£220</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="muted-pet">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><div style="font-weight:600;">PET (Peak Engagement Time)</div><span class="badge badge-info">Available in MVP-B</span></div>
+            <div style="font-size:13px;color:var(--polaris-text-secondary);line-height:1.6;">When MVP-B ships, this surface will show your top three engagement windows by day-of-week and, for AudioQR-enabled video, the exact moments in the timeline that produced verified Connects. Data is being captured from day one of MVP-A; only the dashboard surface is gated.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Campaigns -->
+      <div class="screen" data-screen="campaigns">
+        <div class="page-header"><div><div class="page-title">Campaigns</div><div class="page-subtitle">5 campaigns · 4 published</div></div><button class="btn-primary">+ New campaign</button></div>
+        <table class="data-table">
+          <thead><tr><th>Campaign</th><th>Goal</th><th>Status</th><th>Master Smartlink</th><th>Tagged links</th><th>Verified traffic</th><th>Clean sales attribution</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Summer Sale 2026</strong></td><td>Drive sales</td><td><span class="badge badge-success">Published</span></td><td>m.minfo.com/s/summer-sale</td><td>5</td><td>847</td><td>£3,420</td></tr>
+            <tr><td><strong>Eco Hoodie Drop</strong></td><td>Drive sales</td><td><span class="badge badge-success">Published</span></td><td>m.minfo.com/s/eco-hoodie</td><td>3</td><td>412</td><td>£1,890</td></tr>
+            <tr><td><strong>Charlotte's Picks</strong></td><td>Partner launch</td><td><span class="badge badge-success">Published</span></td><td>m.minfo.com/s/charlottes-picks</td><td>8</td><td>538</td><td>£2,180</td></tr>
+            <tr><td><strong>Q2 Brand Refresh</strong></td><td>Engagement</td><td><span class="badge badge-warning">Draft</span></td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+            <tr><td><strong>Free Trial Promo</strong></td><td>Grow email list</td><td><span class="badge badge-success">Published</span></td><td>m.minfo.com/s/free-trial</td><td>4</td><td>1,243</td><td>£890</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Smartlinks -->
+      <div class="screen" data-screen="smartlinks">
+        <div class="page-header"><div><div class="page-title">Smartlinks</div><div class="page-subtitle">Master and Tagged Smartlinks across all campaigns</div></div><button class="btn-primary">+ New Tagged Smartlink</button></div>
+        <div class="card">
+          <div style="font-weight:600;margin-bottom:12px;">Top sources, last 7 days</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <div style="background:var(--polaris-bg);padding:10px 14px;border-radius:var(--radius-sm);"><div style="font-size:11px;color:var(--polaris-text-secondary);text-transform:uppercase;letter-spacing:0.4px;">youtube</div><div style="font-weight:600;">320 visits · £980</div></div>
+            <div style="background:var(--polaris-bg);padding:10px 14px;border-radius:var(--radius-sm);"><div style="font-size:11px;color:var(--polaris-text-secondary);text-transform:uppercase;letter-spacing:0.4px;">instagram</div><div style="font-weight:600;">280 visits · £1,160</div></div>
+            <div style="background:var(--polaris-bg);padding:10px 14px;border-radius:var(--radius-sm);"><div style="font-size:11px;color:var(--polaris-text-secondary);text-transform:uppercase;letter-spacing:0.4px;">share-charlotte-banks</div><div style="font-weight:600;">142 visits · £640</div></div>
+            <div style="background:var(--polaris-bg);padding:10px 14px;border-radius:var(--radius-sm);"><div style="font-size:11px;color:var(--polaris-text-secondary);text-transform:uppercase;letter-spacing:0.4px;">tiktok</div><div style="font-weight:600;">105 visits · £420</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div style="font-weight:600;margin-bottom:8px;">Summer Sale 2026</div>
+          <div class="smartlink-row"><div class="smartlink-tag" style="background:var(--minfo-orange);color:white;">master</div><div class="smartlink-url">m.minfo.com/s/summer-sale</div><button class="btn-secondary copy-btn">Copy</button></div>
+          <div class="smartlink-row"><div class="smartlink-tag">youtube</div><div class="smartlink-url">m.minfo.com/s/summer-sale?s=youtube</div><button class="btn-secondary copy-btn">Copy</button></div>
+          <div class="smartlink-row"><div class="smartlink-tag">instagram</div><div class="smartlink-url">m.minfo.com/s/summer-sale?s=instagram</div><button class="btn-secondary copy-btn">Copy</button></div>
+          <div class="smartlink-row"><div class="smartlink-tag">share-charlotte-banks</div><div class="smartlink-url">m.minfo.com/s/summer-sale?s=share-charlotte-banks</div><button class="btn-secondary copy-btn">Copy</button></div>
+        </div>
+      </div>
+
+      <!-- Analytics (campaign deep-dive) -->
+      <div class="screen" data-screen="attribution">
+        <div style="font-size:13px;color:var(--polaris-text-secondary);margin-bottom:8px;">Campaigns &nbsp;&rsaquo;&nbsp; Summer Sale 2026</div>
+        <div class="page-header"><div style="display:flex;align-items:center;gap:14px;"><div class="page-title">Summer Sale 2026</div><span class="badge badge-success">Published</span></div><div style="display:flex;gap:8px;"><button class="btn-secondary">Edit campaign</button><button class="btn-secondary">Export CSV</button></div></div>
+
+        <!-- Stat strip -->
+        <div style="display:flex;flex-wrap:wrap;gap:24px;padding:14px 18px;background:var(--white);border:1px solid var(--polaris-border);border-radius:var(--radius-md);margin-bottom:16px;">
+          <div style="display:flex;align-items:center;gap:8px;"><span style="color:var(--minfo-orange);">&#x25A1;</span><strong style="font-size:18px;">1</strong><span style="color:var(--polaris-text-secondary);font-size:13px;">Products</span></div>
+          <div style="display:flex;align-items:center;gap:8px;"><span style="color:var(--minfo-orange);">&#x25CE;</span><strong style="font-size:18px;">5</strong><span style="color:var(--polaris-text-secondary);font-size:13px;">Events</span></div>
+          <div style="display:flex;align-items:center;gap:8px;"><span style="color:var(--polaris-success);">&#x2713;</span><strong style="font-size:18px;">5</strong><span style="color:var(--polaris-text-secondary);font-size:13px;">Confirmed</span></div>
+          <div style="display:flex;align-items:center;gap:8px;"><span style="color:var(--polaris-text-secondary);">&#x29D6;</span><strong style="font-size:18px;">0</strong><span style="color:var(--polaris-text-secondary);font-size:13px;">Pending</span></div>
+          <div style="display:flex;align-items:center;gap:8px;"><span style="color:var(--minfo-orange);">&#x26A1;</span><strong style="font-size:18px;">3</strong><span style="color:var(--polaris-text-secondary);font-size:13px;">PETs</span></div>
+          <div style="display:flex;align-items:center;gap:8px;"><span style="color:var(--polaris-text-secondary);">&#x25B7;</span><strong style="font-size:18px;">2m 52s</strong><span style="color:var(--polaris-text-secondary);font-size:13px;">Duration</span></div>
+          <div style="flex:1;"></div>
+          <div style="display:flex;align-items:center;gap:8px;"><span style="color:var(--polaris-success);">&#x1F4B0;</span><strong style="font-size:18px;">&pound;3,420</strong><span style="color:var(--polaris-text-secondary);font-size:13px;">Clean sales attribution</span></div>
+        </div>
+
+        <!-- Insights -->
+        <div class="card" style="margin-bottom:16px;">
+          <div style="font-weight:600;font-size:16px;margin-bottom:4px;">Insights</div>
+          <div style="font-size:13px;color:var(--polaris-text-secondary);margin-bottom:12px;">People, locations, and brands detected in the video.</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <div style="background:var(--polaris-bg);padding:8px 12px;border-radius:99px;display:inline-flex;align-items:center;gap:8px;font-size:13px;">
+              <span style="font-size:14px;">&#x1F4FA;</span> <strong>YouTube</strong> &middot; <span style="color:var(--polaris-text-secondary);">@ 0:10</span> <span class="badge badge-tier">2&times;</span>
+            </div>
+            <div style="background:var(--polaris-bg);padding:8px 12px;border-radius:99px;display:inline-flex;align-items:center;gap:8px;font-size:13px;">
+              <span style="font-size:14px;">&#x1F464;</span> <strong>Charlotte Banks</strong> &middot; <span style="color:var(--polaris-text-secondary);">@ 2:34</span>
+            </div>
+            <div style="background:var(--polaris-bg);padding:8px 12px;border-radius:99px;display:inline-flex;align-items:center;gap:8px;font-size:13px;">
+              <span style="font-size:14px;">&#x1F4CD;</span> <strong>Bristol</strong> &middot; <span style="color:var(--polaris-text-secondary);">@ 1:42</span>
+            </div>
+            <div style="background:var(--polaris-bg);padding:8px 12px;border-radius:99px;display:inline-flex;align-items:center;gap:8px;font-size:13px;">
+              <span style="font-size:14px;">&#x1F3F7;</span> <strong>Acme Cotton</strong> &middot; <span style="color:var(--polaris-text-secondary);">@ 0:08</span> <span class="badge badge-tier">4&times;</span>
+            </div>
+          </div>
+        </div>
+        <!-- Tabs -->
+        <div class="tab-bar" style="margin-bottom:16px;">
+          <button class="active" onclick="switchTab(this, 'an-analysis')">Analysis</button>
+          <button onclick="switchTab(this, 'an-products')">Products</button>
+          <button onclick="switchTab(this, 'an-events')">Events</button>
+          <button onclick="switchTab(this, 'an-transcript')">Transcript</button>
+          <button onclick="switchTab(this, 'an-smartlinks')">Smartlinks</button>
+        </div>
+
+        <!-- Analysis tab: PET curve + candidates + history -->
+        <div class="tab-panel active" id="an-analysis">
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+              <div>
+                <div style="font-weight:600;font-size:16px;">PET Engagement Curve</div>
+                <div style="font-size:13px;color:var(--polaris-text-secondary);">Modeled audience engagement across the video. Markers show detected events and PET candidates.</div>
+              </div>
+              <div style="display:flex;gap:12px;font-size:12px;align-items:center;">
+                <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;background:var(--minfo-orange);border-radius:50%;"></span>Engagement</span>
+                <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;background:#FFC453;border-radius:50%;"></span>Event</span>
+                <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;background:var(--polaris-success);border-radius:50%;"></span>PET</span>
+              </div>
+            </div>
+            <svg viewBox="0 0 720 220" width="100%" height="220" style="margin-top:8px;">
+              <defs><linearGradient id="petFill2" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#f99d32" stop-opacity="0.35"/><stop offset="100%" stop-color="#f99d32" stop-opacity="0"/></linearGradient></defs>
+              <line x1="40" y1="170" x2="700" y2="170" stroke="#E1E3E5" stroke-width="1"/>
+              <line x1="40" y1="40" x2="700" y2="40" stroke="#F0F0F2" stroke-width="1" stroke-dasharray="2,3"/>
+              <line x1="40" y1="105" x2="700" y2="105" stroke="#F0F0F2" stroke-width="1" stroke-dasharray="2,3"/>
+              <text x="40" y="190" font-size="11" fill="#6D7175">0:00</text>
+              <text x="200" y="190" font-size="11" fill="#6D7175">0:29</text>
+              <text x="370" y="190" font-size="11" fill="#6D7175">1:26</text>
+              <text x="540" y="190" font-size="11" fill="#6D7175">2:23</text>
+              <text x="700" y="190" font-size="11" fill="#6D7175" text-anchor="end">2:52</text>
+              <text x="32" y="44" font-size="10" fill="#6D7175" text-anchor="end">100</text>
+              <text x="32" y="109" font-size="10" fill="#6D7175" text-anchor="end">50</text>
+              <text x="32" y="173" font-size="10" fill="#6D7175" text-anchor="end">0</text>
+              <path d="M 40 130 L 100 95 L 160 80 L 220 130 L 280 65 L 340 130 L 400 138 L 460 138 L 520 130 L 580 50 L 640 50 L 700 145 L 700 170 L 40 170 Z" fill="url(#petFill2)" stroke="#f99d32" stroke-width="2.5"/>
+              <circle cx="225" cy="78" r="5" fill="#FFC453"/>
+              <circle cx="280" cy="76" r="5" fill="#FFC453"/>
+              <circle cx="280" cy="63" r="5" fill="#008060"/>
+              <circle cx="580" cy="62" r="5" fill="#FFC453"/>
+              <circle cx="580" cy="48" r="5" fill="#008060"/>
+              <circle cx="640" cy="62" r="5" fill="#FFC453"/>
+              <circle cx="640" cy="48" r="5" fill="#008060"/>
+            </svg>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+              <div style="display:flex;align-items:center;gap:10px;"><span style="color:var(--minfo-orange);font-size:18px;">&#x26A1;</span><div style="font-weight:600;font-size:16px;">PET Candidates</div><span class="badge badge-tier">3</span></div>
+              <div style="display:flex;align-items:center;gap:10px;"><span style="font-size:12px;color:var(--polaris-text-secondary);">0 accepted</span><button class="btn-primary" style="font-size:13px;">Approve PETs &rsaquo;</button></div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+              <div style="border:1px solid var(--polaris-border);border-radius:var(--radius-sm);padding:14px;background:var(--white);">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px;"><span style="color:var(--polaris-text-secondary);">#1</span><span style="font-family:ui-monospace,monospace;font-weight:600;">2:17</span><span style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;background:var(--polaris-success);border-radius:50%;"></span><span style="font-size:12px;font-weight:500;">strong</span><strong>100</strong></span></div>
+                <div style="font-size:13px;line-height:1.5;color:var(--polaris-text);margin-bottom:12px;">The presenter makes a direct and urgent call-to-action, telling viewers to click the link to get a special price. Strong signal of high purchase intent.</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"><button class="btn-secondary" style="font-size:13px;padding:8px;">&#x1F44D; Accept</button><button class="btn-secondary" style="font-size:13px;padding:8px;">&#x1F44E; Reject</button></div>
+              </div>
+              <div style="border:1px solid var(--polaris-border);border-radius:var(--radius-sm);padding:14px;background:var(--white);">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px;"><span style="color:var(--polaris-text-secondary);">#2</span><span style="font-family:ui-monospace,monospace;font-weight:600;">2:08</span><span style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;background:#FFC453;border-radius:50%;"></span><span style="font-size:12px;font-weight:500;">moderate</span><strong>90</strong></span></div>
+                <div style="font-size:13px;line-height:1.5;color:var(--polaris-text);margin-bottom:12px;">The price of the course is revealed alongside a significant discount, addressing a key consideration for potential buyers and creating a sense of value.</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"><button class="btn-secondary" style="font-size:13px;padding:8px;">&#x1F44D; Accept</button><button class="btn-secondary" style="font-size:13px;padding:8px;">&#x1F44E; Reject</button></div>
+              </div>
+              <div style="border:1px solid var(--polaris-border);border-radius:var(--radius-sm);padding:14px;background:var(--white);">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px;"><span style="color:var(--polaris-text-secondary);">#3</span><span style="font-family:ui-monospace,monospace;font-weight:600;">0:50</span><span style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;"><span style="width:8px;height:8px;background:#FFC453;border-radius:50%;"></span><span style="font-size:12px;font-weight:500;">moderate</span><strong>80</strong></span></div>
+                <div style="font-size:13px;line-height:1.5;color:var(--polaris-text);margin-bottom:12px;">The presenter demonstrates the course content, showing the modules and curriculum. Tangible proof of the product's value and helps viewers visualise what they will receive.</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"><button class="btn-secondary" style="font-size:13px;padding:8px;">&#x1F44D; Accept</button><button class="btn-secondary" style="font-size:13px;padding:8px;">&#x1F44E; Reject</button></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <div style="font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:0.4px;color:var(--polaris-text-secondary);">Analysis history</div>
+              <button class="btn-secondary" style="font-size:13px;">+ Run another analysis</button>
+            </div>
+            <table class="data-table" style="border:none;">
+              <thead><tr><th>Source</th><th>Status</th><th>Model</th><th>Started</th><th>Duration</th><th>Actions</th></tr></thead>
+              <tbody>
+                <tr><td>&#x21F2; YouTube</td><td><span class="badge badge-success">completed</span></td><td>gemini-2.5-pro</td><td>26 Apr, 12:19</td><td>2m 52s</td><td><button class="icon-btn" title="Delete"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/></svg></button></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Products tab -->
+        <div class="tab-panel" id="an-products">
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+              <div>
+                <div style="font-weight:600;font-size:16px;">Declared Products</div>
+                <div style="font-size:13px;color:var(--polaris-text-secondary);margin-top:4px;">Products the AI will look for in your content.</div>
+              </div>
+              <button class="btn-primary" style="font-size:13px;">+ Add Product</button>
+            </div>
+            <table class="data-table" style="border:none;">
+              <thead><tr><th>Ref</th><th>Product</th><th>SKU</th><th>Price</th><th></th></tr></thead>
+              <tbody>
+                <tr><td><span class="badge badge-tier" style="font-family:ui-monospace,monospace;">P1</span></td><td>Cotton Tee 2026</td><td>CT-2026</td><td>&pound;24</td><td style="text-align:right;"><button class="icon-btn" title="Remove"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/></svg></button></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Events tab -->
+        <div class="tab-panel" id="an-events">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-weight:600;"><span style="color:var(--polaris-success);">&#x2713;</span> Reviewed <span class="badge badge-success">5</span></div>
+          <div style="display:flex;flex-direction:column;gap:8px;border-left:2px solid var(--polaris-border);padding-left:16px;">
+            <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--white);border:1px solid var(--polaris-border);border-radius:var(--radius-sm);position:relative;">
+              <div style="position:absolute;left:-23px;top:50%;transform:translateY(-50%);width:10px;height:10px;border-radius:50%;background:var(--polaris-success);"></div>
+              <span style="font-family:ui-monospace,monospace;font-weight:600;color:var(--minfo-orange);min-width:42px;">0:10</span>
+              <span style="font-size:18px;">&#x1F5E3;&#xFE0F;</span>
+              <span style="font-weight:500;flex:1;">Verbal Mention</span>
+              <span class="smartlink-tag">Cotton Tee 2026</span>
+              <span class="badge badge-success">95%</span>
+              <span class="badge badge-success">confirmed</span>
+              <span style="color:var(--polaris-text-secondary);">&#9662;</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--white);border:1px solid var(--polaris-border);border-radius:var(--radius-sm);position:relative;">
+              <div style="position:absolute;left:-23px;top:50%;transform:translateY(-50%);width:10px;height:10px;border-radius:50%;background:var(--polaris-success);"></div>
+              <span style="font-family:ui-monospace,monospace;font-weight:600;color:var(--minfo-orange);min-width:42px;">0:50</span>
+              <span style="font-size:18px;">&#x1F441;&#xFE0F;</span>
+              <span style="font-weight:500;flex:1;">Product Shown</span>
+              <span class="smartlink-tag">Cotton Tee 2026</span>
+              <span class="badge badge-success">100%</span>
+              <span class="badge badge-success">confirmed</span>
+              <span style="color:var(--polaris-text-secondary);">&#9662;</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--white);border:1px solid var(--polaris-border);border-radius:var(--radius-sm);position:relative;">
+              <div style="position:absolute;left:-23px;top:50%;transform:translateY(-50%);width:10px;height:10px;border-radius:50%;background:var(--polaris-success);"></div>
+              <span style="font-family:ui-monospace,monospace;font-weight:600;color:var(--minfo-orange);min-width:42px;">0:50</span>
+              <span style="font-size:18px;">&#x1F3AC;</span>
+              <span style="font-weight:500;flex:1;">Product Demo</span>
+              <span class="smartlink-tag">Cotton Tee 2026</span>
+              <span class="badge badge-success">100%</span>
+              <span class="badge badge-success">confirmed</span>
+              <span style="color:var(--polaris-text-secondary);">&#9662;</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--white);border:1px solid var(--polaris-border);border-radius:var(--radius-sm);position:relative;">
+              <div style="position:absolute;left:-23px;top:50%;transform:translateY(-50%);width:10px;height:10px;border-radius:50%;background:var(--polaris-success);"></div>
+              <span style="font-family:ui-monospace,monospace;font-weight:600;color:var(--minfo-orange);min-width:42px;">2:08</span>
+              <span style="font-size:18px;">&#x1F4B0;</span>
+              <span style="font-weight:500;flex:1;">Price Mention</span>
+              <span class="smartlink-tag">Cotton Tee 2026</span>
+              <span class="badge badge-success">100%</span>
+              <span class="badge badge-success">confirmed</span>
+              <span style="color:var(--polaris-text-secondary);">&#9662;</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--white);border:1px solid var(--polaris-border);border-radius:var(--radius-sm);position:relative;">
+              <div style="position:absolute;left:-23px;top:50%;transform:translateY(-50%);width:10px;height:10px;border-radius:50%;background:var(--polaris-success);"></div>
+              <span style="font-family:ui-monospace,monospace;font-weight:600;color:var(--minfo-orange);min-width:42px;">2:17</span>
+              <span style="font-size:18px;">&#x1F4E2;</span>
+              <span style="font-weight:500;flex:1;">CTA</span>
+              <span class="smartlink-tag">Cotton Tee 2026</span>
+              <span class="badge badge-success">100%</span>
+              <span class="badge badge-success">confirmed</span>
+              <span style="color:var(--polaris-text-secondary);">&#9662;</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Transcript tab -->
+        <div class="tab-panel" id="an-transcript">
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+              <div>
+                <div style="font-weight:600;font-size:16px;">Spoken Content Transcript</div>
+                <div style="font-size:13px;color:var(--polaris-text-secondary);margin-top:4px;">Aggregated speech captured at each detected event, in chronological order.</div>
+              </div>
+              <button class="btn-secondary" style="font-size:13px;">&#x2922; Expand</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:14px;font-size:14px;line-height:1.6;">
+              <div style="display:flex;gap:16px;padding-bottom:14px;border-bottom:1px solid var(--polaris-border);"><span style="font-family:ui-monospace,monospace;font-weight:600;color:var(--minfo-orange);min-width:42px;">0:10</span><span style="font-style:italic;">"The speaker introduces the Cotton Tee 2026 and the campaign for the new summer collection."</span></div>
+              <div style="display:flex;gap:16px;padding-bottom:14px;border-bottom:1px solid var(--polaris-border);"><span style="font-family:ui-monospace,monospace;font-weight:600;color:var(--minfo-orange);min-width:42px;">0:50</span><span style="font-style:italic;">"The presenter shows the tee on camera, explaining the cotton sourcing and the ethical supply chain behind it."</span></div>
+              <div style="display:flex;gap:16px;padding-bottom:14px;border-bottom:1px solid var(--polaris-border);"><span style="font-family:ui-monospace,monospace;font-weight:600;color:var(--minfo-orange);min-width:42px;">0:50</span><span style="font-style:italic;">"The presenter demonstrates the fit, cut, and finish, walking around to show the tee on different body types."</span></div>
+              <div style="display:flex;gap:16px;padding-bottom:14px;border-bottom:1px solid var(--polaris-border);"><span style="font-family:ui-monospace,monospace;font-weight:600;color:var(--minfo-orange);min-width:42px;">2:08</span><span style="font-style:italic;">"The speaker states that the tee is currently available for &pound;24, with free UK shipping over &pound;30."</span></div>
+              <div style="display:flex;gap:16px;"><span style="font-family:ui-monospace,monospace;font-weight:600;color:var(--minfo-orange);min-width:42px;">2:17</span><span style="font-style:italic;">"The presenter encourages viewers to scan or click the Smartlink in the description to land on the Minfo Page."</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Smartlinks tab (existing source breakdown) -->
+        <div class="tab-panel" id="an-smartlinks">
+          <div class="banner banner-info" style="font-size:13px;margin-bottom:16px;">Server-side reconciliation is canonical. The Web Pixel is supporting evidence. <a href="#" onclick="event.preventDefault();">How attribution works</a></div>
+          <table class="data-table">
+            <thead><tr><th>Source</th><th>Verified traffic</th><th>Click-through rate</th><th>Conversion rate</th><th>Clean sales attribution</th><th>Filtered attribution</th></tr></thead>
+            <tbody>
+              <tr><td><span class="smartlink-tag">instagram</span></td><td>280</td><td>72%</td><td>5.4%</td><td>£1,160</td><td>2 of 282</td></tr>
+              <tr><td><span class="smartlink-tag">youtube</span></td><td>320</td><td>61%</td><td>3.1%</td><td>£980</td><td>1 of 321</td></tr>
+              <tr><td><span class="smartlink-tag">share-charlotte-banks</span></td><td>142</td><td>83%</td><td>6.9%</td><td>£640</td><td>0 of 142</td></tr>
+              <tr><td><span class="smartlink-tag">tiktok</span></td><td>105</td><td>54%</td><td>2.4%</td><td>£420</td><td>3 of 108</td></tr>
+              <tr><td><span class="smartlink-tag">paid-meta</span></td><td>198</td><td>42%</td><td>1.2%</td><td>£220</td><td>17 of 215</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- AI Chat -->
+      <div class="screen" data-screen="aichat">
+        <div class="page-header"><div><div class="page-title">AI Chat</div><div class="page-subtitle">Lite scope in MVP-A: product-info knowledge, conversations retained 90 days</div></div></div>
+        <div class="banner banner-info" style="font-size:13px;">AI chat lite ships with MVP-A as a feature flag. If the chat backend is not production-ready at submission, the surface stays off and ships as a post-submission update.</div>
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+              <div style="font-weight:600;font-size:16px;">Summer Sale 2026</div>
+              <div style="font-size:13px;color:var(--polaris-text-secondary);margin-top:4px;">Knowledge: Shopify product · Cotton Tee 2026</div>
+            </div>
+            <span class="badge badge-success">Active</span>
+          </div>
+          <div style="display:flex;gap:24px;margin-top:14px;">
+            <div><div style="font-size:11px;color:var(--polaris-text-secondary);text-transform:uppercase;letter-spacing:0.4px;">Conversations</div><div style="font-weight:700;font-size:20px;">47</div></div>
+            <div><div style="font-size:11px;color:var(--polaris-text-secondary);text-transform:uppercase;letter-spacing:0.4px;">Email gate</div><div style="font-weight:600;font-size:14px;margin-top:4px;">Off · <span class="badge badge-tier">Brand+ to enable</span></div></div>
+            <div><div style="font-size:11px;color:var(--polaris-text-secondary);text-transform:uppercase;letter-spacing:0.4px;">Leads captured</div><div style="font-weight:700;font-size:20px;">0</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+              <div style="font-weight:600;font-size:16px;">Charlotte's Picks</div>
+              <div style="font-size:13px;color:var(--polaris-text-secondary);margin-top:4px;">Knowledge: Shopify collection · Summer Collection 2026</div>
+            </div>
+            <span class="badge badge-success">Active</span>
+          </div>
+          <div style="display:flex;gap:24px;margin-top:14px;">
+            <div><div style="font-size:11px;color:var(--polaris-text-secondary);text-transform:uppercase;letter-spacing:0.4px;">Conversations</div><div style="font-weight:700;font-size:20px;">23</div></div>
+            <div><div style="font-size:11px;color:var(--polaris-text-secondary);text-transform:uppercase;letter-spacing:0.4px;">Email gate</div><div style="font-weight:600;font-size:14px;margin-top:4px;">Off · <span class="badge badge-tier">Brand+ to enable</span></div></div>
+            <div><div style="font-size:11px;color:var(--polaris-text-secondary);text-transform:uppercase;letter-spacing:0.4px;">Leads captured</div><div style="font-weight:700;font-size:20px;">0</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings -->
+      <div class="screen" data-screen="settings">
+        <div class="page-header"><div><div class="page-title">Settings</div><div class="page-subtitle">Billing, integrations, privacy, and account</div></div></div>
+        <div class="tab-bar">
+          <button class="active" onclick="switchTab(this, 'tab-billing')">Billing</button>
+          <button onclick="switchTab(this, 'tab-theme')">Theme App Extension</button>
+          <button onclick="switchTab(this, 'tab-consent')">Cookie consent</button>
+          <button onclick="switchTab(this, 'tab-gdpr')">GDPR / DSAR</button>
+          <button onclick="switchTab(this, 'tab-account')">Account</button>
+        </div>
+
+        <div class="tab-panel active" id="tab-billing">
+          <div class="banner banner-success" style="font-size:13px;">You are on the <strong>Creator</strong> tier. Billed in GBP via Shopify.</div>
+          <div class="tier-grid">
+            <div class="tier-card">
+              <div class="tier-card-header"><div class="tier-name">Free Starter</div></div>
+              <div class="tier-price">£0<span class="tier-period">/month</span></div>
+              <ul class="tier-features"><li>1 live campaign</li><li>1 published Minfo Page</li><li>100 tracked visits/month</li><li>Minfo attribution footer on page</li></ul>
+              <div class="tier-extra"><strong>Over the cap?</strong> Page keeps serving normally. Tracking continues internally. Dashboard reporting caps at 100 with an upgrade prompt.</div>
+              <div class="tier-cta"><button class="btn-secondary">Downgrade</button></div>
+            </div>
+            <div class="tier-card current">
+              <div class="tier-card-header"><div class="tier-name">Creator</div><span class="badge badge-success">Current plan</span></div>
+              <div class="tier-price">£29<span class="tier-period">/month</span></div>
+              <ul class="tier-features"><li>Unlimited campaigns</li><li>Unlimited Smartlinks</li><li>AI chat lite</li><li>Lead capture to Shopify Customer</li></ul>
+              <div class="tier-cta"><button class="btn-secondary" disabled>Current plan</button></div>
+            </div>
+            <div class="tier-card">
+              <div class="tier-card-header"><div class="tier-name">Brand</div></div>
+              <div class="tier-price">£149<span class="tier-period">/month</span></div>
+              <ul class="tier-features"><li>Everything in Creator</li><li>AI chat email gate</li><li>Source tag analytics</li><li>30-day attribution history</li></ul>
+              <div class="tier-cta"><button class="btn-primary" onclick="showModal()">Upgrade to Brand</button></div>
+            </div>
+            <div class="tier-card">
+              <div class="tier-card-header"><div class="tier-name">Pro / Agency</div></div>
+              <div class="tier-price">£499<span class="tier-period">/month</span></div>
+              <ul class="tier-features"><li>Multi-client management</li><li>Custom Smartlink domain</li><li>Data warehouse export</li><li>Partner dashboards</li></ul>
+              <div class="tier-cta"><button class="btn-secondary">Upgrade to Pro</button></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="tab-theme">
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;">
+              <div>
+                <div style="font-weight:600;font-size:16px;">Render Minfo Pages on your storefront domain</div>
+                <div style="font-size:13px;color:var(--polaris-text-secondary);margin-top:6px;line-height:1.6;">By default, Minfo Pages render at <strong>app.minfo.com/p/[slug]</strong>, the guaranteed launch surface. Enable the Theme App Extension to also render at <strong>your-store.com/pages/[slug]</strong> for SEO and merchant-domain branding. The hosted page remains available as a fallback and as the entry point for AudioQR Connects from broadcast media.</div>
+              </div>
+              <div class="toggle" onclick="this.classList.toggle('on');"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div style="font-weight:600;margin-bottom:8px;font-size:14px;">When the extension is enabled</div>
+            <ul style="font-size:13px;color:var(--polaris-text-secondary);line-height:1.8;padding-left:20px;">
+              <li>Hero, Media, and CTA blocks render natively in your theme (MVP-A)</li>
+              <li>AI chat and email capture render as links to the Minfo-hosted page (MVP-A)</li>
+              <li>AI chat and email capture become inline blocks in MVP-B (theme parity)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="tab-consent">
+          <div style="font-weight:600;margin-bottom:8px;font-size:16px;">How attribution cookies work on your storefront</div>
+          <div style="font-size:13px;color:var(--polaris-text-secondary);margin-bottom:16px;line-height:1.6;">Each mode requires legal review before enabling. Default for new installs is Consent-based.</div>
+          <div class="consent-mode selected" onclick="selectConsent(this, 0)">
+            <input type="radio" name="consent" checked>
+            <div>
+              <div class="consent-mode-label">Consent-based analytics mode <span class="badge badge-success">Recommended</span></div>
+              <div class="consent-mode-desc">Click attribution cookie is set only after your cookie consent banner accepts non-essential tracking. Where the visitor declines consent, attribution falls back to server-side note_attributes (cart permalink and Minfo-hosted page only) and unattributed otherwise. Safest legal posture across UK GDPR, EU PECR, and CCPA.</div>
+            </div>
+          </div>
+          <div class="consent-mode" onclick="selectConsent(this, 1)">
+            <input type="radio" name="consent">
+            <div>
+              <div class="consent-mode-label">Essential attribution mode</div>
+              <div class="consent-mode-desc">Click attribution cookie is set on click as a legitimate-interest data flow. Requires a documented LI assessment from your legal counsel. Minfo provides the template.</div>
+              <div class="banner banner-warning" style="margin-top:10px;font-size:12px;">Confirm legal review before enabling. The merchant carries the legal liability.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="tab-gdpr">
+          <div class="card">
+            <div style="font-weight:600;font-size:16px;margin-bottom:6px;">Data subject request lookup</div>
+            <div style="font-size:13px;color:var(--polaris-text-secondary);margin-bottom:14px;">Look up engagement and lead capture records for a specific data subject.</div>
+            <div class="field-group">
+              <label>Identifier type</label>
+              <select>
+                <option>Shopify customer ID</option>
+                <option>Hashed device fingerprint</option>
+                <option>Campaign-scoped lead ID</option>
+                <option>Hashed normalised email</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label>Identifier value</label>
+              <input type="text" placeholder="Enter the identifier...">
+            </div>
+            <button class="btn-primary">Look up data</button>
+          </div>
+          <div class="banner banner-info" style="font-size:13px;line-height:1.6;">When you enter a plaintext email, the system hashes it on receipt with this merchant's <strong>unique salt</strong> before query. The system never indexes plaintext email and never logs plaintext email outside encrypted-at-rest storage. The salt rotates annually with a 30-day overlap window.</div>
+          <div class="card">
+            <div style="font-weight:600;font-size:14px;margin-bottom:6px;">Mandatory Shopify GDPR webhooks</div>
+            <div style="font-size:13px;color:var(--polaris-text-secondary);line-height:1.7;">customers/data_request, customers/redact, and shop/redact are wired automatically. Each responds HTTP 200 within 5 seconds and completes async work within 30 days. Audit trail retained 7 years.</div>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="tab-account">
+          <div class="card">
+            <div style="font-weight:600;font-size:16px;margin-bottom:12px;">Your role</div>
+            <div class="goal-grid" style="grid-template-columns: 1fr 1fr;">
+              <div class="goal-card selected"><div class="goal-card-title">Creator</div><div class="goal-card-desc">YouTube and social-first dashboards. Per-video performance.</div></div>
+              <div class="goal-card"><div class="goal-card-title">Brand</div><div class="goal-card-desc">Campaign-level dashboards. Channel breakdown. Agency-friendly.</div></div>
+            </div>
+            <button class="btn-primary" style="margin-top:14px;" onclick="showRoleModal()">Save role</button>
+          </div>
+          <div class="card">
+            <div style="font-weight:600;font-size:14px;margin-bottom:6px;">Account</div>
+            <div style="font-size:13px;color:var(--polaris-text-secondary);line-height:1.7;">Shop: acme-cotton.myshopify.com<br>Plan: Creator (£29/month, GBP)<br>Installed: 12 March 2026<br>Connected to Minfo Protocol: Yes</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div id="modalBackdrop" class="modal-backdrop">
+  <div class="modal">
+    <h3 id="modalTitle">Switch role?</h3>
+    <p id="modalBody">Switching role resets your dashboard defaults to the new role's empty states. Historical data is unchanged.</p>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="closeModal()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div id="sdkModalBackdrop" class="modal-backdrop">
+  <div class="modal modal-wide">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+      <h3 id="sdkModalTitle" style="font-size:18px;font-weight:700;">SDK tips</h3>
+      <button class="icon-btn" onclick="closeSdkModal()" aria-label="Close"><svg viewBox="0 0 24 24" style="width:18px;height:18px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div id="sdkModalBody"></div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn-secondary" onclick="closeSdkModal()">Close</button>
+      <a class="btn-flutter" href="Minfo_Flutter_SDK_Integration_Requirements.md" target="_blank" rel="noopener" style="text-decoration:none;">&lt;/&gt; Open full integration doc</a>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentStep = 1;
+const totalSteps = 9;
+
+function setStep(n) {
+  currentStep = n;
+  document.querySelectorAll('.onboarding-step').forEach(el => el.style.display = (parseInt(el.dataset.step) === n ? 'block' : 'none'));
+  document.getElementById('onboardingProgress').style.width = ((n / totalSteps) * 100) + '%';
+  document.getElementById('stepLabel').textContent = 'Step ' + n + ' of ' + totalSteps;
+  if (n === 9) {
+    setTimeout(() => {
+      const a = document.getElementById('awaitingBanner');
+      const c = document.getElementById('celebratoryBanner');
+      if (a && c) { a.style.display = 'none'; c.style.display = 'flex'; }
+    }, 3000);
+  }
+}
+function nextStep() { if (currentStep < totalSteps) setStep(currentStep + 1); }
+function prevStep() { if (currentStep > 1) setStep(currentStep - 1); }
+
+function selectGoal(el, key) {
+  document.querySelectorAll('.goal-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  const btn = document.getElementById('goalContinue');
+  if (btn) btn.disabled = false;
+}
+
+function selectProduct(el) {
+  // PRD note: multi-select supported on the picker. Data model still attaches
+  // a single product or collection per Campaign; if the merchant picks several,
+  // we generate a temporary Shopify Collection on the fly and attach that.
+  el.classList.toggle('selected');
+  const count = document.querySelectorAll('.product-row.selected').length;
+  const btn = document.getElementById('productContinue');
+  if (btn) {
+    btn.disabled = count === 0;
+    btn.textContent = count > 1 ? 'Continue with ' + count + ' selected' : 'Continue';
+  }
+}
+
+function finishOnboarding() {
+  document.getElementById('onboarding').style.display = 'none';
+  document.getElementById('admin').style.display = 'block';
+  showAdminScreen('dashboard');
+}
+
+function restartOnboarding() {
+  document.getElementById('onboarding').style.display = 'flex';
+  document.getElementById('admin').style.display = 'none';
+  setStep(1);
+  document.querySelectorAll('.goal-card').forEach(c => c.classList.remove('selected'));
+  document.querySelectorAll('.product-row').forEach(r => r.classList.remove('selected'));
+  const goalBtn = document.getElementById('goalContinue'); if (goalBtn) goalBtn.disabled = true;
+  const prodBtn = document.getElementById('productContinue'); if (prodBtn) prodBtn.disabled = true;
+}
+
+function showAdminScreen(name) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.screen === name));
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.dataset.screen === name));
+}
+
+document.querySelectorAll('.nav-item').forEach(n => n.addEventListener('click', () => showAdminScreen(n.dataset.screen)));
+
+function setRole(role) {
+  document.getElementById('roleCreator').classList.toggle('active', role === 'creator');
+  document.getElementById('roleBrand').classList.toggle('active', role === 'brand');
+  document.getElementById('roleLabel').textContent = role === 'creator' ? 'Creator view' : 'Brand view';
+  if (role === 'brand') {
+    document.getElementById('statVerified').textContent = '4,210';
+    document.getElementById('statFiltered').textContent = '3,890';
+    document.getElementById('statRevenue').textContent = '£18,640';
+    document.getElementById('topSourcesLabel').textContent = '(per channel)';
+    document.getElementById('topSourcesBody').innerHTML = '<tr><td><span class="smartlink-tag">paid-meta</span></td><td>1,420</td><td>£6,800</td></tr><tr><td><span class="smartlink-tag">paid-google</span></td><td>1,180</td><td>£4,920</td></tr><tr><td><span class="smartlink-tag">channel-4</span></td><td>620</td><td>£3,400</td></tr><tr><td><span class="smartlink-tag">youtube</span></td><td>540</td><td>£2,140</td></tr><tr><td><span class="smartlink-tag">organic</span></td><td>0</td><td>£1,380</td></tr>';
+  } else {
+    document.getElementById('statVerified').textContent = '847';
+    document.getElementById('statFiltered').textContent = '792';
+    document.getElementById('statRevenue').textContent = '£3,420';
+    document.getElementById('topSourcesLabel').textContent = '(per video)';
+    document.getElementById('topSourcesBody').innerHTML = '<tr><td><span class="smartlink-tag">instagram</span></td><td>280</td><td>£1,160</td></tr><tr><td><span class="smartlink-tag">youtube</span></td><td>320</td><td>£980</td></tr><tr><td><span class="smartlink-tag">share-charlotte-banks</span></td><td>142</td><td>£640</td></tr><tr><td><span class="smartlink-tag">tiktok</span></td><td>105</td><td>£420</td></tr><tr><td><span class="smartlink-tag">organic</span></td><td>0</td><td>£220</td></tr>';
+  }
+}
+
+function switchTab(btn, panelId) {
+  const bar = btn.parentElement;
+  bar.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const panel = document.getElementById(panelId);
+  if (panel) {
+    panel.parentElement.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    panel.classList.add('active');
+  }
+}
+
+function selectConsent(el, idx) {
+  document.querySelectorAll('.consent-mode').forEach(m => m.classList.remove('selected'));
+  el.classList.add('selected');
+  el.querySelector('input[type="radio"]').checked = true;
+}
+
+function showModal() {
+  document.getElementById('modalTitle').textContent = 'Upgrade to Brand?';
+  document.getElementById('modalBody').textContent = 'You will be charged £149 per month, prorated from today. Tier features unlock immediately on confirmation.';
+  document.getElementById('modalBackdrop').classList.add('show');
+}
+function showRoleModal() {
+  document.getElementById('modalTitle').textContent = 'Switch role?';
+  document.getElementById('modalBody').textContent = 'Switching role resets your dashboard defaults to the new role empty states. Historical data is unchanged.';
+  document.getElementById('modalBackdrop').classList.add('show');
+}
+function closeModal() { document.getElementById('modalBackdrop').classList.remove('show'); }
+function closeSdkModal() { document.getElementById('sdkModalBackdrop').classList.remove('show'); }
+
+const SDK_CONTENT = {
+  encoding: {
+    title: 'Multi-version AudioQR encoding (Flutter SDK)',
+    body: '<div class="sdk-section"><h4>Why multi-version encoding</h4><p>One campaign often runs across channels with different bitrate, codec, and length requirements. The Minfo Flutter SDK produces multiple AudioQR-embedded outputs from a single source asset: <strong>broadcast-quality</strong> for TV and CTV, <strong>web-grade</strong> for YouTube and social, <strong>podcast-grade</strong> for audio-only, <strong>short-form</strong> for TikTok and Reels. Encode once, distribute everywhere.</p></div>'
+        + '<div class="sdk-section"><h4>1. Add the SDK</h4><pre><code># pubspec.yaml\ndependencies:\n  minfo_sdk: ^7.3.0\n  minfo_audioqr: ^7.3.0</code></pre></div>'
+        + '<div class="sdk-section"><h4>2. Encode multiple outputs</h4><p>Pass an array of <code>EncodingProfile</code> objects to produce all variants in one pass.</p><pre><code>import \'package:minfo_audioqr/minfo_audioqr.dart\';\n\nfinal encoder = AudioQREncoder(apiKey: env.minfoApiKey);\n\nfinal results = await encoder.encode(\n  source: File(\'masters/cotton-tee-launch.mp4\'),\n  campaignId: \'cmp_summer_sale_2026\',\n  profiles: [\n    EncodingProfile.broadcastTV(),     // ProRes, 1080i, 30fps\n    EncodingProfile.connectedTV(),     // H.264, 1080p, 30fps\n    EncodingProfile.youtube(),         // H.264, 1080p, 24-60fps\n    EncodingProfile.tiktok(),          // H.264, vertical 9:16, 30fps\n    EncodingProfile.podcast(),         // MP3 audio-only, 192kbps\n  ],\n  watermark: WatermarkMode.embedded,   // or .ultrasonic for live\n);</code></pre></div>'
+        + '<div class="sdk-section"><h4>3. Server-side or client-side?</h4><p>For Shopify merchant uploads, run the encoder server-side in a worker. The SDK ships with a Cloud Run reference deployment. The Shopify app POSTs the source asset URL to that worker, which calls the SDK and returns signed URLs for each output.</p><p>For agency or in-house teams who already have a render farm, the SDK runs locally on macOS, Linux, or Windows.</p></div>'
+        + '<div class="sdk-section"><h4>4. AudioQR detection range per profile</h4><p>Embedded AudioQR (audible band) is volume-dependent: it works at typical TV viewing volumes within a 4-10 metre cone. Ultrasonic AudioQR is volume-independent: 10 metre range regardless of audio level. Use ultrasonic for live broadcast, in-store audio, and noise-resilient deployments.</p></div>'
+  },
+  page: {
+    title: 'Minfo Page (Flutter SDK)',
+    body: '<div class="sdk-section"><p>The Minfo Page is rendered by Flutter on every surface that displays it: the Shopify storefront block, the Minfo-hosted fallback at <code>app.minfo.com/p/[slug]</code>, the Universal App deep link, and AudioQR Connect resolution. The merchant configures the page via the Shopify app, but the rendering and customisation extension points live in the Flutter SDK.</p></div>'
+        + '<div class="sdk-section"><h4>1. Add the SDK</h4><pre><code># pubspec.yaml\ndependencies:\n  minfo_sdk: ^7.3.0\n  minfo_page: ^7.3.0</code></pre></div>'
+        + '<div class="sdk-section"><h4>2. Instantiate a Page from the API schema</h4><pre><code>import \'package:minfo_page/minfo_page.dart\';\n\nfinal page = await MinfoPage.fromApi(\n  pageId: \'pg_01HYZ...\',\n  apiKey: env.minfoApiKey,\n);\n\nrunApp(MinfoPageApp(page: page));</code></pre></div>'
+        + '<div class="sdk-section"><h4>3. Custom blocks</h4><p>Beyond the seven built-in block types (hero, media, CTA, AI chat, email capture, custom HTML, divider), register a custom block for layouts the merchant UI does not expose.</p><pre><code>MinfoPageRegistry.registerBlock(\n  type: \'product_carousel\',\n  builder: (context, config) =&gt; ProductCarouselWidget(\n    products: config[\'shopify_product_ids\'],\n    autoplay: config[\'autoplay\'] ?? true,\n  ),\n);</code></pre></div>'
+        + '<div class="sdk-section"><h4>4. Deep linking from AudioQR</h4><p>When a Member Connects via AudioQR, the Universal App passes the campaign slug and the originating Smartlink tag. Use these to personalise the rendered page (e.g., show a different CTA per source tag).</p><pre><code>MinfoPage.onDeepLink((event) {\n  print(\'Connected from: ${event.sourceTag}\'); // youtube, instagram, share-charlotte-banks\n  print(\'Campaign: ${event.campaignId}\');\n  print(\'Member device hash: ${event.memberDeviceHash}\');\n});</code></pre></div>'
+        + '<div class="sdk-section"><h4>5. Theme customisation</h4><p>The Shopify app exposes a basic palette and font picker. For full control (custom typography, gradient strategies, dark mode, motion), use <code>MinfoPageTheme</code>.</p><pre><code>final theme = MinfoPageTheme(\n  primary: const Color(0xFFf99d32),\n  surface: const Color(0xFF1F1F22),\n  fontFamily: \'Inter\',\n  ctaShape: CtaShape.pill,\n  motion: MotionPreset.subtle,\n);</code></pre></div>'
+        + '<div class="sdk-section"><h4>6. Where the page actually lives</h4><p>In Shopify storefront mode, the Theme App Extension hydrates the page from this SDK. In hosted mode, the same SDK powers <code>app.minfo.com/p/[slug]</code>. Both surfaces stay in parity because they read from the same Page API and render through the same Flutter widget tree.</p></div>'
+  }
+};
+
+function showSdkModal(key) {
+  const content = SDK_CONTENT[key];
+  if (!content) return;
+  document.getElementById('sdkModalTitle').textContent = content.title;
+  document.getElementById('sdkModalBody').innerHTML = content.body;
+  document.getElementById('sdkModalBackdrop').classList.add('show');
+}
+
+function copySmartlink(btn) {
+  const url = "https://m.minfo.com/s/summer-sale";
+  if (navigator.clipboard) navigator.clipboard.writeText(url).catch(() => {});
+  const originalText = btn.textContent;
+  btn.textContent = "Copied!";
+  setTimeout(() => { btn.textContent = originalText; }, 1500);
+}
+
+function handleMediaUpload(input, kind) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const target = document.getElementById(kind + 'FileChosen');
+  if (target) {
+    const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+    target.innerHTML = '<strong>' + file.name + '</strong> &middot; ' + sizeMB + ' MB &middot; <span style="color:var(--polaris-success);">queued for AudioQR embed</span>';
+  }
+}
+
+function toggleKsField(checkbox, fieldId) {
+  const field = document.getElementById(fieldId);
+  if (field) field.style.display = checkbox.checked ? 'block' : 'none';
+}
+
+function addKnowledgeFile(input, listId) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const list = document.getElementById(listId);
+  if (list) {
+    const item = document.createElement('div');
+    item.style.cssText = 'padding:6px 8px;background:var(--polaris-bg);border-radius:4px;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;';
+    item.innerHTML = '<span><strong>' + file.name + '</strong> &middot; queued for indexing</span><span class="badge badge-success" style="font-size:11px;">added</span>';
+    list.appendChild(item);
+  }
+}
+
+function shareSmartlink() {
+  const url = "https://m.minfo.com/s/summer-sale";
+  const title = "Summer Sale 2026";
+  if (navigator.share) {
+    navigator.share({ title, url }).catch(() => {});
+  } else {
+    document.getElementById('modalTitle').textContent = 'Share this Smartlink';
+    document.getElementById('modalBody').textContent = 'Native share not supported in this browser. The link has been copied to your clipboard.';
+    if (navigator.clipboard) navigator.clipboard.writeText(url).catch(() => {});
+    document.getElementById('modalBackdrop').classList.add('show');
+  }
+}
+</script>
+
+</body>
+</html>
