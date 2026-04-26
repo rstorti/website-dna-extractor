@@ -346,7 +346,7 @@ async function readHistory(tenantId = 'default') {
       const queryPromise = supabase
         .from('extraction_history')
         .select('*')
-        .or(	enant_id.eq.${tenantId},tenant_id.is.null)
+        .or(`tenant_id.eq.${tenantId},tenant_id.is.null`)
         .order('timestamp', { ascending: false })
         .limit(100); // cap to 100 rows — prevents slow queries as history grows
         
