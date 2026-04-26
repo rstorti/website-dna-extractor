@@ -32,18 +32,31 @@ export function setSessionToken(token) {
 }
 
 export async function login(password, tenantId) {
+  const endpoint = `${API_BASE_URL}/api/auth/login`;
   try {
-    const r = await fetch(`${API_BASE_URL}/api/auth/login`, {
+    const r = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password, tenantId: tenantId || 'default' })
     });
-    if (!r.ok) return false;
+    if (!r.ok) {
+      let serverMsg = `HTTP ${r.status} ${r.statusText}`;
+      try {
+        const body = await r.json();
+        if (body?.error) serverMsg = `[${r.status}] ${body.error}`;
+      } catch { /* body wasn't JSON */ }
+      return { ok: false, error: serverMsg, status: r.status, endpoint };
+    }
     const { token } = await r.json();
     setSessionToken(token);
-    return true;
-  } catch {
-    return false;
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: `Network error — cannot reach server. (${err.message})`,
+      status: 0,
+      endpoint,
+    };
   }
 }
 
@@ -1129,16 +1142,32 @@ function App() {
                         placeholder="Tenant ID (Optional)" 
                         style={{ width: '100%', padding: '0.8rem', marginBottom: '1rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(0,0,0,0.2)', color: 'white', outline: 'none' }} 
                     />
-                    {loginError && <p style={{ color: '#ff4b4b', marginBottom: '1rem', fontSize: '0.85rem' }}>{loginError}</p>}
+                    {loginError && (
+                        <div style={{ marginBottom: '1rem' }}>
+                            <p style={{ color: '#ff4b4b', fontSize: '0.85rem', margin: '0 0 0.3rem 0', fontWeight: '600' }}>
+                                ⚠ {loginError}
+                            </p>
+                            {/* Diagnostics — comment out block below for production */}
+                            <p style={{ color: 'rgba(255,100,100,0.6)', fontSize: '0.72rem', margin: 0, fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                                Endpoint: {`${window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? '' : (import.meta.env.VITE_API_BASE_URL || '')}/api/auth/login`}
+                            </p>
+                        </div>
+                    )}
                     <button 
                         id="login-btn"
                         onClick={async () => {
                             if (!loginKey) return;
                             setIsLoggingIn(true);
                             setLoginError('');
-                            const ok = await login(loginKey, tenantId);
-                            if (ok) setHasToken(true);
-                            else setLoginError('Invalid API Key or Tenant');
+                            const result = await login(loginKey, tenantId);
+                            if (result.ok) {
+                                setHasToken(true);
+                            } else {
+                                // Show exact server error for diagnostics
+                                // TODO: can be replaced with generic message in production:
+                                // setLoginError('Invalid API Key or Tenant');
+                                setLoginError(result.error || 'Login failed — unknown error');
+                            }
                             setIsLoggingIn(false);
                         }} 
                         disabled={isLoggingIn}
