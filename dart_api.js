@@ -125,8 +125,7 @@ module.exports = function mountDartApi(app, {
   jobStore = new JobStore(),
 } = {}) {
   if (process.env.NODE_ENV === 'production' && !process.env.DART_API_KEY) {
-    console.error('[DART API] FATAL: DART_API_KEY must be set in production.');
-    process.exit(1);
+    console.warn('[DART API] WARNING: DART_API_KEY is not set — Dart routes will operate in open-access mode. Set the key in Railway Variables for production security.');
   }
 
   app.post('/api/dart/extract', requireApiKey, dartExtractRateLimit, async (req, res) => {
