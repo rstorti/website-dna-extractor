@@ -24,7 +24,8 @@ function HistoryTab({
     setWebsite2Url,
     setResult,
     setShowJsonPreview,
-    setActiveTab
+    setActiveTab,
+    skipJsonResetRef,
 }) {
     return (
         <div className="input-card" style={{ marginBottom: 0 }}>
@@ -197,8 +198,12 @@ function HistoryTab({
 
                                                             // ── Restore full result + show JSON ──────────────────
                                                             setResult(p);
-                                                            setShowJsonPreview(true);
                                                             setActiveTab('Dashboard');
+                                                            // Suppress the JSON-reset useEffect for this render cycle
+                                                            skipJsonResetRef.current = true;
+                                                            setShowJsonPreview(true);
+                                                            // Re-enable after React has processed all state updates
+                                                            setTimeout(() => { skipJsonResetRef.current = false; }, 200);
                                                             // Scroll to top so JSON panel is visible
                                                             window.scrollTo({ top: 0, behavior: 'smooth' });
                                                         }}

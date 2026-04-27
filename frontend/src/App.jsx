@@ -93,6 +93,7 @@ function App() {
     // A plain object { current: null } is recreated each render, making Cancel a no-op.
     const abortControllerRef = useRef(null);
     const activeJobIdRef = useRef(null);
+    const skipJsonResetRef = useRef(false); // true during History Review to prevent useEffect from clearing showJsonPreview
     
     // Interactive Selection States
     const [selectedSummaryType, setSelectedSummaryType] = useState('website'); // website, youtube, combined
@@ -303,8 +304,8 @@ function App() {
     }, [activeTab]);
 
     useEffect(() => {
-        // Reset JSON preview (and revert green selectors back to orange) if the user modifies any active selections
-        if (showJsonPreview) {
+        // Reset JSON preview when the user modifies selections — but NOT during a History Review load
+        if (showJsonPreview && !skipJsonResetRef.current) {
             setShowJsonPreview(false);
         }
     }, [selectedSummaryType, summaryText, selectedCtas, selectedImages, selectedButtonStyle, selectedColors]);
@@ -654,32 +655,38 @@ function App() {
     const handleDeleteDomain = async (domain) => {
         if (!window.confirm(`Are you sure you want to delete ALL extractions for ${domain}?`)) return;
         try {
-            await fetch(`${API_BASE_URL}/api/history`, {
+            const res = await fetch(`${API_BASE_URL}/api/history`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getSessionToken() },
                 body: JSON.stringify({ domain })
             });
+            if (!res.ok) throw new Error(`Server returned ${res.status}`);
             setHistoryData(prev => prev.filter(item => {
                 let itemDomain = item.url || item.target_url;
                 try { itemDomain = new URL(itemDomain).hostname; } catch(e) {}
                 return String(itemDomain) !== String(domain);
             }));
+            showToast(`✅ Deleted all extractions for ${domain}`, 'success');
         } catch (error) {
             console.error('Failed to delete domain history', error);
+            showToast('⚠️ Failed to delete — please try again.', 'warning');
         }
     };
 
     const handleDeleteExtraction = async (timestamp) => {
         if (!window.confirm(`Delete this specific extraction record?`)) return;
         try {
-            await fetch(`${API_BASE_URL}/api/history`, {
+            const res = await fetch(`${API_BASE_URL}/api/history`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getSessionToken() },
                 body: JSON.stringify({ timestamp })
             });
+            if (!res.ok) throw new Error(`Server returned ${res.status}`);
             setHistoryData(prev => prev.filter(item => item.timestamp !== timestamp));
+            showToast('✅ Extraction record deleted.', 'success');
         } catch (error) {
             console.error('Failed to delete extraction history', error);
+            showToast('⚠️ Failed to delete — please try again.', 'warning');
         }
     };
 
@@ -710,7 +717,9 @@ function App() {
             const fetchUrl = url.startsWith('http')
                 ? `${API_BASE_URL}/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(title)}`
                 : url; // relative /outputs/... path served directly
-            const resp = await fetch(fetchUrl);
+            const resp = await fetch(fetchUrl, {
+                headers: { 'Authorization': 'Bearer ' + getSessionToken() }
+            });
             if (!resp.ok) throw new Error(`Server returned ${resp.status}`);
             const blob = await resp.blob();
             const link = document.createElement('a');
@@ -1264,7 +1273,7 @@ function App() {
                     <div className={`nav-item ${activeTab === 'Settings' ? 'active' : ''}`} onClick={() => setActiveTab('Settings')}>Settings</div>
                 </nav>
                 <div style={{ marginTop: 'auto', paddingBottom: '1rem', fontSize: '0.8rem', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.5px' }}>
-                    v1.4.2
+                    v1.4.3
                 </div>
             </aside>
 
@@ -2514,6 +2523,7 @@ function App() {
                         setResult={setResult}
                         setShowJsonPreview={setShowJsonPreview}
                         setActiveTab={setActiveTab}
+                        skipJsonResetRef={skipJsonResetRef}
                     />
                 )}
 

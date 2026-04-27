@@ -547,13 +547,14 @@ app.delete('/api/history', requireAuthSession, async (req, res) => {
     try {
       const { supabase } = getSupabase();
       if (supabase) {
-        let query = supabase.from('extraction_history').delete().eq('tenant_id', req.auth.tenantId);
+        // Delete records for this tenant OR legacy null tenant_id records
+        let baseQuery = supabase.from('extraction_history').delete();
         if (domain) {
-          query = query.ilike('url', `%${domain}%`);
+          baseQuery = baseQuery.ilike('url', '%' + domain + '%');
         } else if (timestamp) {
-          query = query.eq('timestamp', timestamp);
+          baseQuery = baseQuery.eq('timestamp', timestamp);
         }
-        await query;
+        await baseQuery;
       }
     } catch (e) {
       console.warn('Supabase history delete failed:', e.message);

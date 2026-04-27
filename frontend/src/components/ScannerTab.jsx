@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getSessionToken } from '../App';
 
 function ScannerTab({ showToast }) {
     const [scanUrl, setScanUrl] = useState('');
@@ -34,7 +35,7 @@ function ScannerTab({ showToast }) {
         try {
             const r = await fetch(`${API_BASE}/api/scan-images`, { 
                 method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getSessionToken() }, 
                 body: JSON.stringify({ url: scanUrl.trim() }) 
             });
             const d = await r.json();
@@ -43,6 +44,7 @@ function ScannerTab({ showToast }) {
         } catch(e) { setScanError(e.message); }
         setIsScanning(false);
     };
+
 
     const downloadSelected = () => {
         scanSelected.forEach((url, i) => {
