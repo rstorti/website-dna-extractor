@@ -982,7 +982,8 @@ async function runExtraction({
     // 6. Save history
     setStage('saving-history');
     try {
-      await appendHistory({ id: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`, url: url||profileUrl||youtubeUrl, target_url: url||'', youtube_url: youtubeUrl||'', profile_url: profileUrl||'', timestamp: new Date().toISOString(), success: true, name: payload.data?.name||null, screenshotUrl: payload.screenshotUrl||null, payload }, tenantId);
+      const payloadWithInputs = { ...payload, _inputs: { url: url||'', youtubeUrl: youtubeUrl||'', profileUrl: profileUrl||'', linkedinUrl: linkedinUrl||'', website2Url: website2Url||'' } };
+      await appendHistory({ id: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`, url: url||profileUrl||youtubeUrl, target_url: url||'', youtube_url: youtubeUrl||'', profile_url: profileUrl||'', timestamp: new Date().toISOString(), success: true, name: payloadWithInputs.data?.name||null, screenshotUrl: payloadWithInputs.screenshotUrl||null, payload: payloadWithInputs }, tenantId);
     } catch(histErr) { console.warn(`${TAG} History save failed:`, histErr.message); }
 
     console.log(`${TAG} ✅ Extraction complete in ${((Date.now() - startTime)/1000).toFixed(1)}s`);

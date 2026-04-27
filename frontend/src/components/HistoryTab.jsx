@@ -20,6 +20,8 @@ function HistoryTab({
     setUrl,
     setYoutubeUrl,
     setProfileUrl,
+    setLinkedinUrl,
+    setWebsite2Url,
     setResult,
     setShowJsonPreview,
     setActiveTab
@@ -144,43 +146,61 @@ function HistoryTab({
                                                                 showToast('⚠️ This record was saved before Review was supported. Please re-extract to use Review.', 'warning', 6000);
                                                                 return;
                                                             }
-                                                            const verified = entry.payload.data || {};
+                                                            const p = entry.payload;
+                                                            const inputs = p._inputs || {};
+                                                            const verified = p.data || {};
+
+                                                            // ── Restore all 5 input URL fields ──────────────────
+                                                            setUrl(inputs.url || entry.target_url || entry.url || '');
+                                                            setYoutubeUrl(inputs.youtubeUrl || entry.youtube_url || '');
+                                                            setProfileUrl(inputs.profileUrl || entry.profile_url || '');
+                                                            setLinkedinUrl(inputs.linkedinUrl || '');
+                                                            setWebsite2Url(inputs.website2Url || '');
+
+                                                            // ── Restore summaries ───────────────────────────────
                                                             setSummaryText({
                                                                 website: verified.website_summary || '',
                                                                 youtube: verified.youtube_summary || '',
                                                                 combined: verified.combined_summary || '',
-                                                                raw_youtube: entry.payload.youtubeData?.description || ''
+                                                                raw_youtube: p.youtubeData?.description || ''
                                                             });
                                                             setSelectedSummaryType('website');
+
+                                                            // ── Restore CTAs ─────────────────────────────────────
                                                             setSelectedCtas([
                                                                 ...(verified.youtube_ctas || []),
-                                                                ...(entry.payload.ctas || [])
+                                                                ...(p.ctas || [])
                                                             ]);
                                                             setCtaEdits({});
-                                                            const heroes = entry.payload.featuredImages || [];
+
+                                                            // ── Restore images ───────────────────────────────────
+                                                            const heroes = p.featuredImages || [];
                                                             if (heroes.length > 0) {
                                                                 setSelectedImages(heroes);
-                                                            } else if (verified.image || entry.payload.mappedData?.image) {
-                                                                setSelectedImages([verified.image || entry.payload.mappedData?.image].filter(Boolean));
+                                                            } else if (verified.image || p.mappedData?.image) {
+                                                                setSelectedImages([verified.image || p.mappedData?.image].filter(Boolean));
                                                             } else {
                                                                 setSelectedImages([]);
                                                             }
-                                                            const histBtnStyles = entry.payload.data?.buttonStyles || entry.payload.buttonStyles || [];
+
+                                                            // ── Restore styles ───────────────────────────────────
+                                                            const histBtnStyles = p.data?.buttonStyles || p.buttonStyles || [];
                                                             setSelectedButtonStyle(histBtnStyles.length > 0 ? histBtnStyles[0] : null);
                                                             const histColorsToSelect = [
-                                                                { label: 'Background Color', hex: entry.payload.data?.background_color },
-                                                                { label: 'Foreground Color', hex: entry.payload.data?.foreground_color },
-                                                                { label: 'App Bar Background', hex: entry.payload.data?.background_app_bar_color },
-                                                                { label: 'App Bar Text', hex: entry.payload.data?.foreground_app_bar_color },
-                                                                { label: 'Button Accent', hex: entry.payload.data?.icon_background_color_left }
+                                                                { label: 'Background Color', hex: p.data?.background_color },
+                                                                { label: 'Foreground Color', hex: p.data?.foreground_color },
+                                                                { label: 'App Bar Background', hex: p.data?.background_app_bar_color },
+                                                                { label: 'App Bar Text', hex: p.data?.foreground_app_bar_color },
+                                                                { label: 'Button Accent', hex: p.data?.icon_background_color_left }
                                                             ];
                                                             setSelectedColors(histColorsToSelect.filter(c => c.hex).map(c => c.label));
-                                                            setUrl(entry.target_url || entry.url || '');
-                                                            setYoutubeUrl(entry.youtube_url || '');
-                                                            setProfileUrl(entry.profile_url || '');
-                                                            setResult(entry.payload);
-                                                            setShowJsonPreview(false);
+
+                                                            // ── Restore full result + show JSON ──────────────────
+                                                            setResult(p);
+                                                            setShowJsonPreview(true);
                                                             setActiveTab('Dashboard');
+                                                            // Scroll to top so JSON panel is visible
+                                                            window.scrollTo({ top: 0, behavior: 'smooth' });
                                                         }}
                                                         style={{
                                                             background: entry.payload ? 'var(--primary)' : 'rgba(255,255,255,0.15)',

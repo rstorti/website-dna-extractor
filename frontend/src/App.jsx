@@ -2509,6 +2509,8 @@ function App() {
                         setUrl={setUrl}
                         setYoutubeUrl={setYoutubeUrl}
                         setProfileUrl={setProfileUrl}
+                        setLinkedinUrl={setLinkedinUrl}
+                        setWebsite2Url={setWebsite2Url}
                         setResult={setResult}
                         setShowJsonPreview={setShowJsonPreview}
                         setActiveTab={setActiveTab}
