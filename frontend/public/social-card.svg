@@ -1,0 +1,13 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" rx="32" fill="#F6F0E5"/>
+  <rect x="56" y="56" width="1088" height="518" rx="30" fill="#FFF9F1" stroke="#E0D6C6"/>
+  <rect x="92" y="100" width="176" height="176" rx="32" fill="#B85C38"/>
+  <path d="M141 148H196.2C222.951 148 242 165.697 242 191.6C242 217.694 222.951 235.2 196.2 235.2H171.4V289H141V148ZM193 209.2C205.6 209.2 212.6 202.2 212.6 191.6C212.6 181 205.6 174 193 174H171.4V209.2H193Z" fill="#FFF9F1"/>
+  <path d="M275 289L326.2 148H357.4L408.6 289H377.2L366.8 257.2H315.8L305.4 289H275ZM323.8 232.8H358.8L341.4 179.6L323.8 232.8Z" fill="#FFF9F1"/>
+  <path d="M438 289V148H491.2C530.8 148 558.8 176 558.8 218.4C558.8 260.8 530.8 289 491.2 289H438ZM468.4 263.2H489.8C512.8 263.2 528 246.2 528 218.4C528 190.6 512.8 173.8 489.8 173.8H468.4V263.2Z" fill="#FFF9F1"/>
+  <path d="M591 140H1064V488H591V140Z" fill="#171411"/>
+  <text x="646" y="228" fill="#F4EDE1" font-family="Arial, sans-serif" font-size="28" letter-spacing="2">BRAND CONTENT STUDIO</text>
+  <text x="646" y="310" fill="#F4EDE1" font-family="Georgia, serif" font-size="72" font-weight="700">Turn any website into</text>
+  <text x="646" y="388" fill="#F4EDE1" font-family="Georgia, serif" font-size="72" font-weight="700">a campaign-ready brand system.</text>
+  <text x="646" y="452" fill="#C0B4A6" font-family="Arial, sans-serif" font-size="28">Website analysis, Business DNA review, and on-brand asset generation.</text>
+</svg>

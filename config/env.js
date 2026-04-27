@@ -41,7 +41,15 @@ const env = {
     PORT: optional('PORT', '3001'),
     NODE_ENV: optional('NODE_ENV', 'development'),
 
-    GEMINI_API_KEY: required('GEMINI_API_KEY'),
+    // Warn loudly but do NOT crash — lets the server start so Railway health checks pass.
+    // Extraction endpoints will return 503 until this key is configured.
+    GEMINI_API_KEY: (() => {
+        const v = process.env.GEMINI_API_KEY;
+        if (!v) {
+            console.error('[STARTUP] ⚠️  GEMINI_API_KEY is missing. Set it in Railway Variables → Redeploy. Extraction will be disabled until resolved.');
+        }
+        return v || null;
+    })(),
 
     YOUTUBE_API_KEY: youtubeKey,
     FIRECRAWLER_API_KEY: optional('FIRECRAWLER_API_KEY'),

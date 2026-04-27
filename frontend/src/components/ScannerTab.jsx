@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { getSessionToken } from '../App';
+import { getSessionToken } from '../ToolApp';
 
 function ScannerTab({ showToast }) {
     const [scanUrl, setScanUrl] = useState('');
