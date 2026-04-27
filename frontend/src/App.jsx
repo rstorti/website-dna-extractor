@@ -408,6 +408,18 @@ function App() {
             return;
         }
 
+        // Require at least 1 image to be selected from the dashboard galleries
+        const totalSelectedImages = dashSelectedImages.length + dash2SelectedImages.length;
+        if (totalSelectedImages === 0) {
+            setError('🖼️ Please select at least 1 image from the gallery below before extracting. Images are loaded automatically when you enter a Website URL.');
+            // Scroll down to the image gallery so the user can see it
+            setTimeout(() => {
+                const gallery = document.getElementById('dash-image-gallery');
+                if (gallery) gallery.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
+            return;
+        }
+
         setLoading(true);
         setError(null);
         setResult(null);
@@ -1273,7 +1285,7 @@ function App() {
                     <div className={`nav-item ${activeTab === 'Settings' ? 'active' : ''}`} onClick={() => setActiveTab('Settings')}>Settings</div>
                 </nav>
                 <div style={{ marginTop: 'auto', paddingBottom: '1rem', fontSize: '0.8rem', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.5px' }}>
-                    v1.4.3
+                    v1.4.4
                 </div>
             </aside>
 
@@ -1530,7 +1542,7 @@ function App() {
 
                             {/* Dashboard Image Auto-Scanner */}
                             {dashScanResults && dashScanResults.images.length > 0 && (
-                                <div style={{ marginTop: '1.5rem', marginBottom: '2.5rem', background: 'rgba(0,0,0,0.2)', padding: '1.5rem', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <div id="dash-image-gallery" style={{ marginTop: '1.5rem', marginBottom: '2.5rem', background: 'rgba(0,0,0,0.2)', padding: '1.5rem', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                                         <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--primary)' }}>Select Base Images (Optional)</h3>
                                         <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)' }}>{dashScanResults.images.length} images found • Select preferred images to process for 1:1 640x640</span>
@@ -1690,7 +1702,7 @@ function App() {
 
 
                             {loading && (
-                                <div className="loading-container" style={{ maxWidth: '850px', width: '100%', margin: '1rem auto 0 auto' }}>
+                                <div className="loading-container">
                                     <div className="progress-bar-wrapper">
                                         <div className="progress-bar-fill"></div>
                                     </div>

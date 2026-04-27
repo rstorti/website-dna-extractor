@@ -1,17 +1,40 @@
-/* CSS for animated progress bar */
+/* ── Floating Loading Overlay ─────────────────────────────────── */
 .loading-container {
-    margin-top: 2rem;
-    padding: 1.5rem;
-    background: rgba(0, 0, 0, 0.4);
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border-color);
-    text-align: center;
+    position: fixed;
+    bottom: 2.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    width: min(680px, calc(100vw - 2rem));
+    padding: 1.4rem 1.6rem;
+    background: rgba(18, 18, 24, 0.82);
+    backdrop-filter: blur(24px) saturate(1.6);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+    border: 1px solid rgba(249, 157, 50, 0.22);
+    border-radius: 16px;
+    box-shadow:
+        0 8px 40px rgba(0, 0, 0, 0.6),
+        0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+        0 0 32px rgba(249, 157, 50, 0.08);
+    animation: floatIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
+@keyframes floatIn {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(16px) scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0) scale(1);
+    }
+}
+
+/* ── Progress Bar ─────────────────────────────────────────────── */
 .progress-bar-wrapper {
     width: 100%;
-    height: 8px;
-    background: rgba(255, 255, 255, 0.1);
+    height: 6px;
+    background: rgba(255, 255, 255, 0.08);
     border-radius: 4px;
     overflow: hidden;
     margin-bottom: 1rem;
@@ -21,98 +44,69 @@
 .progress-bar-fill {
     height: 100%;
     width: 0%;
-    background: linear-gradient(90deg, var(--primary), #FFB76B);
+    background: linear-gradient(90deg, var(--primary), #FFB76B, var(--primary));
+    background-size: 200% 100%;
     border-radius: 4px;
-    animation: fillProgress 25s cubic-bezier(0.1, 0.7, 0.1, 1) forwards;
+    animation:
+        fillProgress 25s cubic-bezier(0.1, 0.7, 0.1, 1) forwards,
+        gradientShift 3s linear infinite;
     position: relative;
 }
 
 .progress-bar-fill::after {
     content: "";
     position: absolute;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    right: 0;
+    top: 0; left: 0; bottom: 0; right: 0;
     background: linear-gradient(90deg,
-            rgba(255, 255, 255, 0) 0%,
-            rgba(255, 255, 255, 0.4) 50%,
-            rgba(255, 255, 255, 0) 100%);
-    animation: shimmer 2s infinite linear;
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.5) 50%,
+        rgba(255, 255, 255, 0) 100%);
+    animation: shimmer 1.8s infinite linear;
 }
 
 @keyframes fillProgress {
-    0% {
-        width: 0%;
-    }
+    0%   { width: 0%; }
+    10%  { width: 25%; }
+    30%  { width: 45%; }
+    50%  { width: 65%; }
+    70%  { width: 80%; }
+    90%  { width: 95%; }
+    100% { width: 99%; }
+}
 
-    10% {
-        width: 25%;
-    }
-
-    30% {
-        width: 45%;
-    }
-
-    50% {
-        width: 65%;
-    }
-
-    70% {
-        width: 80%;
-    }
-
-    90% {
-        width: 95%;
-    }
-
-    100% {
-        width: 99%;
-    }
+@keyframes gradientShift {
+    0%   { background-position: 0% 0%; }
+    100% { background-position: 200% 0%; }
 }
 
 @keyframes shimmer {
-    0% {
-        transform: translateX(-100%);
-    }
-
-    100% {
-        transform: translateX(100%);
-    }
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
 }
 
+/* ── Status Text ──────────────────────────────────────────────── */
 .loading-status-text {
     font-family: 'Space Mono', monospace;
     color: var(--primary);
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     display: flex;
     align-items: center;
-    justify-content: center;
     gap: 0.8rem;
 }
 
+/* ── Pulsing Dot ──────────────────────────────────────────────── */
 .pulsing-dot {
-    width: 10px;
-    height: 10px;
+    width: 9px;
+    height: 9px;
     background-color: var(--primary);
     border-radius: 50%;
     display: inline-block;
+    flex-shrink: 0;
     animation: pulse 1.5s infinite;
 }
 
 @keyframes pulse {
-    0% {
-        transform: scale(0.95);
-        box-shadow: 0 0 0 0 rgba(249, 157, 50, 0.7);
-    }
-
-    70% {
-        transform: scale(1);
-        box-shadow: 0 0 0 10px rgba(249, 157, 50, 0);
-    }
-
-    100% {
-        transform: scale(0.95);
-        box-shadow: 0 0 0 0 rgba(249, 157, 50, 0);
-    }
+    0%   { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(249, 157, 50, 0.7); }
+    70%  { transform: scale(1);    box-shadow: 0 0 0 8px rgba(249, 157, 50, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(249, 157, 50, 0); }
 }
