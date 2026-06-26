@@ -163,6 +163,7 @@ function HistoryTab({
                                                                 website: verified.website_summary || '',
                                                                 youtube: verified.youtube_summary || '',
                                                                 combined: verified.combined_summary || '',
+                                                                linkedin: p.linkedinData?.description || p.linkedinData?.headline || '',
                                                                 raw_youtube: p.youtubeData?.description || ''
                                                             });
                                                             setSelectedSummaryType('website');

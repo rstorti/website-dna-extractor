@@ -141,17 +141,25 @@ await test('session token: dev-open accepted when no key', () => {
 // ─── 4. Job API Auth simulation ───────────────────────────────────────────────
 group('Auth: Job API (requireJobsToken)');
 
-function jobsTokenCheck(authHeader, jobApiKey) {
-  if (!jobApiKey) return 'allowed';
+function jobsTokenCheck(authHeader, jobApiKey, codexJobApiKey = null, nodeEnv = 'development') {
+  const keys = [jobApiKey, codexJobApiKey].filter(Boolean);
+  if (nodeEnv === 'production' && keys.length === 0) return 'disabled';
+  if (keys.length === 0) return 'session-fallback';
   const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  return token === jobApiKey ? 'allowed' : 'rejected';
+  return keys.includes(token) ? 'allowed' : 'rejected';
 }
 
-await test('jobs: no JOB_API_KEY → open', () => {
-  assert.strictEqual(jobsTokenCheck('', null), 'allowed');
+await test('jobs: no job keys in development uses session fallback', () => {
+  assert.strictEqual(jobsTokenCheck('', null), 'session-fallback');
+});
+await test('jobs: no job keys in production is disabled', () => {
+  assert.strictEqual(jobsTokenCheck('', null, null, 'production'), 'disabled');
 });
 await test('jobs: correct Bearer token → allowed', () => {
   assert.strictEqual(jobsTokenCheck('Bearer correct-key', 'correct-key'), 'allowed');
+});
+await test('jobs: CODEX Bearer token allowed', () => {
+  assert.strictEqual(jobsTokenCheck('Bearer codex-key', 'job-key', 'codex-key'), 'allowed');
 });
 await test('jobs: wrong Bearer token → rejected', () => {
   assert.strictEqual(jobsTokenCheck('Bearer wrong', 'correct-key'), 'rejected');

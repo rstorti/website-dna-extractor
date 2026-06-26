@@ -10,6 +10,9 @@ const { JobStore } = require('./lib/jobStore');
 function requireApiKey(req, res, next) {
   const expectedKey = process.env.DART_API_KEY;
   if (!expectedKey) {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(503).json({ error: 'Dart API is disabled: DART_API_KEY not configured.' });
+    }
     return next();
   }
   const authHeader = req.headers.authorization || '';
@@ -125,7 +128,7 @@ module.exports = function mountDartApi(app, {
   jobStore = new JobStore(),
 } = {}) {
   if (process.env.NODE_ENV === 'production' && !process.env.DART_API_KEY) {
-    console.warn('[DART API] WARNING: DART_API_KEY is not set — Dart routes will operate in open-access mode. Set the key in Railway Variables for production security.');
+    console.warn('[DART API] WARNING: DART_API_KEY is not set; Dart routes are disabled in production.');
   }
 
   app.post('/api/dart/extract', requireApiKey, dartExtractRateLimit, async (req, res) => {
@@ -163,14 +166,22 @@ module.exports = function mountDartApi(app, {
     if (activeExtractions() >= MAX_CONCURRENCY) {
       return res.status(429).json({ error: 'Server is at maximum capacity. Please try again in 1 minute.' });
     }
+    incrementActive();
 
-    const job = await jobStore.createJob({
-      jobType: 'dart',
-      tenantId: 'dart',
-      status: 'pending',
-      stage: 'init',
-      steps: [],
-    });
+    let job;
+    try {
+      job = await jobStore.createJob({
+        jobType: 'dart',
+        tenantId: 'dart',
+        status: 'pending',
+        stage: 'init',
+        steps: [],
+      });
+    } catch (error) {
+      decrementActive();
+      console.error('[DART API] Failed to create job:', error.message);
+      return res.status(500).json({ error: 'Failed to create extraction job' });
+    }
 
     res.status(202).json({
       job_id: job.jobId,
@@ -180,9 +191,8 @@ module.exports = function mountDartApi(app, {
     });
 
     (async () => {
-      incrementActive();
-      await jobStore.updateJob(job.jobId, { status: 'running' });
       try {
+        await jobStore.updateJob(job.jobId, { status: 'running' });
         const payload = await runExtraction({
           url: urlParsed.url,
           youtubeUrl: ytUrl || undefined,
@@ -242,7 +252,7 @@ module.exports = function mountDartApi(app, {
       dart_api: 'v1',
       active_jobs: counts.running + counts.cancelling,
       pending_jobs: counts.pending,
-      dart_api_key: process.env.DART_API_KEY ? 'SET' : 'NOT SET (open access)',
+      dart_api_key: process.env.DART_API_KEY ? 'SET' : 'NOT SET',
     });
   });
 

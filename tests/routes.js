@@ -4,6 +4,7 @@ process.env.NODE_ENV = 'test';
 process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'stub-ci-key';
 process.env.HISTORY_API_KEY = 'test-history-secret-abc123';
 process.env.JOB_API_KEY = 'test-job-secret-xyz789';
+process.env.CODEX_JOB_API_KEY = 'test-codex-job-secret-abc123';
 process.env.DART_API_KEY = 'test-dart-secret-456';
 process.env.SUPABASE_URL = '';
 process.env.SUPABASE_ANON_KEY = '';
@@ -14,6 +15,11 @@ const path = require('path');
 const assert = require('assert');
 const request = require('supertest');
 const axios = require('axios');
+const dns = require('dns').promises;
+const express = require('express');
+const mountDartApi = require('../dart_api');
+const { JobStore } = require('../lib/jobStore');
+const { scrapeLinkedinProfile } = require('../lib/linkedinScraper');
 
 const ROOT = path.resolve(__dirname, '..');
 const historyPath = path.join(ROOT, '.data', 'history.json');
@@ -148,6 +154,22 @@ async function main() {
       assert.strictEqual(res.body[0].tenant_id, 'tenant-a');
     });
 
+    await test('POST /api/jobs validation failures do not consume extraction slots', async () => {
+      for (let i = 0; i < 4; i++) {
+        const invalid = await request(app)
+          .post('/api/jobs')
+          .set('Authorization', `Bearer ${token}`)
+          .send({});
+        assert.strictEqual(invalid.status, 400, invalid.text);
+      }
+
+      const valid = await request(app)
+        .post('/api/jobs')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ url: 'https://example.com' });
+      assert.strictEqual(valid.status, 202, valid.text);
+    });
+
     await test('POST /api/jobs creates a durable job and GET /api/jobs/:id returns completion', async () => {
       const res = await request(app)
         .post('/api/jobs')
@@ -166,6 +188,32 @@ async function main() {
 
       assert.strictEqual(completed.body.status, 'complete');
       assert.strictEqual(completed.body.data.success, true);
+    });
+
+    await test('POST /api/jobs accepts CODEX_JOB_API_KEY and rejects fake/no auth', async () => {
+      const codexRes = await request(app)
+        .post('/api/jobs')
+        .set('Authorization', `Bearer ${process.env.CODEX_JOB_API_KEY}`)
+        .send({ url: 'https://example.com' });
+
+      assert.strictEqual(codexRes.status, 202, codexRes.text);
+      assert.ok(codexRes.body.jobId);
+
+      const codexPoll = await request(app)
+        .get(`/api/jobs/${codexRes.body.jobId}`)
+        .set('Authorization', `Bearer ${process.env.CODEX_JOB_API_KEY}`);
+      assert.ok([200, 202].includes(codexPoll.status), codexPoll.text);
+
+      const fakeRes = await request(app)
+        .post('/api/jobs')
+        .set('Authorization', 'Bearer definitely-not-valid')
+        .send({ url: 'https://example.com' });
+      assert.strictEqual(fakeRes.status, 401);
+
+      const noAuthRes = await request(app)
+        .post('/api/jobs')
+        .send({ url: 'https://example.com' });
+      assert.strictEqual(noAuthRes.status, 401);
     });
 
     await test('GET /api/jobs/:id returns running state for seeded job', async () => {
@@ -207,6 +255,77 @@ async function main() {
 
       const updated = await jobStore.getJob(seeded.jobId, { tenantId: 'tenant-a' });
       assert.strictEqual(updated.status, 'cancelling');
+    });
+
+    await test('POST /api/dart/extract reserves capacity before job creation completes', async () => {
+      const dartApp = express();
+      dartApp.use(express.json());
+
+      let active = 0;
+      let createJobCalls = 0;
+      const releaseCreateJobs = [];
+      const releaseExtractions = [];
+
+      class BlockingJobStore extends JobStore {
+        async createJob(args) {
+          createJobCalls++;
+          return new Promise((resolve, reject) => {
+            releaseCreateJobs.push(() => super.createJob(args).then(resolve, reject));
+          });
+        }
+      }
+
+      mountDartApi(dartApp, {
+        runExtraction: async () => new Promise((resolve) => {
+          releaseExtractions.push(() => resolve({
+            success: true,
+            data: { name: 'Mock Dart' },
+            featuredImages: [],
+            buttonStyles: [],
+            ctas: [],
+            socialMediaLinks: [],
+          }));
+        }),
+        activeExtractions: () => active,
+        incrementActive: () => { active++; },
+        decrementActive: () => { active--; },
+        MAX_CONCURRENCY: 4,
+        jobStore: new BlockingJobStore(),
+      });
+
+      const requests = Array.from({ length: 5 }, () => request(dartApp)
+        .post('/api/dart/extract')
+        .set('Authorization', `Bearer ${process.env.DART_API_KEY}`)
+        .send({ url: 'http://93.184.216.34' })
+        .then((res) => res));
+
+      await waitFor(() => createJobCalls >= 4);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      releaseCreateJobs.splice(0).forEach((release) => release());
+
+      const statuses = (await Promise.all(requests)).map((res) => res.status).sort();
+      assert.deepStrictEqual(statuses, [202, 202, 202, 202, 429]);
+      assert.strictEqual(createJobCalls, 4);
+
+      await waitFor(() => releaseExtractions.length === 4);
+      releaseExtractions.splice(0).forEach((release) => release());
+      await waitFor(() => active === 0);
+    });
+
+    await test('GET /api/dart/health fails closed in production without DART_API_KEY', async () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+      const originalDartKey = process.env.DART_API_KEY;
+
+      try {
+        process.env.NODE_ENV = 'production';
+        delete process.env.DART_API_KEY;
+
+        const res = await request(app).get('/api/dart/health');
+        assert.strictEqual(res.status, 503);
+      } finally {
+        process.env.NODE_ENV = originalNodeEnv;
+        process.env.DART_API_KEY = originalDartKey;
+      }
     });
 
     await test('POST /api/scan-images returns extracted images', async () => {
@@ -252,6 +371,38 @@ async function main() {
         .query({ url: '/outputs/test-download.txt', filename: 'report.txt' });
 
       assert.strictEqual(res.status, 401);
+    });
+
+    await test('LinkedIn scraper blocks redirects to non-LinkedIn targets', async () => {
+      const originalAxiosGet = axios.get;
+      const originalLookup = dns.lookup;
+      const requestedUrls = [];
+
+      dns.lookup = async (hostname) => {
+        if (hostname === 'www.linkedin.com' || hostname === 'linkedin.com') {
+          return [{ address: '93.184.216.34', family: 4 }];
+        }
+        return originalLookup(hostname, { all: true });
+      };
+
+      axios.get = async (url) => {
+        requestedUrls.push(url);
+        return {
+          status: 302,
+          headers: { location: 'http://127.0.0.1:8080/private' },
+          data: '',
+        };
+      };
+
+      try {
+        const result = await scrapeLinkedinProfile('https://www.linkedin.com/in/test-person');
+        assert.strictEqual(result.success, false);
+        assert.match(result.error, /linkedin\.com|SSRF Block/);
+        assert.deepStrictEqual(requestedUrls, ['https://www.linkedin.com/in/test-person']);
+      } finally {
+        axios.get = originalAxiosGet;
+        dns.lookup = originalLookup;
+      }
     });
   } finally {
     if (originalHistory == null) {

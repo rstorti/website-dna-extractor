@@ -22,11 +22,14 @@ const fs = require('fs/promises');
 const dns = require('dns');
 const crypto = require('crypto');
 const axios = require('axios');
+const multer = require('multer');
 const { JobStore } = require('./lib/jobStore');
 const { assertRuntimeReadiness } = require('./lib/runtimeGuards');
+const { scrapeLinkedinProfile } = require('./lib/linkedinScraper');
+const { extractTextFromDocument, extractEntitiesWithAI } = require('./lib/documentExtractor');
 
-// Atomic concurrency counter — pre-incremented BEFORE accepting the job so
-// concurrent requests see the correct value and cannot race past the cap.
+// Shared extraction counter. Routes reserve capacity after validation, before
+// accepting a job, so malformed requests cannot consume slots.
 let activeExtractions = 0;
 
 // Force IPv4 resolution to prevent Supabase connection timeouts on systems with broken IPv6
@@ -338,14 +341,14 @@ async function writeLocalHistory(data) {
   await fs.rename(tmpPath, HISTORY_FILE);
 }
 
-async function readHistory() {
+async function readHistory(tenantId = 'default') {
   try {
     const { supabase } = getSupabase();
     if (supabase) {
-      // Single-tenant: return ALL records, no tenant_id filtering
       const queryPromise = supabase
         .from('extraction_history')
         .select('*')
+        .eq('tenant_id', tenantId)
         .order('timestamp', { ascending: false })
         .limit(100);
       const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase query timed out')), 5000));
@@ -356,7 +359,8 @@ async function readHistory() {
   } catch (e) {
     console.warn('Supabase history read failed, falling back to local:', e.message);
   }
-  return await readLocalHistory();
+  const localHistory = await readLocalHistory();
+  return localHistory.filter((item) => (item.tenantId || item.tenant_id || 'default') === tenantId);
 }
 
 async function appendHistory(record, tenantId = 'default') {
@@ -410,23 +414,35 @@ async function appendHistory(record, tenantId = 'default') {
 
 /**
  * Job API authentication middleware.
- * If JOB_API_KEY is set, every call to POST /api/jobs must supply it.
- * Falls back to open access in development (with a clear warning).
- * In production, strongly recommended — set JOB_API_KEY in Railway env vars.
+ * Accepts either JOB_API_KEY or CODEX_JOB_API_KEY as Bearer tokens.
+ * If no job key matches, falls back to the regular authenticated session path.
+ * In production, at least one job key must be configured.
  */
 function requireJobsToken(req, res, next) {
-  const expectedKey = process.env.JOB_API_KEY;
-  if (!expectedKey) {
-    if (process.env.NODE_ENV === 'production') {
-      // Fail closed in production
-      return res.status(503).json({ error: 'Job endpoint is disabled: JOB_API_KEY not configured.' });
-    }
-    return next();
+  const keys = [
+    { key: process.env.JOB_API_KEY, tenantId: 'default' },
+    { key: process.env.CODEX_JOB_API_KEY, tenantId: 'codex' },
+  ].filter(item => item.key);
+
+  if (process.env.NODE_ENV === 'production' && keys.length === 0) {
+    return res.status(503).json({ error: 'Job endpoint is disabled: no job API key configured.' });
   }
+
   const authHeader = req.headers['authorization'] || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (token && token === expectedKey) return next();
-  return res.status(401).json({ error: 'Unauthorized: valid JOB_API_KEY required in Authorization header' });
+  if (token) {
+    const matchedKey = keys.find(({ key }) => {
+      const provided = Buffer.from(token);
+      const expected = Buffer.from(key);
+      return provided.length === expected.length && crypto.timingSafeEqual(provided, expected);
+    });
+    if (matchedKey) {
+      req.auth = { role: 'api', tenantId: matchedKey.tenantId };
+      return next();
+    }
+  }
+
+  return requireAuthSession(req, res, next);
 }
 
 // ─── AUTHENTICATION (Session Tokens) ──────────────────────────────────────────
@@ -547,8 +563,10 @@ app.delete('/api/history', requireAuthSession, async (req, res) => {
     try {
       const { supabase } = getSupabase();
       if (supabase) {
-        // Delete records for this tenant OR legacy null tenant_id records
-        let baseQuery = supabase.from('extraction_history').delete();
+        let baseQuery = supabase
+          .from('extraction_history')
+          .delete()
+          .eq('tenant_id', req.auth.tenantId);
         if (domain) {
           baseQuery = baseQuery.ilike('url', '%' + domain + '%');
         } else if (timestamp) {
@@ -595,6 +613,7 @@ try {
   extractRateLimit = rateLimit({
     windowMs: 60_000,
     max: 5,
+    skip: () => env.NODE_ENV === 'test',
     standardHeaders: true,
     message: { error: 'Too many extraction requests. Please wait 1 minute before trying again.' }
   });
@@ -602,6 +621,7 @@ try {
   dartExtractRateLimit = rateLimit({
     windowMs: 60_000,
     max: 10,
+    skip: () => env.NODE_ENV === 'test',
     standardHeaders: true,
     keyGenerator: (req) => req.headers['authorization'] || req.ip,
     message: { error: 'Too many Dart extraction requests. Please wait 1 minute.' }
@@ -609,6 +629,7 @@ try {
   scanRateLimit = rateLimit({
     windowMs: 60_000,
     max: 30,
+    skip: () => env.NODE_ENV === 'test',
     standardHeaders: true,
     message: { error: 'Too many scan requests. Please wait 1 minute.' }
   });
@@ -742,6 +763,95 @@ app.post('/api/scan-images', requireAuthSession, scanRateLimit, async (req, res)
   }
 });
 
+// ─── /api/extract-document ───────────────────────────────────────────────────
+// Accepts uploaded PDFs/text files, extracts text, then uses Gemini to identify
+// all entities (people, places, products) and organize them into groups.
+// Returns a structured JSON payload for the frontend to display.
+// ─────────────────────────────────────────────────────────────────────────────
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB max per file
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['.pdf', '.txt', '.md'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedTypes.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Unsupported file type: ${ext}. Supported: ${allowedTypes.join(', ')}`));
+    }
+  },
+});
+
+app.post('/api/extract-document', requireAuthSession, extractRateLimit, upload.array('documents', 5), async (req, res) => {
+  const TAG = '[DOC-EXTRACT]';
+  const startTime = Date.now();
+
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: 'No files uploaded. Please attach at least one PDF or text file.' });
+    }
+
+    const brandWebsiteUrl = req.body.brandWebsiteUrl || null;
+    console.log(`${TAG} Received ${req.files.length} file(s). Brand URL: ${brandWebsiteUrl || 'none'}`);
+
+    // Extract text from all uploaded files
+    const allTexts = [];
+    const fileNames = [];
+    for (const file of req.files) {
+      console.log(`${TAG} Processing: ${file.originalname} (${(file.size / 1024).toFixed(1)} KB)`);
+      try {
+        const text = await extractTextFromDocument(file.buffer, file.originalname);
+        allTexts.push(`\n--- FILE: ${file.originalname} ---\n${text}`);
+        fileNames.push(file.originalname);
+      } catch (fileErr) {
+        console.warn(`${TAG} Failed to extract text from ${file.originalname}: ${fileErr.message}`);
+        allTexts.push(`\n--- FILE: ${file.originalname} (EXTRACTION FAILED: ${fileErr.message}) ---\n`);
+        fileNames.push(file.originalname);
+      }
+    }
+
+    const combinedText = allTexts.join('\n');
+    if (combinedText.replace(/[^a-zA-Z0-9]/g, '').length < 50) {
+      return res.status(422).json({
+        error: 'Could not extract sufficient text from the uploaded files. They may be image-only PDFs or empty.',
+      });
+    }
+
+    console.log(`${TAG} Combined text length: ${combinedText.length} chars. Sending to AI...`);
+
+    // Send to Gemini for entity extraction
+    const extractionResult = await extractEntitiesWithAI(combinedText, brandWebsiteUrl);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+    console.log(`${TAG} ✅ AI extraction complete in ${elapsed}s. Found ${extractionResult.entities?.length || 0} entities in ${extractionResult.suggestedGroups?.length || 0} groups.`);
+
+    res.json({
+      success: true,
+      totalMs: Date.now() - startTime,
+      sourceFiles: fileNames,
+      brandWebsiteUrl,
+      documentTitle: extractionResult.documentTitle || 'Untitled Document',
+      documentType: extractionResult.documentType || 'generic',
+      entities: extractionResult.entities || [],
+      suggestedGroups: extractionResult.suggestedGroups || [],
+      extractedTextLength: combinedText.length,
+    });
+
+  } catch (err) {
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.error(`${TAG} ❌ Failed after ${elapsed}s:`, err.message);
+
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: 'File too large. Maximum size is 25 MB per file.' });
+    }
+    if (err.code === 'LIMIT_FILE_COUNT') {
+      return res.status(400).json({ error: 'Too many files. Maximum is 5 files per upload.' });
+    }
+
+    res.status(500).json({ error: `Document extraction failed: ${err.message}` });
+  }
+});
+
 // ─── Shared extraction engine ────────────────────────────────────────────────
 // Called by BOTH the web UI route (POST /api/extract) and the Dart API.
 // Returns the raw payload object on success, or throws an Error on failure.
@@ -807,7 +917,7 @@ async function runExtraction({
     if (url) {
       setStage('website-extraction');
       const { extractDNA } = getExtractor();
-      dnaResult = await extractDNA(url, (s) => setStage(s, true, 'Website'), selectedImages);
+      dnaResult = await extractDNA(url, (s) => setStage(s, true, 'Website'), selectedImages, abortSignal);
       if (dnaResult?.error) {
         const err = new Error(dnaResult.error);
         err.stage = 'website-extraction';
@@ -824,7 +934,7 @@ async function runExtraction({
       setStage('website2-extraction');
       const { extractDNA } = getExtractor();
       try {
-        website2DnaResult = await extractDNA(website2Url, (s) => setStage(s, true, 'Website 2'), selectedImages);
+        website2DnaResult = await extractDNA(website2Url, (s) => setStage(s, true, 'Website 2'), selectedImages, abortSignal);
         if (website2DnaResult?.error) {
           console.warn(`${TAG} Website 2 extraction failed (non-fatal): ${website2DnaResult.error}`);
           website2DnaResult = null;
@@ -913,7 +1023,64 @@ async function runExtraction({
       console.log(`${TAG} Profile extraction complete (${((Date.now() - startTime) / 1000).toFixed(1)}s)`);
     }
 
-    // 4. AI verification
+    // 3.5. LinkedIn extraction (non-fatal)
+    let linkedinData = null;
+    if (linkedinUrl) {
+      setStage('linkedin-extraction');
+      try {
+        const liResult = await scrapeLinkedinProfile(linkedinUrl);
+        if (liResult.success) {
+          // Try to upload avatar to Supabase so it's a stable public URL
+          let storedAvatarUrl = liResult.avatarUrl;
+          if (liResult.avatarUrl) {
+            try {
+              const { supabase } = getSupabase();
+              if (supabase) {
+                const { safeHttpAgent, safeHttpsAgent } = require('./lib/validateUrl.js');
+                const avatarRes = await axios.get(liResult.avatarUrl, {
+                  responseType: 'arraybuffer',
+                  timeout: 12_000,
+                  httpAgent: safeHttpAgent,
+                  httpsAgent: safeHttpsAgent,
+                  maxContentLength: 5 * 1024 * 1024,
+                  headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.linkedin.com/' },
+                });
+                const ext = liResult.avatarUrl.match(/\.(jpg|jpeg|png|webp)/i)?.[1] || 'jpg';
+                const filename = `li_avatar_${Date.now()}.${ext}`;
+                const { data: uploadData, error: uploadErr } = await supabase.storage
+                  .from('outputs')
+                  .upload(filename, Buffer.from(avatarRes.data), {
+                    contentType: avatarRes.headers['content-type'] || `image/${ext}`,
+                    upsert: false,
+                  });
+                if (!uploadErr && uploadData?.path) {
+                  const { data: { publicUrl } } = supabase.storage.from('outputs').getPublicUrl(uploadData.path);
+                  storedAvatarUrl = publicUrl;
+                  console.log(`${TAG} LinkedIn avatar uploaded: ${storedAvatarUrl}`);
+                } else {
+                  console.warn(`${TAG} LinkedIn avatar upload failed, using original URL: ${uploadErr?.message}`);
+                }
+              }
+            } catch (uploadErr) {
+              console.warn(`${TAG} LinkedIn avatar upload error (non-fatal): ${uploadErr.message}`);
+            }
+          }
+          linkedinData = {
+            avatarUrl:   storedAvatarUrl   || null,
+            name:        liResult.name        || null,
+            headline:    liResult.headline    || null,
+            description: liResult.description || null,
+            profileUrl:  linkedinUrl,
+          };
+          console.log(`${TAG} LinkedIn data extracted: ${JSON.stringify({ name: linkedinData.name, headline: linkedinData.headline?.slice(0,50) })}`);
+        } else {
+          console.warn(`${TAG} LinkedIn extraction returned no data: ${liResult.error}`);
+        }
+      } catch (liErr) {
+        console.warn(`${TAG} LinkedIn extraction failed (non-fatal): ${liErr.message}`);
+      }
+    }
+
     let combinedMappedData = {
         ...(website2DnaResult?.mappedData || {}),
         ...(dnaResult?.mappedData || {})
@@ -944,7 +1111,7 @@ async function runExtraction({
     const totalMs = Date.now() - startTime;
 
     const mergedButtonStyles = [...(dnaResult?.buttonStyles || []), ...(website2DnaResult?.buttonStyles || [])];
-    const mergedFeaturedImages = [...(dnaResult?.featuredImages || []), ...(website2DnaResult?.featuredImages || [])];
+    const mergedFeaturedImages = [...(dnaResult?.featuredImages || []), ...(website2DnaResult?.featuredImages || []), ...(linkedinData?.avatarUrl ? [linkedinData.avatarUrl] : [])];
     const mergedCtas = [...(dnaResult?.ctas || []), ...(website2DnaResult?.ctas || [])];
 
     const payload = {
@@ -967,6 +1134,7 @@ async function runExtraction({
       ])].filter(link => link !== profileUrl),
       featuredImages: mergedFeaturedImages,
       profilePayload: profileResult || null,
+      linkedinData:   linkedinData  || null,
     };
 
     const { enforcePayloadSchema } = require('./lib/schemaValidator');
@@ -996,14 +1164,7 @@ async function runExtraction({
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-app.post('/api/jobs', requireAuthSession, extractRateLimit, async (req, res) => {
-  // Pre-increment atomically BEFORE returning 202 — prevents multiple concurrent
-  // requests from all passing the check before any of them increments the counter.
-  if (activeExtractions >= MAX_CONCURRENCY) {
-    return res.status(429).json({ error: 'Server is at maximum capacity. Please try again in 1 minute.', stage: 'init' });
-  }
-  activeExtractions++;  // Atomic: increment now, before any await
-
+app.post('/api/jobs', requireJobsToken, extractRateLimit, async (req, res) => {
   let { url, youtubeUrl, profileUrl, linkedinUrl, website2Url, selectedImages } = req.body;
 
   if (!url && !youtubeUrl && !profileUrl && !linkedinUrl && !website2Url) {
@@ -1050,14 +1211,28 @@ app.post('/api/jobs', requireAuthSession, extractRateLimit, async (req, res) => 
     }
   }
 
+  // Reserve capacity only after validation passes. Otherwise malformed requests
+  // can leak slots and lock the service at MAX_CONCURRENCY.
+  if (activeExtractions >= MAX_CONCURRENCY) {
+    return res.status(429).json({ error: 'Server is at maximum capacity. Please try again in 1 minute.', stage: 'init' });
+  }
+  activeExtractions++;
+
   const abortController = new AbortController();
-  const job = await jobStore.createJob({
-    jobType: 'web',
-    tenantId: req.auth.tenantId || 'default',
-    status: 'running',
-    stage: 'init',
-    steps: [],
-  });
+  let job;
+  try {
+    job = await jobStore.createJob({
+      jobType: 'web',
+      tenantId: req.auth.tenantId || 'default',
+      status: 'running',
+      stage: 'init',
+      steps: [],
+    });
+  } catch (error) {
+    activeExtractions--;
+    console.error('[EXTRACT/WEB-ASYNC] Failed to create job:', error);
+    return res.status(500).json({ error: 'Failed to create extraction job', stage: 'init' });
+  }
   const jobId = job.jobId;
   jobStore.registerAbortController(jobId, abortController);
 
@@ -1113,7 +1288,7 @@ app.post('/api/jobs', requireAuthSession, extractRateLimit, async (req, res) => 
 });
 
 // ── DELETE /api/jobs/:jobId ── Cancel a running job ──────────────────────────
-app.delete('/api/jobs/:jobId', requireAuthSession, async (req, res) => {
+app.delete('/api/jobs/:jobId', requireJobsToken, async (req, res) => {
   const job = await jobStore.getJob(req.params.jobId, { tenantId: req.auth.tenantId });
   if (!job) return res.status(404).json({ error: 'Job not found or already expired' });
   if (!['pending', 'running', 'cancelling'].includes(job.status)) {
@@ -1128,7 +1303,7 @@ app.delete('/api/jobs/:jobId', requireAuthSession, async (req, res) => {
   return res.json({ success: true, jobId: req.params.jobId, status: 'cancelling' });
 });
 
-app.get('/api/jobs/:jobId', requireAuthSession, async (req, res) => {
+app.get('/api/jobs/:jobId', requireJobsToken, async (req, res) => {
   const job = await jobStore.getJob(req.params.jobId, { tenantId: req.auth.tenantId });
   if (!job) return res.status(404).json({ error: 'Job not found or expired' });
   

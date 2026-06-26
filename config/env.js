@@ -72,6 +72,7 @@ const env = {
     DART_API_KEY: optional('DART_API_KEY'),
     HISTORY_API_KEY: optional('HISTORY_API_KEY'),
     JOB_API_KEY: optional('JOB_API_KEY'),
+    CODEX_JOB_API_KEY: optional('CODEX_JOB_API_KEY'),
 };
 
 module.exports = env;

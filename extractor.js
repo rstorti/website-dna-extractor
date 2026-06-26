@@ -111,7 +111,7 @@ function makeSsrfSafeHandler() {
 
     // Perform async DNS check BEFORE allowing the request to continue.
     try {
-      const records = await dns.promises.lookup(hostname, { all: true });
+      const records = await dns.lookup(hostname, { all: true });
       const blocked = records.some(r => !isIpAllowed(r.address));
       if (blocked) {
         console.warn(`[SSRF] 🛑 Blocked internal subrequest to ${rawUrl}`);
@@ -353,15 +353,34 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = [], abo
   logStage('Booting Headless Browser');
  
   let browser;
+  let abortHandler = null;
+  const throwIfAborted = () => {
+    if (abortSignal?.aborted) {
+      throw new Error('Extraction cancelled by user');
+    }
+  };
   try {
+    throwIfAborted();
     const launchT = makeTimer('Puppeteer browser launch [extractDNA]');
     browser = await Promise.race([
       launchBrowser(),
       new Promise((_, reject) => setTimeout(() => reject(new Error('Browser launch timed out after 30s. Server may be out of memory — try again in 1 minute.')), 30_000))
     ]);
     launchT('browser ready', 'connector=Puppeteer/Chromium');
+    if (abortSignal) {
+      abortHandler = () => {
+        if (browser) {
+          browser.close().catch(() => {});
+        }
+      };
+      abortSignal.addEventListener('abort', abortHandler, { once: true });
+    }
+    throwIfAborted();
   } catch (launchErr) {
     console.error(`❌ [connector=Puppeteer/Chromium] Browser Launch Failed at +${elapsed()}: ${launchErr.message}`);
+    if (abortSignal?.aborted || launchErr.message === 'Extraction cancelled by user') {
+      return { error: 'Extraction cancelled by user' };
+    }
     return { error: `[Puppeteer/Chromium] Browser launch failed at +${elapsed()}: ${launchErr.message}` };
   }
  
@@ -460,6 +479,8 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = [], abo
             const freshPage = await browser.newPage();
             freshPage.setDefaultNavigationTimeout(90000);
             freshPage.setDefaultTimeout(90000);
+            await freshPage.setRequestInterception(true);
+            freshPage.on('request', makeSsrfSafeHandler());
             await freshPage.setViewport({ width: 1280, height: 800 });
             await freshPage.goto(url, { waitUntil: 'commit', timeout: 90000 });
             await new Promise(r => setTimeout(r, 5000)); // Wait 5s after first byte for JS to mount
@@ -1820,8 +1841,14 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = [], abo
  
   } catch (error) {
     console.error(`❌ [connector=Puppeteer/extractDNA] Fatal error at +${elapsed()}: ${error.message}`);
+    if (abortSignal?.aborted || error.message === 'Extraction cancelled by user') {
+      return { error: 'Extraction cancelled by user' };
+    }
     return { error: `[Puppeteer/extractDNA] Failed at +${elapsed()}: ${error.message}` };
   } finally {
+    if (abortSignal && abortHandler) {
+      abortSignal.removeEventListener('abort', abortHandler);
+    }
     try {
       if (browser) {
         console.log("🔒 Closing browser...");
