@@ -285,9 +285,11 @@ function App() {
             });
             clearTimeout(timeoutId);
             if (res.status === 401) {
-                localStorage.removeItem('auth_session');
+                setSessionToken(null);
                 setHasToken(false);
-                throw new Error('Session expired');
+                setIsHistoryLoading(false);
+                setHistoryError(null);
+                return;
             }
             if (!res.ok) throw new Error(`Server returned ${res.status}`);
             const data = await res.json();
