@@ -173,6 +173,7 @@ function getSupabase() {
 const jobStore = new JobStore({ getSupabase });
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = env.PORT;
 const HISTORY_FILE = path.join(__dirname, '.data', 'history.json');
 
@@ -411,6 +412,62 @@ async function appendHistory(record, tenantId = 'default') {
 
 // ============ API ROUTES ============
 
+let authRateLimit = (req, res, next) => next();
+let extractRateLimit = (req, res, next) => next();
+let scanRateLimit = (req, res, next) => next();
+let dartExtractRateLimit = (req, res, next) => next();
+try {
+  const rateLimit = require('express-rate-limit');
+  authRateLimit = rateLimit({
+    windowMs: 15 * 60_000,
+    max: 5,
+    skipSuccessfulRequests: true,
+    skip: () => env.NODE_ENV === 'test' && process.env.TEST_AUTH_RATE_LIMITS !== '1',
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many login attempts. Please wait 15 minutes before trying again.' }
+  });
+  extractRateLimit = rateLimit({
+    windowMs: 60_000,
+    max: 5,
+    skip: () => env.NODE_ENV === 'test',
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many extraction requests. Please wait 1 minute before trying again.' }
+  });
+  dartExtractRateLimit = rateLimit({
+    windowMs: 60_000,
+    max: 10,
+    skip: () => env.NODE_ENV === 'test',
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => req.headers['authorization'] || req.ip,
+    message: { error: 'Too many Dart extraction requests. Please wait 1 minute.' }
+  });
+  scanRateLimit = rateLimit({
+    windowMs: 60_000,
+    max: 30,
+    skip: () => env.NODE_ENV === 'test',
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many scan requests. Please wait 1 minute.' }
+  });
+} catch (e) {
+  console.warn('[BOOT] express-rate-limit not installed - rate limiting disabled. Run: npm install');
+}
+
+function timingSafeStringEqual(providedValue, expectedValue) {
+  if (typeof providedValue !== 'string' || typeof expectedValue !== 'string') return false;
+  const provided = Buffer.from(providedValue);
+  const expected = Buffer.from(expectedValue);
+  return provided.length === expected.length && crypto.timingSafeEqual(provided, expected);
+}
+
+function configuredAdminLoginKeys() {
+  if (process.env.ADMIN_LOGIN_KEY) return [process.env.ADMIN_LOGIN_KEY];
+  return process.env.JOB_API_KEY ? [process.env.JOB_API_KEY] : [];
+}
+
 
 /**
  * Job API authentication middleware.
@@ -431,11 +488,7 @@ function requireJobsToken(req, res, next) {
   const authHeader = req.headers['authorization'] || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
   if (token) {
-    const matchedKey = keys.find(({ key }) => {
-      const provided = Buffer.from(token);
-      const expected = Buffer.from(key);
-      return provided.length === expected.length && crypto.timingSafeEqual(provided, expected);
-    });
+    const matchedKey = keys.find(({ key }) => timingSafeStringEqual(token, key));
     if (matchedKey) {
       req.auth = { role: 'api', tenantId: matchedKey.tenantId };
       return next();
@@ -446,20 +499,22 @@ function requireJobsToken(req, res, next) {
 }
 
 // ─── AUTHENTICATION (Session Tokens) ──────────────────────────────────────────
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', authRateLimit, (req, res) => {
   const { password, tenantId = 'default' } = req.body;
-  const expectedKey = process.env.JOB_API_KEY;
+  const expectedKeys = configuredAdminLoginKeys();
 
   if (typeof password !== 'string' || !password.trim()) {
     return res.status(400).json({ error: 'Password is required' });
   }
   
-  // In production, JOB_API_KEY MUST be set and matched
-  if (process.env.NODE_ENV === 'production' && !expectedKey) {
-    return res.status(503).json({ error: 'Auth disabled: JOB_API_KEY not configured.' });
+  // In production, ADMIN_LOGIN_KEY is preferred. JOB_API_KEY remains a fallback
+  // only until ADMIN_LOGIN_KEY is configured, so deployments can roll forward
+  // without locking out the current web UI.
+  if (process.env.NODE_ENV === 'production' && expectedKeys.length === 0) {
+    return res.status(503).json({ error: 'Auth disabled: ADMIN_LOGIN_KEY or JOB_API_KEY not configured.' });
   }
 
-  if (expectedKey && password !== expectedKey) {
+  if (expectedKeys.length > 0 && !expectedKeys.some((key) => timingSafeStringEqual(password, key))) {
     return res.status(401).json({ error: 'Invalid password' });
   }
 
@@ -603,39 +658,6 @@ app.delete('/api/history', requireAuthSession, async (req, res) => {
 // constrained free-tier servers. Gracefully degrades if package is not yet installed.
 const MAX_CONCURRENCY = 4;
 const extractionStatus = new Map();
-
-// Rate-limit vars — set in the try block below; fallback to no-op if package missing
-let extractRateLimit = (req, res, next) => next();
-let scanRateLimit = (req, res, next) => next();
-let dartExtractRateLimit = (req, res, next) => next();
-try {
-  const rateLimit = require('express-rate-limit');
-  extractRateLimit = rateLimit({
-    windowMs: 60_000,
-    max: 5,
-    skip: () => env.NODE_ENV === 'test',
-    standardHeaders: true,
-    message: { error: 'Too many extraction requests. Please wait 1 minute before trying again.' }
-  });
-  // Dart API gets its own separate bucket (10/min) so it never shares with the web UI
-  dartExtractRateLimit = rateLimit({
-    windowMs: 60_000,
-    max: 10,
-    skip: () => env.NODE_ENV === 'test',
-    standardHeaders: true,
-    keyGenerator: (req) => req.headers['authorization'] || req.ip,
-    message: { error: 'Too many Dart extraction requests. Please wait 1 minute.' }
-  });
-  scanRateLimit = rateLimit({
-    windowMs: 60_000,
-    max: 30,
-    skip: () => env.NODE_ENV === 'test',
-    standardHeaders: true,
-    message: { error: 'Too many scan requests. Please wait 1 minute.' }
-  });
-} catch (e) {
-  console.warn('[BOOT] express-rate-limit not installed — rate limiting disabled. Run: npm install');
-}
 
 app.get('/api/status', (req, res) => {
   const targetUrl = req.query.url;

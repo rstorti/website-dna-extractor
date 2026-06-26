@@ -3,6 +3,7 @@
 process.env.NODE_ENV = 'test';
 process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'stub-ci-key';
 process.env.HISTORY_API_KEY = 'test-history-secret-abc123';
+process.env.ADMIN_LOGIN_KEY = 'test-admin-login-secret-123456';
 process.env.JOB_API_KEY = 'test-job-secret-xyz789';
 process.env.CODEX_JOB_API_KEY = 'test-codex-job-secret-abc123';
 process.env.DART_API_KEY = 'test-dart-secret-456';
@@ -116,7 +117,7 @@ async function waitFor(fn, timeoutMs = 2000) {
 async function loginAs(tenantId) {
   const res = await request(app)
     .post('/api/auth/login')
-    .send({ password: process.env.JOB_API_KEY, tenantId });
+    .send({ password: process.env.ADMIN_LOGIN_KEY, tenantId });
 
   assert.strictEqual(res.status, 200, `login failed: ${res.text}`);
   assert.ok(res.body.token, 'login did not return a token');
@@ -136,6 +137,48 @@ async function main() {
     await test('POST /api/auth/login rejects missing password', async () => {
       const res = await request(app).post('/api/auth/login').send({ tenantId: 'tenant-a' });
       assert.strictEqual(res.status, 400);
+    });
+
+    await test('POST /api/auth/login uses ADMIN_LOGIN_KEY when configured', async () => {
+      const adminRes = await request(app)
+        .post('/api/auth/login')
+        .send({ password: process.env.ADMIN_LOGIN_KEY, tenantId: 'tenant-a' });
+      assert.strictEqual(adminRes.status, 200, adminRes.text);
+      assert.ok(adminRes.body.token);
+
+      const jobKeyRes = await request(app)
+        .post('/api/auth/login')
+        .send({ password: process.env.JOB_API_KEY, tenantId: 'tenant-a' });
+      assert.strictEqual(jobKeyRes.status, 401, jobKeyRes.text);
+    });
+
+    await test('POST /api/auth/login falls back to JOB_API_KEY before ADMIN_LOGIN_KEY rollout', async () => {
+      const originalAdminKey = process.env.ADMIN_LOGIN_KEY;
+      delete process.env.ADMIN_LOGIN_KEY;
+      try {
+        const res = await request(app)
+          .post('/api/auth/login')
+          .send({ password: process.env.JOB_API_KEY, tenantId: 'tenant-a' });
+        assert.strictEqual(res.status, 200, res.text);
+        assert.ok(res.body.token);
+      } finally {
+        process.env.ADMIN_LOGIN_KEY = originalAdminKey;
+      }
+    });
+
+    await test('POST /api/auth/login rate-limits repeated invalid passwords', async () => {
+      process.env.TEST_AUTH_RATE_LIMITS = '1';
+      try {
+        let lastRes;
+        for (let i = 0; i < 6; i++) {
+          lastRes = await request(app)
+            .post('/api/auth/login')
+            .send({ password: `wrong-password-${i}`, tenantId: 'tenant-a' });
+        }
+        assert.strictEqual(lastRes.status, 429, lastRes.text);
+      } finally {
+        delete process.env.TEST_AUTH_RATE_LIMITS;
+      }
     });
 
     await test('GET /api/history returns tenant-scoped records', async () => {
