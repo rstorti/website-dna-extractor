@@ -1,0 +1,11 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" rx="32" fill="#17181B"/>
+  <rect x="54" y="54" width="1092" height="522" rx="28" fill="#1F2125" stroke="#2A2D33"/>
+  <rect x="96" y="102" width="174" height="174" rx="30" fill="#F99D32"/>
+  <path d="M138 148H191C214 148 230 164 230 188C230 212 214 228 191 228H166V286H138V148ZM188 204C199 204 204 198 204 188C204 178 199 172 188 172H166V204H188Z" fill="#17181B"/>
+  <path d="M286 286L336 148H367L417 286H386.5L376 255H326L315.5 286H286ZM333.5 231H368.5L351 178L333.5 231Z" fill="#F99D32"/>
+  <text x="610" y="200" fill="#F99D32" font-family="Arial, sans-serif" font-size="28" letter-spacing="2">BRAND CONTENT STUDIO</text>
+  <text x="610" y="298" fill="#F5F6F7" font-family="Arial, sans-serif" font-size="72" font-weight="700">Website-first brand analysis</text>
+  <text x="610" y="382" fill="#F5F6F7" font-family="Arial, sans-serif" font-size="72" font-weight="700">for on-brand campaign output.</text>
+  <text x="610" y="452" fill="#B5BAC4" font-family="Arial, sans-serif" font-size="28">Standalone marketing site with guides, comparisons, FAQ, updates, and repeated CTAs.</text>
+</svg>
