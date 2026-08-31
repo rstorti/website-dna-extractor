@@ -3,6 +3,7 @@ import * as XLSX from '@e965/xlsx';
 import SettingsTab from './components/SettingsTab';
 import ScannerTab from './components/ScannerTab';
 import HistoryTab from './components/HistoryTab';
+import CampaignsTab from './components/CampaignsTab';
 import './index.css';
 import './loading.css';
 
@@ -37,7 +38,7 @@ export async function login(password, tenantId) {
     const r = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password, tenantId: tenantId || 'default' })
+      body: JSON.stringify({ password, tenantId })
     });
     if (!r.ok) {
       let serverMsg = `HTTP ${r.status} ${r.statusText}`;
@@ -507,7 +508,9 @@ function App() {
         try {
             statusInterval = setInterval(async () => {
                 try {
-                    const stRes = await fetch(`${API_BASE_URL}/api/status?url=${encodeURIComponent(targetLabel)}`);
+                    const stRes = await fetch(`${API_BASE_URL}/api/status?url=${encodeURIComponent(targetLabel)}`, {
+                        headers: { 'Authorization': 'Bearer ' + getSessionToken() }
+                    });
                     const stData = await stRes.json();
                     if (stData.stage) lastKnownStage = stData.stage;
                     if (Array.isArray(stData.steps)) lastKnownSteps = stData.steps;
@@ -1337,7 +1340,10 @@ function App() {
                     <button 
                         id="login-btn"
                         onClick={async () => {
-                            if (!loginKey) return;
+                            if (!loginKey || !tenantId) {
+                                setLoginError('Both API Key and Tenant ID are required');
+                                return;
+                            }
                             setIsLoggingIn(true);
                             setLoginError('');
                             const result = await login(loginKey, tenantId);
@@ -1385,6 +1391,7 @@ function App() {
                 </div>
                 <nav className="nav-menu">
                     <div className={`nav-item ${activeTab === 'Dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('Dashboard')}>Dashboard</div>
+                    <div className={`nav-item ${activeTab === 'Campaigns' ? 'active' : ''}`} onClick={() => setActiveTab('Campaigns')}>Campaigns</div>
                     <div className={`nav-item ${activeTab === 'History' ? 'active' : ''}`} onClick={() => setActiveTab('History')}>History</div>
                     <div className={`nav-item ${activeTab === 'Scanner' ? 'active' : ''}`} onClick={() => setActiveTab('Scanner')}>🔍 Scanner</div>
                     <div className={`nav-item ${activeTab === 'Settings' ? 'active' : ''}`} onClick={() => setActiveTab('Settings')}>Settings</div>
@@ -2815,6 +2822,13 @@ function App() {
                 )}
 
                 {activeTab === 'Scanner' && <ScannerTab showToast={showToast} />}
+
+                {activeTab === 'Campaigns' && (
+                    <CampaignsTab
+                        brandDna={result}
+                        showToast={showToast}
+                    />
+                )}
 
                 {activeTab === 'Settings' && (
                     <SettingsTab 

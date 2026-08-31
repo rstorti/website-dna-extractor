@@ -3,6 +3,22 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+// Load local secrets overrides if they exist
+const secretsPath = path.resolve(__dirname, '../.data/secrets.json');
+if (fs.existsSync(secretsPath)) {
+    try {
+        const localSecrets = JSON.parse(fs.readFileSync(secretsPath, 'utf8'));
+        for (const [key, value] of Object.entries(localSecrets)) {
+            if (value != null && value !== '') {
+                process.env[key] = value;
+            }
+        }
+        console.log('[CONFIG] Loaded local secrets overrides from .data/secrets.json');
+    } catch (e) {
+        console.error('[CONFIG] Failed to parse local secrets overrides:', e.message);
+    }
+}
+
 const asBoolean = (value, fallback = false) => {
     if (value == null || value === '') return fallback;
     return ['1', 'true', 'yes', 'on', 'enabled'].includes(String(value).toLowerCase());
@@ -74,6 +90,11 @@ const env = {
     ADMIN_LOGIN_KEY: optional('ADMIN_LOGIN_KEY'),
     JOB_API_KEY: optional('JOB_API_KEY'),
     CODEX_JOB_API_KEY: optional('CODEX_JOB_API_KEY'),
+
+    MUAPIAPP_API_KEY: optional('MUAPIAPP_API_KEY'),
+    POMELLI_API_KEY: optional('POMELLI_API_KEY'),
+    MINFO_API_URL: optional('MINFO_API_URL'),
+    MINFO_API_KEY: optional('MINFO_API_KEY'),
 };
 
 module.exports = env;

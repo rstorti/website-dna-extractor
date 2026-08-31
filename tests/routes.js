@@ -85,6 +85,50 @@ require.cache[youtubeExtractorPath] = {
   },
 };
 
+const campaignGeneratorPath = require.resolve(path.join(ROOT, 'lib', 'campaignGenerator.js'));
+require.cache[campaignGeneratorPath] = {
+  id: campaignGeneratorPath,
+  filename: campaignGeneratorPath,
+  loaded: true,
+  exports: {
+    validateMinfoCampaign: (payload) => {
+      // Mock validation logic
+      if (!payload.campaign || !payload.campaign.campaignName || !payload.campaignItemButtons) {
+        return { valid: false, errors: [{ message: 'Missing fields' }] };
+      }
+      return { valid: true };
+    },
+    parseStyleGuide: async (text, name) => ({
+      themeColors: [{ colorName: 'Brand Red', hex: '#E50914', context: 'Primary' }],
+      brandFonts: { headings: 'Helvetica', body: 'Arial' },
+      visualGuidelines: ['Mock rule'],
+      toneOfVoice: 'Friendly',
+      approvedCtas: ['Sign Up'],
+      keyMessaging: ['Simple'],
+      sourceFile: name
+    }),
+    generateCampaignFromDna: async (dna, rules) => ({
+      campaign: {
+        campaignName: 'Mock Campaign',
+        campaignDescription: '<p>Mock Description</p>',
+        campaignType: 1,
+        brand: { name: dna.data?.name || 'Mock Brand', logo: 'https://example.com/logo.png' }
+      },
+      campaignItemButtons: [
+        { buttonName: 'Sign Up', type: 1, url: 'https://example.com', order: 1, action: 1 }
+      ],
+      imagePrompts: {
+        conceptA: 'Concept A DSLR shot',
+        conceptB: 'Concept B DSLR shot'
+      },
+      decisionProvenance: {
+        primaryColor: { value: '#E50914', source: 'style-guide', rationale: 'Mock logic' },
+        tagline: { value: 'Mock Tagline', source: 'website-dna', rationale: 'Mock logic' }
+      }
+    })
+  }
+};
+
 const { app, jobStore } = require('../server.js');
 
 let passed = 0;
@@ -446,6 +490,120 @@ async function main() {
         axios.get = originalAxiosGet;
         dns.lookup = originalLookup;
       }
+    });
+
+    await test('GET /api/history rejects local fallback in production when Supabase fails', async () => {
+      const env = require('../config/env');
+      const originalNodeEnv = env.NODE_ENV;
+      env.NODE_ENV = 'production';
+      try {
+        const res = await request(app)
+          .get('/api/history')
+          .set('Authorization', `Bearer ${token}`);
+        assert.strictEqual(res.status, 500);
+      } finally {
+        env.NODE_ENV = originalNodeEnv;
+      }
+    });
+
+    await test('GET /api/download in production blocks local outputs requests', async () => {
+      const env = require('../config/env');
+      const originalNodeEnv = env.NODE_ENV;
+      env.NODE_ENV = 'production';
+      try {
+        const res = await request(app)
+          .get('/api/download')
+          .set('Authorization', `Bearer ${token}`)
+          .query({ url: '/outputs/test-download.txt', filename: 'report.txt' });
+        assert.strictEqual(res.status, 404);
+      } finally {
+        env.NODE_ENV = originalNodeEnv;
+      }
+    });
+
+    await test('GET /api/admin/secrets: returns masked in production, plaintext in dev', async () => {
+      const env = require('../config/env');
+      const originalNodeEnv = env.NODE_ENV;
+      const originalGeminiKey = process.env.GEMINI_API_KEY;
+
+      process.env.GEMINI_API_KEY = 'secret-gemini-key-12345';
+      try {
+        // Test production
+        env.NODE_ENV = 'production';
+        let res = await request(app)
+          .get('/api/admin/secrets')
+          .set('Authorization', `Bearer ${token}`);
+        assert.strictEqual(res.status, 200);
+        assert.strictEqual(res.body.secrets.GEMINI_API_KEY.status, 'SET');
+        assert.strictEqual(res.body.secrets.GEMINI_API_KEY.value, '***2345');
+
+        // Test development
+        env.NODE_ENV = 'development';
+        res = await request(app)
+          .get('/api/admin/secrets')
+          .set('Authorization', `Bearer ${token}`);
+        assert.strictEqual(res.status, 200);
+        assert.strictEqual(res.body.secrets.GEMINI_API_KEY.status, 'SET');
+        assert.strictEqual(res.body.secrets.GEMINI_API_KEY.value, 'secret-gemini-key-12345');
+      } finally {
+        env.NODE_ENV = originalNodeEnv;
+        process.env.GEMINI_API_KEY = originalGeminiKey;
+      }
+    });
+
+    await test('POST & DELETE /api/admin/secrets: forbidden in production', async () => {
+      const env = require('../config/env');
+      const originalNodeEnv = env.NODE_ENV;
+      env.NODE_ENV = 'production';
+      try {
+        const postRes = await request(app)
+          .post('/api/admin/secrets')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ secrets: { SOME_KEY: 'some-value' } });
+        assert.strictEqual(postRes.status, 403);
+
+        const deleteRes = await request(app)
+          .delete('/api/admin/secrets')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ keys: ['SOME_KEY'] });
+        assert.strictEqual(deleteRes.status, 403);
+      } finally {
+        env.NODE_ENV = originalNodeEnv;
+      }
+    });
+
+    await test('GET /api/proxy-image: SSRF blocks private and non-images', async () => {
+      // Test loopback IP SSRF check
+      const resLocal = await request(app)
+        .get('/api/proxy-image')
+        .set('Authorization', `Bearer ${token}`)
+        .query({ url: 'http://127.0.0.1:3000/some-image.jpg' });
+      assert.strictEqual(resLocal.status, 403); // SSRF Blocked
+    });
+
+    await test('POST /api/campaign/generate & POST /api/minfo/import: executes workflow', async () => {
+      const brandDna = {
+        success: true,
+        data: { name: 'Test Brand' }
+      };
+
+      // Generate campaign draft session
+      const genRes = await request(app)
+        .post('/api/campaign/generate')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ brandDna });
+      assert.strictEqual(genRes.status, 200);
+      assert.ok(genRes.body.session.session_id);
+      const sessionId = genRes.body.session.session_id;
+
+      // Import to Minfo
+      const importRes = await request(app)
+        .post('/api/minfo/import')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ sessionId });
+      assert.strictEqual(importRes.status, 200);
+      assert.strictEqual(importRes.body.status, 'imported');
+      assert.ok(importRes.body.idempotencyKey);
     });
   } finally {
     if (originalHistory == null) {

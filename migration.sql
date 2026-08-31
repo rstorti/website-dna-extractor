@@ -76,3 +76,30 @@ create policy "service role manages jobs"
     to service_role
     using (true)
     with check (true);
+
+-- ── Campaign Sessions Table ──
+create table if not exists public.campaign_sessions (
+    session_id uuid primary key default gen_random_uuid(),
+    tenant_id text not null,
+    brand_dna jsonb not null default '{}'::jsonb,
+    style_guide_rules jsonb not null default '[]'::jsonb,
+    campaign_output jsonb,
+    idempotency_key text unique,
+    status text not null default 'draft',
+    created_at timestamptz not null default timezone('utc', now()),
+    updated_at timestamptz not null default timezone('utc', now()),
+    constraint campaign_sessions_status_check check (status in ('draft', 'imported', 'failed'))
+);
+
+create index if not exists campaign_sessions_tenant_idx
+    on public.campaign_sessions (tenant_id, updated_at desc);
+
+alter table public.campaign_sessions enable row level security;
+
+drop policy if exists "service role manages sessions" on public.campaign_sessions;
+create policy "service role manages sessions"
+    on public.campaign_sessions
+    for all
+    to service_role
+    using (true)
+    with check (true);

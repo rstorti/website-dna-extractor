@@ -225,6 +225,101 @@ await test('image: data: URI rejected', () => { assert.strictEqual(isValidImageU
 await test('image: empty string fails', () => { assert.strictEqual(isValidImageUrl(''), false); });
 await test('image: ftp:// fails', () => { assert.strictEqual(isValidImageUrl('ftp://example.com/img.png'), false); });
 
+// ─── 9. Runtime Readiness Guards ──────────────────────────────────────────────
+group('Runtime Guards: assertRuntimeReadiness');
+const { assertRuntimeReadiness } = require('../lib/runtimeGuards');
+
+await test('assertRuntimeReadiness: degraded in dev with missing env vars', async () => {
+  const mockEnv = { NODE_ENV: 'development' };
+  const mockGetSupabase = () => ({ supabase: null });
+  const result = await assertRuntimeReadiness(mockEnv, mockGetSupabase, { log: () => {}, warn: () => {} });
+  assert.strictEqual(result.degraded, true);
+  assert.ok(result.missing.includes('GEMINI_API_KEY'));
+});
+
+await test('assertRuntimeReadiness: throws in production if Supabase unavailable', async () => {
+  const mockEnv = {
+    NODE_ENV: 'production',
+    GEMINI_API_KEY: 'set',
+    JOB_API_KEY: 'set',
+    ADMIN_LOGIN_KEY: 'set',
+    HISTORY_API_KEY: 'set',
+    DART_API_KEY: 'set',
+    SUPABASE_URL: 'set',
+    SUPABASE_SERVICE_ROLE_KEY: 'set',
+  };
+  const mockGetSupabase = () => ({ supabase: null });
+  await assert.rejects(
+    async () => {
+      await assertRuntimeReadiness(mockEnv, mockGetSupabase, { log: () => {}, warn: () => {} });
+    },
+    /Supabase client is unavailable/
+  );
+});
+
+// ─── 10. Minfo Campaign: Schema & Tenant Isolation ─────────────────────────────
+group('Minfo Campaign: Schema & Tenant Isolation');
+const { validateMinfoCampaign } = require('../lib/campaignGenerator');
+const { JobStore } = require('../lib/jobStore');
+const env = require('../config/env');
+
+await test('campaign schema: valid campaign passes', () => {
+  const payload = {
+    campaign: {
+      campaignName: "Test Campaign",
+      campaignDescription: "<p>Check this out</p>",
+      campaignType: 1,
+      brand: {
+        name: "Test Brand",
+        logo: "https://example.com/logo.png"
+      }
+    },
+    campaignItemButtons: [
+      { buttonName: "Click Me", type: 1, url: "https://example.com", order: 1, action: 1 }
+    ],
+    idempotencyKey: "12345"
+  };
+  const result = validateMinfoCampaign(payload);
+  assert.strictEqual(result.valid, true);
+});
+
+await test('campaign schema: invalid campaign fails', () => {
+  const payload = {
+    campaign: {
+      campaignName: "Test Campaign",
+      campaignType: 2,
+      brand: {
+        name: "Test Brand"
+      }
+    },
+    campaignItemButtons: []
+  };
+  const result = validateMinfoCampaign(payload);
+  assert.strictEqual(result.valid, false);
+});
+
+await test('JobStore: enforces tenant ID in production', async () => {
+  const store = new JobStore();
+  const originalNodeEnv = env.NODE_ENV;
+  env.NODE_ENV = 'production';
+  try {
+    await assert.rejects(
+      async () => {
+        await store.createJob({ tenantId: 'default' });
+      },
+      /default tenant is not permitted in production mode/
+    );
+    await assert.rejects(
+      async () => {
+        await store.getJob('some-uuid', { tenantId: 'default' });
+      },
+      /default tenant is not permitted in production mode/
+    );
+  } finally {
+    env.NODE_ENV = originalNodeEnv;
+  }
+});
+
 // ─── Summary ──────────────────────────────────────────────────────────────────
 console.log('');
 console.log(`Unit tests complete: ${passed} passed, ${failed} failed`);

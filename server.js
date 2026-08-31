@@ -343,6 +343,7 @@ async function writeLocalHistory(data) {
 }
 
 async function readHistory(tenantId = 'default') {
+  let supabaseError = null;
   try {
     const { supabase } = getSupabase();
     if (supabase) {
@@ -354,12 +355,21 @@ async function readHistory(tenantId = 'default') {
         .limit(100);
       const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase query timed out')), 5000));
       const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
-      if (error) console.warn('Supabase history read error:', error.message);
+      if (error) {
+        supabaseError = new Error(`Supabase history read error: ${error.message}`);
+        console.warn(supabaseError.message);
+      }
       if (!error && data) return data;
     }
   } catch (e) {
-    console.warn('Supabase history read failed, falling back to local:', e.message);
+    supabaseError = e;
+    console.warn('Supabase history read failed:', e.message);
   }
+
+  if (env.NODE_ENV === 'production') {
+    throw supabaseError || new Error('Database history read failed — Supabase is unavailable in production.');
+  }
+
   const localHistory = await readLocalHistory();
   return localHistory.filter((item) => (item.tenantId || item.tenant_id || 'default') === tenantId);
 }
@@ -381,6 +391,7 @@ async function appendHistory(record, tenantId = 'default') {
   };
 
   let supabaseOk = false;
+  let supabaseError = null;
   try {
     const { supabase } = getSupabase();
     if (supabase) {
@@ -389,15 +400,20 @@ async function appendHistory(record, tenantId = 'default') {
         supabaseOk = true;
         console.log('[HISTORY] ✅ Saved to Supabase:', dbRecord.target_url || dbRecord.url);
       } else {
+        supabaseError = new Error(`Supabase write failed: ${error.message}`);
         console.warn('[HISTORY] ⚠️ Supabase write failed:', error.message, '| code:', error.code);
       }
     }
   } catch (e) {
+    supabaseError = e;
     console.warn('[HISTORY] ⚠️ Supabase write exception:', e.message);
   }
 
-  if (!supabaseOk && env.NODE_ENV === 'production') {
-    console.error('[HISTORY] ❌ Production history persistence failed — no local fallback in production.');
+  if (env.NODE_ENV === 'production') {
+    if (!supabaseOk) {
+      console.error('[HISTORY] ❌ Production history persistence failed — no local fallback in production.');
+      throw supabaseError || new Error('Durable history persistence failed in production.');
+    }
     return;
   }
 
@@ -500,17 +516,26 @@ function requireJobsToken(req, res, next) {
 
 // ─── AUTHENTICATION (Session Tokens) ──────────────────────────────────────────
 app.post('/api/auth/login', authRateLimit, (req, res) => {
-  const { password, tenantId = 'default' } = req.body;
-  const expectedKeys = configuredAdminLoginKeys();
+  const { password, tenantId } = req.body;
 
   if (typeof password !== 'string' || !password.trim()) {
     return res.status(400).json({ error: 'Password is required' });
   }
-  
-  // In production, ADMIN_LOGIN_KEY is preferred. JOB_API_KEY remains a fallback
-  // only until ADMIN_LOGIN_KEY is configured, so deployments can roll forward
-  // without locking out the current web UI.
-  if (process.env.NODE_ENV === 'production' && expectedKeys.length === 0) {
+
+  if (typeof tenantId !== 'string' || !tenantId.trim()) {
+    return res.status(400).json({ error: 'Tenant ID is required' });
+  }
+
+  const isProd = env.NODE_ENV === 'production';
+
+  if (isProd && tenantId.toLowerCase() === 'default') {
+    return res.status(400).json({ error: 'Default tenant is not permitted in production mode' });
+  }
+
+  const configuredKeys = configuredAdminLoginKeys();
+  const expectedKeys = configuredKeys.length > 0 ? configuredKeys : (isProd ? [] : ['minfo-secure-dev-key']);
+
+  if (isProd && expectedKeys.length === 0) {
     return res.status(503).json({ error: 'Auth disabled: ADMIN_LOGIN_KEY or JOB_API_KEY not configured.' });
   }
 
@@ -519,7 +544,7 @@ app.post('/api/auth/login', authRateLimit, (req, res) => {
   }
 
   // Issue a short-lived token (12 hours) signed via HMAC
-  if (process.env.NODE_ENV === 'production' && !process.env.HISTORY_API_KEY) {
+  if (isProd && !process.env.HISTORY_API_KEY) {
     return res.status(503).json({ error: 'Auth disabled: HISTORY_API_KEY not configured.' });
   }
   const secret = process.env.HISTORY_API_KEY || 'dev-history-secret';
@@ -533,6 +558,186 @@ app.post('/api/auth/login', authRateLimit, (req, res) => {
 
   const token = `${payloadB64}.${signature}`;
   res.json({ token, expiresAt });
+});
+
+// ============ ADMIN SECRETS ENDPOINTS ============
+
+app.get('/api/admin/secrets', requireAuthSession, (req, res) => {
+  if (req.auth.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin role required' });
+  }
+
+  const secretKeys = [
+    'GEMINI_API_KEY',
+    'YOUTUBE_API_KEY',
+    'FIRECRAWLER_API_KEY',
+    'SUPABASE_URL',
+    'SUPABASE_ANON_KEY',
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'GCP_PROJECT_ID',
+    'GCP_LOCATION',
+    'GCP_CREDENTIALS_JSON',
+    'MUAPIAPP_API_KEY',
+    'POMELLI_API_KEY',
+    'MINFO_API_URL',
+    'MINFO_API_KEY',
+    'DART_API_KEY',
+    'HISTORY_API_KEY',
+    'ADMIN_LOGIN_KEY',
+    'JOB_API_KEY',
+  ];
+
+  const results = {};
+  const isProd = env.NODE_ENV === 'production';
+
+  for (const key of secretKeys) {
+    const val = process.env[key] || env[key] || '';
+    if (!val) {
+      results[key] = { status: 'MISSING', value: '' };
+    } else {
+      results[key] = {
+        status: 'SET',
+        value: isProd
+          ? `***${val.slice(-4)}`
+          : val
+      };
+    }
+  }
+
+  res.json({ secrets: results });
+});
+
+app.post('/api/admin/secrets', requireAuthSession, async (req, res) => {
+  if (req.auth.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin role required' });
+  }
+
+  if (env.NODE_ENV === 'production') {
+    return res.status(403).json({ error: 'Modifying production secrets via UI is disabled. Please use Railway / Render dashboard.' });
+  }
+
+  const { secrets } = req.body;
+  if (!secrets || typeof secrets !== 'object') {
+    return res.status(400).json({ error: 'secrets object is required' });
+  }
+
+  try {
+    const secretsPath = path.resolve(__dirname, './.data/secrets.json');
+    await fs.mkdir(path.dirname(secretsPath), { recursive: true });
+
+    let existing = {};
+    try {
+      const data = await fs.readFile(secretsPath, 'utf8');
+      existing = JSON.parse(data);
+    } catch { /* file doesn't exist yet */ }
+
+    const merged = { ...existing, ...secrets };
+    await fs.writeFile(secretsPath, JSON.stringify(merged, null, 2), 'utf8');
+
+    // Update runtime env
+    for (const [k, v] of Object.entries(secrets)) {
+      if (v != null && v !== '') {
+        process.env[k] = v;
+        env[k] = v;
+      }
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to save secrets:', error);
+    res.status(500).json({ error: 'Failed to save secrets' });
+  }
+});
+
+app.delete('/api/admin/secrets', requireAuthSession, async (req, res) => {
+  if (req.auth.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin role required' });
+  }
+
+  if (env.NODE_ENV === 'production') {
+    return res.status(403).json({ error: 'Deleting production secrets via UI is disabled.' });
+  }
+
+  const { keys } = req.body;
+  if (!Array.isArray(keys)) {
+    return res.status(400).json({ error: 'keys array is required' });
+  }
+
+  try {
+    const secretsPath = path.resolve(__dirname, './.data/secrets.json');
+    let existing = {};
+    try {
+      const data = await fs.readFile(secretsPath, 'utf8');
+      existing = JSON.parse(data);
+    } catch { /* file doesn't exist */ }
+
+    for (const key of keys) {
+      delete existing[key];
+      delete process.env[key];
+      delete env[key];
+    }
+
+    await fs.writeFile(secretsPath, JSON.stringify(existing, null, 2), 'utf8');
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to delete secrets:', error);
+    res.status(500).json({ error: 'Failed to delete secrets' });
+  }
+});
+
+// ============ SECURE IMAGE PROXY ENDPOINT ============
+
+app.get('/api/proxy-image', requireAuthSession, async (req, res) => {
+  try {
+    const { url } = req.query;
+    if (!url) return res.status(400).send('URL missing');
+
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      return res.status(400).send('Invalid image URL');
+    }
+
+    // Run SSRF safety check on the image URL
+    const { isAllowedUrl } = require('./lib/validateUrl.js');
+    const validation = await isAllowedUrl(url);
+    if (!validation.ok) {
+      return res.status(403).send(`SSRF Blocked: ${validation.reason}`);
+    }
+
+    const response = await fetch(url);
+    if (!response.ok) return res.status(response.status).send('Upstream image fetch failed');
+
+    const MAX_IMAGE_BYTES = 20 * 1024 * 1024; // 20 MB
+    const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+    if (contentLength > MAX_IMAGE_BYTES) {
+      return res.status(413).send('Image exceeds 20 MB proxy limit');
+    }
+
+    const contentType = response.headers.get('content-type') || 'application/octet-stream';
+    if (!contentType.startsWith('image/')) {
+      return res.status(400).send('URL does not point to a valid image');
+    }
+
+    // Stream the body with byte counting to enforce hard cap
+    const chunks = [];
+    let totalBytes = 0;
+    for await (const chunk of response.body) {
+      totalBytes += chunk.length;
+      if (totalBytes > MAX_IMAGE_BYTES) {
+        return res.status(413).send('Image size exceeded 20 MB during transfer');
+      }
+      chunks.push(chunk);
+    }
+    const buffer = Buffer.concat(chunks);
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24h
+    res.send(buffer);
+  } catch (error) {
+    console.error('Image proxy failed:', error);
+    res.status(500).send('Image proxy failed');
+  }
 });
 
 // Middleware to protect internal endpoints
@@ -659,7 +864,7 @@ app.delete('/api/history', requireAuthSession, async (req, res) => {
 const MAX_CONCURRENCY = 4;
 const extractionStatus = new Map();
 
-app.get('/api/status', (req, res) => {
+app.get('/api/status', requireAuthSession, (req, res) => {
   const targetUrl = req.query.url;
   if (!targetUrl || !extractionStatus.has(targetUrl)) {
     return res.json({ status: 'not_found' });
@@ -871,6 +1076,256 @@ app.post('/api/extract-document', requireAuthSession, extractRateLimit, upload.a
     }
 
     res.status(500).json({ error: `Document extraction failed: ${err.message}` });
+  }
+});
+
+// ============ CAMPAIGN GENERATION & SESSIONS ============
+const { validateMinfoCampaign, parseStyleGuide, generateCampaignFromDna } = require('./lib/campaignGenerator');
+const { v4: uuidv4 } = require('uuid');
+
+// Local memory fallback for development/test modes
+let localCampaignSessions = new Map();
+
+async function createCampaignSession(tenantId, brandDna, styleGuideRules = [], campaignOutput = null) {
+  const record = {
+    session_id: uuidv4(),
+    tenant_id: tenantId,
+    brand_dna: brandDna,
+    style_guide_rules: styleGuideRules,
+    campaign_output: campaignOutput,
+    status: 'draft',
+    idempotency_key: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+
+  const { supabase } = getSupabase();
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('campaign_sessions')
+      .insert(record)
+      .select()
+      .single();
+    if (error) throw new Error(`Failed to save campaign session to database: ${error.message}`);
+    return data;
+  }
+
+  localCampaignSessions.set(record.session_id, record);
+  return record;
+}
+
+async function updateCampaignSession(sessionId, tenantId, patch) {
+  const { supabase } = getSupabase();
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('campaign_sessions')
+      .update({ ...patch, updated_at: new Date().toISOString() })
+      .eq('session_id', sessionId)
+      .eq('tenant_id', tenantId)
+      .select()
+      .single();
+    if (error) throw new Error(`Failed to update campaign session: ${error.message}`);
+    return data;
+  }
+
+  const existing = localCampaignSessions.get(sessionId);
+  if (!existing || existing.tenant_id !== tenantId) return null;
+  const updated = { ...existing, ...patch, updated_at: new Date().toISOString() };
+  localCampaignSessions.set(sessionId, updated);
+  return updated;
+}
+
+async function listCampaignSessions(tenantId) {
+  const { supabase } = getSupabase();
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('campaign_sessions')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .order('updated_at', { ascending: false });
+    if (error) throw new Error(`Failed to list campaign sessions: ${error.message}`);
+    return data;
+  }
+
+  return Array.from(localCampaignSessions.values())
+    .filter(s => s.tenant_id === tenantId)
+    .sort((a,b) => new Date(b.updated_at) - new Date(a.updated_at));
+}
+
+async function getCampaignSession(sessionId, tenantId) {
+  const { supabase } = getSupabase();
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('campaign_sessions')
+      .select('*')
+      .eq('session_id', sessionId)
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+    if (error) throw new Error(`Failed to get campaign session: ${error.message}`);
+    return data;
+  }
+
+  const session = localCampaignSessions.get(sessionId);
+  if (!session || session.tenant_id !== tenantId) return null;
+  return session;
+}
+
+async function deleteCampaignSession(sessionId, tenantId) {
+  const { supabase } = getSupabase();
+  if (supabase) {
+    const { error } = await supabase
+      .from('campaign_sessions')
+      .delete()
+      .eq('session_id', sessionId)
+      .eq('tenant_id', tenantId);
+    if (error) throw new Error(`Failed to delete campaign session: ${error.message}`);
+    return true;
+  }
+
+  const existing = localCampaignSessions.get(sessionId);
+  if (!existing || existing.tenant_id !== tenantId) return false;
+  localCampaignSessions.delete(sessionId);
+  return true;
+}
+
+app.post('/api/campaign/generate', requireAuthSession, upload.array('documents', 5), async (req, res) => {
+  const tenantId = req.auth.tenantId;
+  let { brandDna, styleGuideRules } = req.body;
+
+  if (typeof brandDna === 'string') {
+    try { brandDna = JSON.parse(brandDna); } catch {}
+  }
+  if (typeof styleGuideRules === 'string') {
+    try { styleGuideRules = JSON.parse(styleGuideRules); } catch {}
+  }
+
+  if (!brandDna) {
+    return res.status(400).json({ error: 'brandDna payload is required' });
+  }
+
+  try {
+    let parsedRules = Array.isArray(styleGuideRules) ? styleGuideRules : (styleGuideRules ? [styleGuideRules] : []);
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        const text = await extractTextFromDocument(file.buffer, file.originalname);
+        const rules = await parseStyleGuide(text, file.originalname);
+        parsedRules.push(rules);
+      }
+    }
+
+    const campaignOutput = await generateCampaignFromDna(brandDna, parsedRules);
+    const session = await createCampaignSession(tenantId, brandDna, parsedRules, campaignOutput);
+
+    res.json({
+      success: true,
+      session
+    });
+  } catch (error) {
+    console.error('[CAMPAIGN/GENERATE] Failed:', error);
+    res.status(500).json({ error: `Campaign generation failed: ${error.message}` });
+  }
+});
+
+app.get('/api/campaign/sessions', requireAuthSession, async (req, res) => {
+  try {
+    const sessions = await listCampaignSessions(req.auth.tenantId);
+    res.json(sessions);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/campaign/sessions/:sessionId', requireAuthSession, async (req, res) => {
+  try {
+    const session = await getCampaignSession(req.params.sessionId, req.auth.tenantId);
+    if (!session) return res.status(404).json({ error: 'Campaign session not found' });
+    res.json(session);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/campaign/sessions/:sessionId', requireAuthSession, async (req, res) => {
+  try {
+    const ok = await deleteCampaignSession(req.params.sessionId, req.auth.tenantId);
+    if (!ok) return res.status(404).json({ error: 'Campaign session not found' });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/minfo/import', requireAuthSession, async (req, res) => {
+  const { sessionId } = req.body;
+  if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
+
+  try {
+    const session = await getCampaignSession(sessionId, req.auth.tenantId);
+    if (!session) return res.status(404).json({ error: 'Campaign session not found' });
+
+    if (session.status === 'imported') {
+      return res.status(409).json({ error: 'Campaign has already been imported' });
+    }
+
+    const campaignPayload = session.campaign_output;
+    if (!campaignPayload) {
+      return res.status(422).json({ error: 'No campaign output found in session' });
+    }
+
+    const validation = validateMinfoCampaign(campaignPayload);
+    if (!validation.valid) {
+      return res.status(422).json({ error: 'Minfo campaign schema validation failed', details: validation.errors });
+    }
+
+    const isProd = env.NODE_ENV === 'production';
+    const minfoApiKey = env.MINFO_API_KEY;
+    const minfoApiUrl = env.MINFO_API_URL || 'https://api.minfo.com/v1/campaigns/import';
+
+    if (isProd && (!minfoApiKey || minfoApiKey === 'open_pomelli_secret_key')) {
+      return res.status(503).json({ error: 'Minfo import integrations not configured in production environment' });
+    }
+
+    const idempotencyKey = session.idempotency_key || uuidv4();
+    
+    // Attempt key reservation in DB
+    await updateCampaignSession(sessionId, req.auth.tenantId, {
+      idempotency_key: idempotencyKey
+    });
+
+    if (!isProd && !minfoApiKey) {
+      // Dev simulation success
+      console.log(`[MINFO-IMPORT] Simulating campaign import to ${minfoApiUrl} for tenant ${req.auth.tenantId}`);
+      await updateCampaignSession(sessionId, req.auth.tenantId, {
+        status: 'imported'
+      });
+      return res.json({ success: true, sessionId, status: 'imported', idempotencyKey });
+    }
+
+    // Call upstream API
+    const response = await fetch(minfoApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${minfoApiKey}`,
+        'X-Idempotency-Key': idempotencyKey
+      },
+      body: JSON.stringify(campaignPayload)
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Upstream Minfo CRM rejected payload: [${response.status}] ${errText}`);
+    }
+
+    await updateCampaignSession(sessionId, req.auth.tenantId, {
+      status: 'imported'
+    });
+
+    res.json({ success: true, sessionId, status: 'imported', idempotencyKey });
+
+  } catch (error) {
+    console.error('[MINFO-IMPORT] Import failed:', error);
+    res.status(500).json({ error: `Campaign import failed: ${error.message}` });
   }
 });
 
@@ -1175,7 +1630,13 @@ async function runExtraction({
     try {
       const payloadWithInputs = { ...payload, _inputs: { url: url||'', youtubeUrl: youtubeUrl||'', profileUrl: profileUrl||'', linkedinUrl: linkedinUrl||'', website2Url: website2Url||'' } };
       await appendHistory({ id: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`, url: url||profileUrl||youtubeUrl, target_url: url||'', youtube_url: youtubeUrl||'', profile_url: profileUrl||'', timestamp: new Date().toISOString(), success: true, name: payloadWithInputs.data?.name||null, screenshotUrl: payloadWithInputs.screenshotUrl||null, payload: payloadWithInputs }, tenantId);
-    } catch(histErr) { console.warn(`${TAG} History save failed:`, histErr.message); }
+    } catch(histErr) {
+      console.warn(`${TAG} History save failed:`, histErr.message);
+      if (env.NODE_ENV === 'production') {
+        histErr.stage = 'saving-history';
+        throw histErr;
+      }
+    }
 
     console.log(`${TAG} ✅ Extraction complete in ${((Date.now() - startTime)/1000).toFixed(1)}s`);
     return payload;
@@ -1289,6 +1750,7 @@ app.post('/api/jobs', requireJobsToken, extractRateLimit, async (req, res) => {
         'profile-extraction': 'The profile URL could not be scraped. Try submitting only the Profile URL on its own.',
         'ai-verification':    'AI verification failed. Check your GEMINI_API_KEY.',
         'building-response':  'Failed while assembling the response payload.',
+        'saving-history':     'Failed to save extraction history to production database.',
       };
       const hint = error.hint || stageHints[error.stage] || 'An unexpected error occurred during extraction.';
       const stat = extractionStatus.get(url || profileUrl || youtubeUrl);

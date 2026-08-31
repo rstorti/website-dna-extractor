@@ -36,7 +36,7 @@ Use the item numbers as permanent references in tickets, commits, QA notes, and 
 
 ### 1. Remove public exposure of local outputs directory
 - **Severity**: P0
-- **Status**: Open
+- **Status**: Closed (Fixed)
 - **Area**: Backend / Security
 - **Issue**: The server exposes `/outputs` statically, which makes fallback files and generated assets directly browsable.
 - **Risk**: Extraction history and local artifacts can be accessed without authorization.
@@ -50,7 +50,7 @@ Use the item numbers as permanent references in tickets, commits, QA notes, and 
 
 ### 2. Remove public local history fallback as a production storage path
 - **Severity**: P0
-- **Status**: Open
+- **Status**: Closed (Fixed)
 - **Area**: Backend / Data handling
 - **Issue**: When Supabase history fails, the app writes to `outputs/history.json`.
 - **Risk**: Production data becomes dependent on local disk and can be leaked or corrupted.
@@ -64,7 +64,7 @@ Use the item numbers as permanent references in tickets, commits, QA notes, and 
 
 ### 3. Add authentication and authorization for history endpoints
 - **Severity**: P0
-- **Status**: Open
+- **Status**: Closed (Fixed)
 - **Area**: API / Security
 - **Issue**: History read and delete operations are exposed without proper auth.
 - **Risk**: Anyone can inspect or delete extraction records.
@@ -78,7 +78,7 @@ Use the item numbers as permanent references in tickets, commits, QA notes, and 
 
 ### 4. Fix local file traversal in `/api/download`
 - **Severity**: P0
-- **Status**: Open
+- **Status**: Closed (Fixed)
 - **Area**: API / Security
 - **Issue**: The download proxy allows local path handling that can be escaped with traversal patterns.
 - **Risk**: Arbitrary file read from the server.
@@ -92,7 +92,7 @@ Use the item numbers as permanent references in tickets, commits, QA notes, and 
 
 ### 5. Add SSRF protection for all user supplied URLs
 - **Severity**: P0
-- **Status**: Open
+- **Status**: Closed (Fixed)
 - **Area**: Scraper / Security
 - **Issue**: User-provided URLs are fetched without blocking localhost, private ranges, metadata endpoints, or internal hostnames.
 - **Risk**: Server-side request forgery and internal network exposure.
@@ -106,7 +106,7 @@ Use the item numbers as permanent references in tickets, commits, QA notes, and 
 
 ### 6. Remove dangerous browser launch flags
 - **Severity**: P0
-- **Status**: Open
+- **Status**: Closed (Fixed)
 - **Area**: Scraper runtime / Security
 - **Issue**: Browser launch includes risky flags such as `--no-sandbox`, `--disable-web-security`, and `--ignore-certificate-errors`.
 - **Risk**: Untrusted content runs with unnecessarily weak protections.
@@ -120,7 +120,7 @@ Use the item numbers as permanent references in tickets, commits, QA notes, and 
 
 ### 7. Stop returning false-success extraction responses
 - **Severity**: P0
-- **Status**: Open
+- **Status**: Closed (Fixed)
 - **Area**: API / Error handling
 - **Issue**: Some extractor stages return `{ error: ... }` objects instead of throwing, and the API can still return `success: true`.
 - **Risk**: Bad or partial extractions look successful and poison downstream data.
@@ -134,7 +134,7 @@ Use the item numbers as permanent references in tickets, commits, QA notes, and 
 
 ### 8. Align Supabase schema, SQL, and runtime expectations
 - **Severity**: P0
-- **Status**: Open
+- **Status**: Closed (Fixed)
 - **Area**: Data layer
 - **Issue**: Setup SQL and runtime expectations are not fully aligned, which pushes the app into fallback behavior.
 - **Risk**: Broken persistence, inconsistent environments, avoidable fallback activation.
@@ -152,7 +152,7 @@ Use the item numbers as permanent references in tickets, commits, QA notes, and 
 
 ### 9. Remove full-page screenshot slicing as an image generation fallback
 - **Severity**: P0
-- **Status**: Open
+- **Status**: Closed (Fixed)
 - **Area**: Image pipeline
 - **Issue**: When no scraped image URLs are found, the code slices the full-page screenshot and resizes it to 640x640.
 - **Risk**: Final campaign assets contain text, buttons, headers, and messy page layouts instead of product or brand imagery.
@@ -165,7 +165,7 @@ Use the item numbers as permanent references in tickets, commits, QA notes, and 
 
 ### 10. Change image pipeline priority to image-first extraction
 - **Severity**: P0
-- **Status**: Open
+- **Status**: Closed (Fixed)
 - **Area**: Image pipeline
 - **Issue**: The current pipeline can fall back too early to screenshot-based processing.
 - **Required fix**:
@@ -181,7 +181,7 @@ Use the item numbers as permanent references in tickets, commits, QA notes, and 
 
 ### 11. Restrict screenshot fallback to the exact image element only
 - **Severity**: P0
-- **Status**: Open
+- **Status**: Closed (Fixed)
 - **Area**: Image pipeline / Puppeteer
 - **Issue**: The fallback element lookup is too broad and can target sections or containers containing text.
 - **Required fix**:
@@ -341,7 +341,7 @@ Use the item numbers as permanent references in tickets, commits, QA notes, and 
 
 ### 25. Fix YouTube fallback control flow
 - **Severity**: P0
-- **Status**: Open
+- **Status**: Closed (Fixed)
 - **Area**: YouTube extraction
 - **Issue**: The documented fallback to scraping when the API key is missing or quota is exhausted does not consistently run.
 - **Required fix**:

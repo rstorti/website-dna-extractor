@@ -53,8 +53,6 @@ async function uploadToSupabase(filename, buffer, mimeType = 'image/jpeg') {
 // Defining args once here prevents the two launch sites (initial + recreatePage)
 // from drifting out of sync when flags need updating.
 const PUPPETEER_ARGS = [
-  '--no-sandbox',
-  '--disable-setuid-sandbox',
   '--disable-dev-shm-usage',        // Use /tmp instead of /dev/shm (too small in Docker)
   '--disable-gpu',
   '--disable-extensions',
@@ -73,6 +71,10 @@ const PUPPETEER_ARGS = [
   '--memory-pressure-off',
   '--window-size=1280,800'
 ];
+
+if (env.NODE_ENV !== 'production' || process.env.PUPPETEER_NO_SANDBOX === 'true') {
+  PUPPETEER_ARGS.unshift('--no-sandbox', '--disable-setuid-sandbox');
+}
 
 /**
  * makeSsrfSafeHandler — Puppeteer request interception factory.
@@ -1588,7 +1590,7 @@ async function extractDNA(url, progressCb = null, presetSelectedImages = [], abo
            } else {
                console.log(`⚠️ In-browser fetch failed, attempting to screen capture the specific image element directly...`);
                const elHandle = await page.evaluateHandle((url) => {
-                   return Array.from(document.querySelectorAll('img, picture, div, section')).find(el => {
+                   return Array.from(document.querySelectorAll('img')).find(el => {
                        if (el.tagName.toLowerCase() === 'img' && el.src === url) return true;
                        if (el.tagName.toLowerCase() === 'img' && el.src && el.src.includes(url.split('/').pop())) return true;
                        if (el.style && el.style.backgroundImage && el.style.backgroundImage.includes(url)) return true;
